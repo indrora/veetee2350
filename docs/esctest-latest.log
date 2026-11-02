@@ -1674,18 +1674,33 @@ Run test: DECSEDTests.test_DECSED_Default_Protection
 Passed.
 
 Run test: DECSEDTests.test_DECSED_doesNotRespectISOProtect
-*** TEST DECSEDTests.test_DECSED_doesNotRespectISOProtect FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: DECSED respects ISO protection for backward compatibility, per email from Thomas
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decsed.py", line 409, in test_DECSED_doesNotRespectISOProtect
+KNOWN BUG:     AssertScreenCharsInRectEqual(Rect(1, 1, 2, 1), [blank() * 2])
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
+KNOWN BUG:     Raise(esctypes.ChecksumException(errorLocations, actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.ChecksumException: Checksum failed at the following locations:
+KNOWN BUG: At Point(x=2, y=1) expected ' ' (0x20) but got 'b' (0x62)
+KNOWN BUG: Actual:
+KNOWN BUG:  b
+KNOWN BUG: 
+KNOWN BUG: Expected:
+KNOWN BUG:   
+KNOWN BUG: 
 
 Run test: DECSELTests.test_DECSEL_0
 Passed.
@@ -1718,18 +1733,33 @@ Run test: DECSELTests.test_DECSEL_IgnoresScrollRegion_Protection
 Passed.
 
 Run test: DECSELTests.test_DECSEL_doesNotRespectISOProtect
-*** TEST DECSELTests.test_DECSEL_doesNotRespectISOProtect FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: DECSEL respects ISO protection for backward compatibility, per email from Thomas
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decsel.py", line 178, in test_DECSEL_doesNotRespectISOProtect
+KNOWN BUG:     AssertScreenCharsInRectEqual(Rect(1, 1, 2, 1), [blank() * 2])
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
+KNOWN BUG:     Raise(esctypes.ChecksumException(errorLocations, actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.ChecksumException: Checksum failed at the following locations:
+KNOWN BUG: At Point(x=2, y=1) expected ' ' (0x20) but got 'b' (0x62)
+KNOWN BUG: Actual:
+KNOWN BUG:  b
+KNOWN BUG: 
+KNOWN BUG: Expected:
+KNOWN BUG:   
+KNOWN BUG: 
 
 Run test: DECSERATests.test_DECSERA_basic
 Passed.
@@ -2000,38 +2030,7 @@ Run test: ECHTests.test_ECH_doesNotRespectDECPRotection
 Passed.
 
 Run test: ECHTests.test_ECH_respectsISOProtection
-*** TEST ECHTests.test_ECH_respectsISOProtection FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/ech.py", line 82, in test_ECH_respectsISOProtection
-    AssertScreenCharsInRectEqual(Rect(1, 1, 3, 1),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 [blank() * 2 + "c"])
-                                 ^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=1) expected 'c' (0x63) but got ' ' (0x20)
-Actual:
-   
-
-Expected:
-  c
-
+Passed.
 
 Run test: EDTests.test_ED_0
 Passed.
@@ -2061,38 +2060,7 @@ Run test: EDTests.test_ED_doesNotRespectDECProtection
 Passed.
 
 Run test: EDTests.test_ED_respectsISOProtection
-*** TEST EDTests.test_ED_respectsISOProtection FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/ed.py", line 188, in test_ED_respectsISOProtection
-    AssertScreenCharsInRectEqual(Rect(1, 1, 3, 1),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 [blank() * 2 + "c"])
-                                 ^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=1) expected 'c' (0x63) but got ' ' (0x20)
-Actual:
-   
-
-Expected:
-  c
-
+Passed.
 
 Run test: ELTests.test_EL_0
 Passed.
@@ -2113,38 +2081,7 @@ Run test: ELTests.test_EL_doesNotRespectDECProtection
 Passed.
 
 Run test: ELTests.test_EL_respectsISOProtection
-*** TEST ELTests.test_EL_respectsISOProtection FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/el.py", line 91, in test_EL_respectsISOProtection
-    AssertScreenCharsInRectEqual(Rect(1, 1, 3, 1),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 [blank() * 2 + "c"])
-                                 ^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=1) expected 'c' (0x63) but got ' ' (0x20)
-Actual:
-   
-
-Expected:
-  c
-
+Passed.
 
 Run test: FFTests.test_FF_Basic
 Passed.
@@ -2977,7 +2914,7 @@ Passed.
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth
 Passed.
 
-*** 491 tests passed, 41 known bugs, 35 TESTS FAILED ***
+*** 494 tests passed, 43 known bugs, 30 TESTS FAILED ***
 Failing tests:
 ChangeColorTests.test_ChangeColor_CIELab
 ChangeColorTests.test_ChangeColor_CIELuv
@@ -3004,13 +2941,8 @@ DATests.test_DA_0
 DATests.test_DA_NoParameter
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECRQSSTests.test_DECRQSS_DECSNLS
-DECSEDTests.test_DECSED_doesNotRespectISOProtect
-DECSELTests.test_DECSEL_doesNotRespectISOProtect
 DECSETTests.test_DECSET_Allow80To132
 DECSETTests.test_DECSET_DECCOLM
-ECHTests.test_ECH_respectsISOProtection
-EDTests.test_ED_respectsISOProtection
-ELTests.test_EL_respectsISOProtection
 RISTests.test_RIS_ResetDECCOLM
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
 XtermWinopsTests.test_XtermWinops_DECSLPP

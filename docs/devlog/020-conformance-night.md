@@ -22,8 +22,9 @@ what changed since the last run, which is how regressions get caught
 | 21–22 | 488 | tabs at the right margin, DECSET 41, alternate-screen clearing |
 | 23 | 489 | CHA and HPA under origin mode |
 | 24 | 491 | DECNCSM only at VT510 level; OSC 104 resets the special colours |
+| 25–26 | 494 | ISO protected areas (SPA/EPA) |
 
-That's libvterm patches 10 to 26 (`lib/libvterm/PATCHES.md`). Most are
+That's libvterm patches 10 to 27 (`lib/libvterm/PATCHES.md`). Most are
 a few lines each; a few of them are worth telling.
 
 ## Left/right margins are everywhere
@@ -84,8 +85,11 @@ Most of the remaining failures can't or shouldn't be fixed:
   characterisation.
 - Window and page resizing (DECSLPP, DECSNLS, 80 ↔ 132 at 640 wide):
   the screen size comes from SET-UP.
-- ISO protected areas (SPA/EPA): libvterm's non-selective erase is
-  shared with RIS.
+- DA1 lists fewer attributes than xterm's (2 tests): VeeTee only
+  claims what it does.
+- Two ISO-protection tests are now "expected failures": DECSED and
+  DECSEL honour SPA protection, as xterm does, which esctest calls a
+  known xterm bug.
 - `ResetSpecialColor_Dynamic` resets the foreground (OSC 110) and
   expects black, because esctest's per-test reset sets OSC 10/11 to
   black on white "to work around a bug". OSC 110 goes back to the
