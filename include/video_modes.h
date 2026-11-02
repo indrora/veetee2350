@@ -12,11 +12,20 @@
  *
  *   mode            sysclk   line    encode  render
  *   640x480 @60     252 MHz   8000    ~4350   ~3650
+ *   640x480 @72     315 MHz   8320    ~4350   ~3650
  *   720x480 @60     270 MHz   8580    ~4900   ~4100
  *   800x480 @60     295 MHz   9920    ~5450   ~4550
  *   960x540 @60     372 MHz  11040    ~6500   ~5500
  *   1280x720 @30    372 MHz  16500    ~8700   ~7300
  *   1280x720 @24    297 MHz  16500    ~8700   ~7300
+ *
+ * 640x480 @72 is VESA's (31.5 MHz pixel clock, 832 x 520 total): the
+ * same picture with 25% more CPU, at 1.25 V. It's the default since
+ * the board got a heatsink (devlog 025); 60 Hz stays for sinks that
+ * want it. The per-line budget barely moves (8320 vs 8000 cycles: the
+ * line is 832 pixels long, not 800) -- sysclk is the bit clock, so a
+ * faster clock means more lines a second, not more cycles a line. What
+ * grows is the main loop's share: parsing and scrolling run 25% faster.
  *
  * 800x600 @60 (400 MHz) is left out: beyond what the RP2350 sensibly
  * overclocks to. 1280x720 @30 is PicoDVI's nonstandard half-rate 720p
@@ -45,6 +54,7 @@ enum video_mode_id {
 	VIDEO_MODE_960x540,
 	VIDEO_MODE_1280x720,
 	VIDEO_MODE_1280x720_24,
+	VIDEO_MODE_640x480_72,	/* appended: settings store the index */
 	VIDEO_MODE_COUNT
 };
 
@@ -59,6 +69,18 @@ static const struct video_mode video_modes[VIDEO_MODE_COUNT] = {
 	[VIDEO_MODE_1280x720] = {"1280x720 @ 30 Hz", 1280, 720, 30},
 	[VIDEO_MODE_1280x720_24] = {"1280x720 @ 24 Hz (low clock)", 1280, 720,
 	    24},
+	[VIDEO_MODE_640x480_72] = {"640x480 @ 72 Hz", 640, 480, 72},
+};
+
+/* The order SET-UP lists them in (the enum's is storage order). */
+static const uint8_t video_mode_order[VIDEO_MODE_COUNT] = {
+	VIDEO_MODE_640x480,
+	VIDEO_MODE_640x480_72,
+	VIDEO_MODE_720x480,
+	VIDEO_MODE_800x480,
+	VIDEO_MODE_960x540,
+	VIDEO_MODE_1280x720,
+	VIDEO_MODE_1280x720_24,
 };
 
 #endif /* VIDEO_MODES_H */

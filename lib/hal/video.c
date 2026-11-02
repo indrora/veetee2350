@@ -113,6 +113,26 @@ static struct dvi_timing timing_1280x720p_24hz = {
 	.bit_clk_khz = 297000,
 };
 
+/*
+ * 640x480 at 72 Hz, VESA DMT: 31.5 MHz, 832 x 520 total, both syncs
+ * negative. 315 MHz is exact from the 12 MHz crystal (VCO 1260 MHz / 4),
+ * at 1.25 V: between PicoDVI's 1.2 V near 300 MHz and our 1.3 V at 372.
+ * In RAM for the same reason as the 24 Hz timing above.
+ */
+static struct dvi_timing timing_640x480p_72hz = {
+	.h_sync_polarity = false,
+	.h_front_porch = 24,
+	.h_sync_width = 40,
+	.h_back_porch = 128,
+	.h_active_pixels = 640,
+	.v_sync_polarity = false,
+	.v_front_porch = 9,
+	.v_sync_width = 3,
+	.v_back_porch = 28,
+	.v_active_lines = 480,
+	.bit_clk_khz = 315000,
+};
+
 static const struct {
 	const struct dvi_timing	*timing;
 	enum vreg_voltage	 vreg;
@@ -123,6 +143,7 @@ static const struct {
 	[VIDEO_MODE_960x540] = {&dvi_timing_960x540p_60hz, VREG_VOLTAGE_1_30},
 	[VIDEO_MODE_1280x720] = {&dvi_timing_1280x720p_30hz, VREG_VOLTAGE_1_30},
 	[VIDEO_MODE_1280x720_24] = {&timing_1280x720p_24hz, VREG_VOLTAGE_1_20},
+	[VIDEO_MODE_640x480_72] = {&timing_640x480p_72hz, VREG_VOLTAGE_1_25},
 };
 
 /* The running mode's size; fixed after video_init. */
