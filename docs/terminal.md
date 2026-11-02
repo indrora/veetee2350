@@ -74,6 +74,10 @@ BOOTSEL button opens SET-UP. Inside SET-UP: Up/Down to select,
 Left/Right/Enter/Space to change, `S` save, `R` recall, `D` factory
 defaults, F3/Esc to leave.
 
+SET-UP's **Hotkeys...** page rebinds any tool to any key (with
+modifiers); **Profiler bar** shows the last frame's per-line cycle counts
+at the top of the screen (devlog 021).
+
 Keys carry xterm's modifier parameter (`; m`, m - 1 = Shift 1, Alt 2,
 Ctrl 4, Meta 8) and ESC + a printable byte is Alt plus that key, so
 hotkeys can use modifiers.
