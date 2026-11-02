@@ -144,3 +144,19 @@ by name:
 
 This has to run from a terminal that has macOS camera permission. The
 sandboxed agent shell doesn't, so use the user's Terminal panel.
+
+## SD card slot
+
+SPI1 on GP30 (SCK), GP31 (MOSI), GP40 (MISO), GP43 (CS); see
+`lib/hal/storage.h`. Boot brings video up first and touches the card
+only afterwards.
+
+Capture caveat: when a boot probes an *empty* slot (saved settings name
+card fonts/schemes, card pulled), the Genki ShadowCast 2 loses the
+picture and stays at "no signal" across board reboots until it's
+unplugged and replugged. The board is fine meanwhile -- the stats build
+reports 60 frames/s, 0 starved lines -- and after the replug the screen
+is there. A failed SD init clocks GP30/31 for about two seconds of
+retries, next to TMDS lane 2 on GP32/33; whether that's the trigger, or
+the grabber just dislikes something about that boot, isn't known. (The
+same "wedged until replug" happened once after a 1280x720 @ 24 test.)

@@ -60,7 +60,7 @@ names and sizes), so after the first time, opening SET-UP says "Card:
 
 ## Configuration Error
 
-![The Configuration Error screen](img/016-crash1.jpg)
+![The Configuration Error screen: card settings saved, card pulled](img/016-nocard-error.jpg)
 
 When a saved card font or scheme can't be loaded (no card, a damaged
 file, not enough memory), or the crash guard falls back to factory
@@ -68,8 +68,11 @@ defaults, the terminal takes over the screen: white on red, a
 double-height title, each problem with its file and reason. The
 default is used instead, for this session only, so forgetting the card
 one day doesn't wipe your settings; host output waits until a key is
-pressed. (The screenshot is the crash-guard case, from the watchdog
-episode above.)
+pressed. Above: the font and the scheme were saved from the card, then
+the card was pulled before a reboot. The crash-guard version looks the
+same with one "Startup" entry:
+
+![The crash-guard version](img/016-crash1.jpg)
 
 ## Video first
 
@@ -81,6 +84,10 @@ on.
 There was a detour on the way. With the card pulled, the grabber
 showed no signal, and for a while that looked like SD access before
 `video_init` killing the HDMI output. The stats build said otherwise:
-60 frames a second, nothing starved. The ShadowCast was wedged, and it
-stays wedged across board reboots until it's replugged. Video-first
-stayed because it's the right order anyway.
+60 frames a second, nothing starved, even across the failed mounts.
+The ShadowCast was wedged, and it stays wedged across board reboots
+until it's replugged; after a replug the error screen above was right
+there. It reliably wedges on a boot where the card is missing (the
+SD init then retries for a couple of seconds, toggling SPI clock pins
+next to an HDMI lane); a monitor may well not care. Video-first stayed
+because it's the right order anyway.
