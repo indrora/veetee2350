@@ -15,6 +15,7 @@
 #include "app.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "board.h"
@@ -30,16 +31,19 @@
 
 #include "pico.h"
 #include "pico/time.h"
+#include "hardware/structs/watchdog.h"
 
-static_assert(RENDER_WIDTH == VIDEO_WIDTH && RENDER_HEIGHT == VIDEO_HEIGHT);
 static_assert(sizeof(struct settings) <= FLASHCFG_MAX);
 
 #define BOOTSEL_POLL_MS		50
+#define BOOT_HEALTHY_MS		60000	/* then the crash count clears */
+#define CRASHES_MAX		2	/* in a row: boot with factory defaults */
 #define VISUAL_BELL_MS		100
 
 static struct render render;
 static struct term term;
 static struct settings settings;	/* in effect now */
+static unsigned running_resolution;	/* video mode chosen at boot */
 static struct keys keys;
 
 static bool in_setup;
@@ -110,7 +114,8 @@ enter_setup(void)
 		return;		/* no memory: stay in the terminal */
 	setup_grid.cursor_visible = false;
 	setup_grid.border2 = grid_dup565(grid_rgb565(16, 40, 120));
-	setup_begin(&setup, &settings, &setup_grid, &term.font);
+	setup_begin(&setup, &settings, &setup_grid, &term.font,
+	    running_resolution);
 	render_set_grid(&render, &setup_grid);
 	in_setup = true;
 }
@@ -122,6 +127,18 @@ leave_setup(void)
 	render_set_grid(&render, term.screen);
 	settings = setup.work;
 	settings_seal(&settings);
+
+	/*
+	 * A new resolution means a new sysclk, VREG and DVI timing, which are
+	 * only set at boot (video_init), so save it and restart. Saving is
+	 * implied: without it the restart would come back in the old mode.
+	 */
+	if (settings.resolution != running_resolution) {
+		if (!flashcfg_write(&settings, sizeof(settings)))
+			panic("settings: save before restart failed");
+		board_reboot();
+	}
+
 	/* render_pause (inside a font change) can't race the grid free:
 	 * the renderer was pointed back at the terminal first. */
 	apply_settings();
@@ -262,13 +279,23 @@ report_stats(void)
 		return;
 	next_report = make_timeout_time_ms(1000);
 	video_get_stats(&stats);
+	uint32_t fault_pc, fault_lr;
+	if (board_last_fault(&fault_pc, &fault_lr))
+		usbio_printf("\r\n[fault] last boot: pc=0x%08lx lr=0x%08lx "
+		    "r0=0x%08lx r2=0x%08lx r5=0x%08lx",
+		    (unsigned long)fault_pc, (unsigned long)fault_lr,
+		    (unsigned long)watchdog_hw->scratch[5],
+		    (unsigned long)watchdog_hw->scratch[6],
+		    (unsigned long)watchdog_hw->scratch[7]);
+		usbio_printf("\r\n[mem] term cells=%p/%p", (void *)term.primary.cells,
+		    (void *)term.alternate.cells);
 	usbio_printf("\r\n[stats] frames=%lu encode avg=%lu max=%lu "
 	    "render avg=%lu max=%lu starved=%lu budget=%u\r\n",
 	    (unsigned long)stats.frames, (unsigned long)stats.avg_encode_cycles,
 	    (unsigned long)stats.max_encode_cycles,
 	    (unsigned long)stats.avg_render_cycles,
 	    (unsigned long)stats.max_render_cycles,
-	    (unsigned long)stats.starved, VIDEO_LINE_BUDGET_CYCLES);
+	    (unsigned long)stats.starved, video_line_budget());
 }
 #endif
 
@@ -277,22 +304,85 @@ app_init(void)
 {
 	load_settings();
 	keys_init(&keys);
+	/*
+	 * If the last boots ended in watchdog resets (a crash or hang, e.g.
+	 * an overclocked mode this chip can't hold), run this session on
+	 * factory defaults. The saved settings stay in flash untouched, so
+	 * nothing is lost to a transient fault; saving from SET-UP makes the
+	 * defaults stick.
+	 */
+	unsigned crashes = board_boot_begin();
+	bool fell_back = crashes >= CRASHES_MAX;
+	if (fell_back)
+		settings_defaults(&settings);
+	running_resolution = settings.resolution;
+	const struct video_mode *mode = &video_modes[running_resolution];
+	render_set_screen(&render, mode->width, mode->height);
 	if (!term_init(&term, settings_font(&settings), &render, send_to_host,
 	    nullptr))
 		panic("term: cannot start (font or memory)");
 	apply_settings();
-	video_init(render_scanline, &render);
+	video_init(running_resolution, render_scanline, &render);
 	render.live = true;	/* from now on, render_pause must wait */
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. F3 or BOOTSEL: SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
+	char detail[96];
+	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u\r\n",
+	    mode->name, term.font_source->name, term.screen->cols,
+	    term.screen->rows);
+	term_feed(&term, (const uint8_t *)detail, (size_t)len);
+#ifdef VEETEE_FLASH_PROBE
+	extern struct board_flash_probe video_flash_probe_result;
+	const struct board_flash_probe *probe = &video_flash_probe_result;
+	len = snprintf(detail, sizeof(detail), "flash probe @%lu MHz: div %u "
+	    "rxdelay ok mask 0x%02x, div %u mask 0x%02x\r\n",
+	    (unsigned long)(probe->sys_hz / 1000000), probe->divider,
+	    probe->pass[0], probe->divider + 1, probe->pass[1]);
+	term_feed(&term, (const uint8_t *)detail, (size_t)len);
+#endif
+	uint32_t fault_pc, fault_lr;
+	if (board_last_fault(&fault_pc, &fault_lr)) {
+		len = snprintf(detail, sizeof(detail), "\x1b[1;31mLast boot "
+		    "crashed: HardFault at pc=0x%08lx lr=0x%08lx\x1b[0m\r\n",
+		    (unsigned long)fault_pc, (unsigned long)fault_lr);
+		term_feed(&term, (const uint8_t *)detail, (size_t)len);
+		usbio_write(USBIO_LINE, detail, (size_t)len);
+	}
+	if (fell_back) {
+		static const char warning[] = "\x1b[1;31mRecovered from "
+		    "repeated crashes: running on factory defaults. Saved "
+		    "settings are untouched (F3, S to replace them).\x1b[0m\r\n";
+		term_feed(&term, (const uint8_t *)warning, sizeof(warning) - 1);
+	}
 }
 
 void
 app_poll(void)
 {
+	static bool boot_marked_ok;
 	char buffer[256];
+
+	board_watchdog_feed();
+#ifdef VEETEE_FLASH_PROBE
+	static absolute_time_t next_probe_report;
+	if (time_reached(next_probe_report)) {
+		extern struct board_flash_probe video_flash_probe_result;
+		extern uint32_t board_boot_qmi_timing;
+		const struct board_flash_probe *p = &video_flash_probe_result;
+		next_probe_report = make_timeout_time_ms(1000);
+		usbio_printf("[probe] %lu MHz boot_timing=0x%08lx div%u mask=0x%02x "
+		    "div%u mask=0x%02x took %lu us\r\n",
+		    (unsigned long)(p->sys_hz / 1000000),
+		    (unsigned long)board_boot_qmi_timing, p->divider, p->pass[0],
+		    p->divider + 1, p->pass[1], (unsigned long)p->probe_us);
+	}
+#endif
+	if (!boot_marked_ok && now_ms() > BOOT_HEALTHY_MS) {
+		board_boot_ok();
+		boot_marked_ok = true;
+	}
 	size_t count = usbio_read(USBIO_LINE, buffer, sizeof(buffer));
 
 	if (count > 0)

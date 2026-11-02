@@ -12,8 +12,10 @@
 
 #include <string.h>
 
+#include "board.h"
 #include "video.h"
 
+#include "hardware/clocks.h"
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "pico.h"
@@ -30,8 +32,15 @@ flashcfg_read(void *dst, size_t len)
 	memcpy(dst, &_EEPROM_start, len);
 }
 
-bool
-flashcfg_write(const void *src, size_t len)
+/*
+ * In RAM, not flash: flash_range_erase/program re-enter XIP using the boot
+ * defaults, which on RP2350 resets the QMI divider to 2. Above ~266 MHz
+ * that overclocks the flash, so the timing must be put back before
+ * ANYTHING fetches from flash again -- including returning into this
+ * function, were it in flash. (Found when a save at 270 MHz read back
+ * garbage and the board restarted in the old video mode.)
+ */
+bool __no_inline_not_in_flash_func(flashcfg_write)(const void *src, size_t len)
 {
 	/* flash_range_program wants whole 256-byte pages. */
 	static uint8_t page_buffer[1024] __attribute__((aligned(4)));
@@ -43,9 +52,19 @@ flashcfg_write(const void *src, size_t len)
 	memset(page_buffer, 0xff, padded);
 	memcpy(page_buffer, src, len);
 
+	uint32_t sys_hz = clock_get_hz(clk_sys);	/* flash code: before */
 	uint32_t saved = save_and_disable_interrupts();
 	flash_range_erase(offset, FLASH_SECTOR_SIZE);
 	flash_range_program(offset, page_buffer, padded);
+	board_flash_timing(sys_hz);
 	restore_interrupts(saved);
-	return memcmp(&_EEPROM_start, src, len) == 0;
+
+	/* Byte compare by hand: memcmp may live in flash, which is fine now,
+	 * but keep the check obviously after the timing fix above. */
+	const uint8_t *stored = &_EEPROM_start;
+	const uint8_t *wanted = src;
+	for (size_t i = 0; i < len; i++)
+		if (stored[i] != wanted[i])
+			return false;
+	return true;
 }

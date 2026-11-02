@@ -18,8 +18,9 @@
 #include "font.h"
 #include "grid.h"
 
-#define RENDER_WIDTH	640
-#define RENDER_HEIGHT	480
+/* Largest screen the renderer supports (1280x720, see video_modes.h). */
+#define RENDER_MAX_WIDTH	1280
+#define RENDER_MAX_HEIGHT	720
 
 /* Every combination of enum cell_attr bits (5 bits today). */
 #define RENDER_ATTR_COMBOS	32
@@ -31,6 +32,8 @@
 struct render {
 	const struct font *font;
 	struct grid * volatile grid;	/* swapped by render_set_grid */
+	uint16_t	 width;		/* screen size, from render_set_screen */
+	uint16_t	 height;
 	uint16_t	 x_offset;	/* even, so cell pixels stay word-aligned */
 	uint16_t	 y_offset;
 	uint8_t		 strike_row;
@@ -38,15 +41,19 @@ struct render {
 	volatile bool	 active;	/* false: draw border only (see pause) */
 	bool		 live;		/* scanout running: pause must wait */
 	volatile uint32_t frame;	/* bumped by core 1 at line 0 */
-	uint8_t		 line_row[RENDER_HEIGHT];	/* grid row or BORDER */
-	uint8_t		 line_sub[RENDER_HEIGHT];	/* glyph row */
+	uint8_t		 line_row[RENDER_MAX_HEIGHT];	/* grid row or BORDER */
+	uint8_t		 line_sub[RENDER_MAX_HEIGHT];	/* glyph row */
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };
 
-/* Grid dimensions a font produces on the 640x480 screen. */
-void	render_grid_size(const struct font *font, unsigned *cols,
-	    unsigned *rows);
+/* Set the output size (once, before anything else; from the video mode). */
+void	render_set_screen(struct render *render, unsigned width,
+	    unsigned height);
+
+/* Grid dimensions a font produces on a screen of the given size. */
+void	render_grid_size(const struct font *font, unsigned width,
+	    unsigned height, unsigned *cols, unsigned *rows);
 
 /*
  * Bind a font and a grid (whose size should come from render_grid_size)

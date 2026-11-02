@@ -444,7 +444,8 @@ vterm_output(const char *bytes, size_t len, void *user)
 static bool
 build_screens(struct term *term, unsigned *cols, unsigned *rows)
 {
-	render_grid_size(&term->font, cols, rows);
+	render_grid_size(&term->font, term->render->width,
+	    term->render->height, cols, rows);
 	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
 		*rows = term->options.max_rows;
 	term->space_glyph = font_glyph_for(&term->font, ' ');

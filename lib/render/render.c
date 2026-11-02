@@ -56,10 +56,22 @@ build_mask_tables(void)
 }
 
 void
-render_grid_size(const struct font *font, unsigned *cols, unsigned *rows)
+render_set_screen(struct render *render, unsigned width, unsigned height)
 {
-	*cols = RENDER_WIDTH / font->width;
-	*rows = RENDER_HEIGHT / font->height;
+	if (width > RENDER_MAX_WIDTH)
+		width = RENDER_MAX_WIDTH;
+	if (height > RENDER_MAX_HEIGHT)
+		height = RENDER_MAX_HEIGHT;
+	render->width = (uint16_t)width;
+	render->height = (uint16_t)height;
+}
+
+void
+render_grid_size(const struct font *font, unsigned width, unsigned height,
+    unsigned *cols, unsigned *rows)
+{
+	*cols = width / font->width;
+	*rows = height / font->height;
 	if (*cols > GRID_MAX_COLS)
 		*cols = GRID_MAX_COLS;
 	if (*rows > GRID_MAX_ROWS)
@@ -74,9 +86,9 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 	build_mask_tables();
 	render->font = font;
 	render->grid = grid;
-	render->x_offset = (uint16_t)(((RENDER_WIDTH -
+	render->x_offset = (uint16_t)(((render->width -
 	    (unsigned)grid->cols * font->width) / 2) & ~1u);
-	render->y_offset = (uint16_t)((RENDER_HEIGHT - used_height) / 2);
+	render->y_offset = (uint16_t)((render->height - used_height) / 2);
 	/* Strike through the middle of lowercase letters, about 3/5 of the
 	 * way up to the baseline; overline on the top row. */
 	render->strike_row = (uint8_t)(font->baseline * 3 / 5);
@@ -100,7 +112,7 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 		}
 	}
 
-	for (unsigned line = 0; line < RENDER_HEIGHT; line++) {
+	for (unsigned line = 0; line < render->height; line++) {
 		if (line < render->y_offset ||
 		    line >= render->y_offset + used_height) {
 			render->line_row[line] = RENDER_LINE_BORDER;
@@ -234,7 +246,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 
 	unsigned text_row = render->line_row[line];
 	if (!render->active || text_row == RENDER_LINE_BORDER) {
-		fill_words((uint32_t *)pixels, RENDER_WIDTH / 2,
+		fill_words((uint32_t *)pixels, render->width / 2u,
 		    render->active ? grid->border2 : 0);
 		return;
 	}
@@ -255,7 +267,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	/* Side borders (zero width when the font divides 640 evenly). */
 	fill_words((uint32_t *)pixels, render->x_offset / 2, grid->border2);
 	unsigned right = render->x_offset + cols * width;
-	for (unsigned x = right; x < RENDER_WIDTH; x++)
+	for (unsigned x = right; x < render->width; x++)
 		pixels[x] = (uint16_t)grid->border2;
 
 	if (width == 8) {

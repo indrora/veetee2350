@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	1
+#define SETTINGS_VERSION	2	/* 2: added resolution */
 #define SETTINGS_FONT_MAX	24
 #define SETTINGS_ANSWERBACK_MAX	32
 
@@ -34,6 +34,7 @@ struct settings {
 	uint32_t	magic;
 	uint16_t	version;
 	uint16_t	size;		/* sizeof(struct settings) when sealed */
+	uint8_t		resolution;	/* enum video_mode_id (video_modes.h) */
 	char		font[SETTINGS_FONT_MAX];	/* built-in font name */
 	uint8_t		rows;		/* SETTINGS_ROWS_AUTO, 24 or 25 */
 	uint8_t		scheme;		/* enum colour_scheme */

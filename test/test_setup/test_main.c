@@ -12,6 +12,7 @@
 #include "settings.h"
 #include "setup.h"
 #include "term.h"
+#include "video_modes.h"
 
 static struct font font;
 static struct grid grid;
@@ -25,7 +26,7 @@ setUp(void)
 	    font_builtins[0].len));
 	TEST_ASSERT_TRUE(grid_init(&grid, 80, 30, grid_make_cell(0, 0, 0, 0)));
 	settings_defaults(&settings);
-	setup_begin(&setup, &settings, &grid, &font);
+	setup_begin(&setup, &settings, &grid, &font, VIDEO_MODE_640x480);
 }
 
 void
@@ -59,7 +60,15 @@ test_settings_crc(void)
 static void
 test_navigation_and_values(void)
 {
+	/* Starts on Resolution; Right picks the next mode. */
+	TEST_ASSERT_EQUAL(ITEM_RESOLUTION, setup.selected);
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(VIDEO_MODE_720x480, setup.work.resolution);
+	press(KEY_LEFT, 0);
+	press(KEY_LEFT, 0);	/* wraps to the last mode */
+	TEST_ASSERT_EQUAL(VIDEO_MODE_COUNT - 1, setup.work.resolution);
 	/* Font: Right steps to the next built-in font. */
+	press(KEY_DOWN, 0);
 	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_RIGHT, 0));
 	TEST_ASSERT_EQUAL_STRING(font_builtins[1].name, setup.work.font);
 	/* Down to Colours, Left wraps around to the last scheme. */
@@ -110,8 +119,12 @@ test_rows_resolution(void)
 {
 	const struct font_builtin *prophet8 =
 	    font_builtin_find("notjam-prophet-8");
-	TEST_ASSERT_EQUAL(60, setup_rows_for(prophet8, SETTINGS_ROWS_AUTO));
-	TEST_ASSERT_EQUAL(24, setup_rows_for(prophet8, 24));
+	TEST_ASSERT_EQUAL(60, setup_rows_for(prophet8, SETTINGS_ROWS_AUTO,
+	    480));
+	TEST_ASSERT_EQUAL(24, setup_rows_for(prophet8, 24, 480));
+	/* 720 lines / 8 = 90, capped at what the grid supports. */
+	TEST_ASSERT_EQUAL(GRID_MAX_ROWS, setup_rows_for(prophet8,
+	    SETTINGS_ROWS_AUTO, 720));
 }
 
 /* --- applying options to the terminal -------------------------------- */
@@ -145,6 +158,7 @@ test_term_configure(void)
 		.answerback = "hello",
 	};
 
+	render_set_screen(&render, 640, 480);
 	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render, capture,
 	    nullptr));
 	TEST_ASSERT_TRUE(term_configure(&term, &font_builtins[0], &options));

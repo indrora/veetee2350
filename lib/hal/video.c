@@ -51,6 +51,9 @@
 #include "pico.h"
 #include "pico/multicore.h"
 
+#include "board.h"
+#include "video_modes.h"
+
 /*
  * Guard against the build silently targeting the 30-GPIO RP2350A: then
  * PICO_PIO_USE_GPIO_BASE is 0, pins >= 32 alias to 0-15, and the screen
@@ -83,11 +86,55 @@ static const struct dvi_serialiser_cfg pizero_dvi_cfg = {
 
 static struct dvi_inst dvi0;
 
+/*
+ * Hardware side of each entry in video_modes[]: the libdvi timing (whose
+ * bit clock becomes sysclk) and the core voltage. Voltages follow
+ * PicoDVI's notes (1.2 V up to ~300 MHz, 1.25 V at 372 MHz "slower silicon
+ * may need the full 1.3"); we take 1.30 V at 372 MHz for margin. 1.30 V is
+ * the highest the RP2350 regulator allows without unlocking.
+ */
+/*
+ * 1280x720 at 24 Hz: libdvi's 720p30 frame (1650 x 750 total) with the
+ * pixel clock scaled from 37.125 to 29.7 MHz. Not const, so it lives in
+ * RAM: core 1's DMA IRQ reads the timing, and core 1 must never touch
+ * flash (tools/core1_audit.py).
+ */
+static struct dvi_timing timing_1280x720p_24hz = {
+	.h_sync_polarity = true,
+	.h_front_porch = 110,
+	.h_sync_width = 40,
+	.h_back_porch = 220,
+	.h_active_pixels = 1280,
+	.v_sync_polarity = true,
+	.v_front_porch = 5,
+	.v_sync_width = 5,
+	.v_back_porch = 20,
+	.v_active_lines = 720,
+	.bit_clk_khz = 297000,
+};
+
+static const struct {
+	const struct dvi_timing	*timing;
+	enum vreg_voltage	 vreg;
+} mode_hw[VIDEO_MODE_COUNT] = {
+	[VIDEO_MODE_640x480] = {&dvi_timing_640x480p_60hz, VREG_VOLTAGE_1_20},
+	[VIDEO_MODE_720x480] = {&dvi_timing_720x480p_60hz, VREG_VOLTAGE_1_20},
+	[VIDEO_MODE_800x480] = {&dvi_timing_800x480p_60hz, VREG_VOLTAGE_1_20},
+	[VIDEO_MODE_960x540] = {&dvi_timing_960x540p_60hz, VREG_VOLTAGE_1_30},
+	[VIDEO_MODE_1280x720] = {&dvi_timing_1280x720p_30hz, VREG_VOLTAGE_1_30},
+	[VIDEO_MODE_1280x720_24] = {&timing_1280x720p_24hz, VREG_VOLTAGE_1_20},
+};
+
+/* The running mode's size; fixed after video_init. */
+static unsigned active_width;
+static unsigned active_height;
+static unsigned line_budget;
+
 static video_scanline_fn scanline_fn;
 static void *scanline_ctx;
 
 /* Line ring. Producer: core 0 (IRQ). Consumer: core 1. */
-static uint16_t ring[RING_LINES][VIDEO_WIDTH] __attribute__((aligned(4)));
+static uint16_t ring[RING_LINES][VIDEO_MAX_WIDTH] __attribute__((aligned(4)));
 static volatile uint32_t ring_head;	/* lines produced, written by core 0 */
 static volatile uint32_t ring_tail;	/* lines consumed, written by core 1 */
 static unsigned produce_line;		/* core 0 only: next scanline index */
@@ -97,6 +144,10 @@ static unsigned produce_line;		/* core 0 only: next scanline index */
  * executes SRAM (tools/core1_audit.py checks that on every build).
  */
 static volatile bool core1_in_ram_loop;
+
+#ifdef VEETEE_FLASH_PROBE
+struct board_flash_probe video_flash_probe_result;
+#endif
 
 /* Per-frame statistics; each field has a single writer core. */
 static volatile struct video_stats live_stats;
@@ -150,10 +201,10 @@ static void __not_in_flash_func(produce_lines)(void)
 		render_frame_total += spent;
 		if (spent > render_frame_max)
 			render_frame_max = spent;
-		if (++produce_line == VIDEO_HEIGHT) {
+		if (++produce_line == active_height) {
 			produce_line = 0;
 			live_stats.avg_render_cycles = render_frame_total /
-			    VIDEO_HEIGHT;
+			    active_height;
 			live_stats.max_render_cycles = render_frame_max;
 			render_frame_total = 0;
 			render_frame_max = 0;
@@ -182,24 +233,24 @@ static void __not_in_flash_func(doorbell_irq)(void)
  * serialiser config (lane 0 = D0 = blue).
  *
  * Two 10-bit symbols are packed per FIFO word (DVI_SYMBOLS_PER_WORD=2), so
- * each lane is VIDEO_WIDTH/2 words. This matters for speed: the SIO TMDS
+ * each lane is width/2 words. This matters for speed: the SIO TMDS
  * encoder can pop both symbols of a pixel pair in one read. Measured on
  * hardware with one symbol per word, encode alone cost ~9.2k cycles/line,
  * over the 8k budget.
  */
-#define LANE_WORDS	(VIDEO_WIDTH / DVI_SYMBOLS_PER_WORD)
-
 static void __not_in_flash_func(encode_line)(const uint16_t *pixels,
     uint32_t *tmds)
 {
 	const uint32_t *pix = (const uint32_t *)pixels;
+	const unsigned width = active_width;
+	const unsigned lane_words = width / DVI_SYMBOLS_PER_WORD;
 
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 0 * LANE_WORDS,
-	    VIDEO_WIDTH, 4, 0);
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 1 * LANE_WORDS,
-	    VIDEO_WIDTH, 10, 5);
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 2 * LANE_WORDS,
-	    VIDEO_WIDTH, 15, 11);
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 0 * lane_words,
+	    width, 4, 0);
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 1 * lane_words,
+	    width, 10, 5);
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 2 * lane_words,
+	    width, 15, 11);
 }
 
 /*
@@ -221,7 +272,7 @@ static void __not_in_flash_func(core1_scanout)(void)
 		uint32_t frame_max = 0;
 		uint32_t frame_total = 0;
 
-		for (unsigned line = 0; line < VIDEO_HEIGHT; line++) {
+		for (unsigned line = 0; line < active_height; line++) {
 			uint32_t *tmds;
 			uint32_t seq = ring_tail;
 
@@ -251,31 +302,69 @@ static void __not_in_flash_func(core1_scanout)(void)
 		}
 
 		live_stats.max_encode_cycles = frame_max;
-		live_stats.avg_encode_cycles = frame_total / VIDEO_HEIGHT;
+		live_stats.avg_encode_cycles = frame_total / active_height;
 		__dmb();
 		live_stats.frames = live_stats.frames + 1;
 	}
 }
 
-void
-video_init(video_scanline_fn scanline, void *ctx)
+unsigned
+video_width(void)
 {
+	return active_width;
+}
+
+unsigned
+video_height(void)
+{
+	return active_height;
+}
+
+unsigned
+video_line_budget(void)
+{
+	return line_budget;
+}
+
+void
+video_init(unsigned mode, video_scanline_fn scanline, void *ctx)
+{
+	if (mode >= VIDEO_MODE_COUNT)
+		mode = VIDEO_MODE_640x480;
+	const struct dvi_timing *timing = mode_hw[mode].timing;
+
 	scanline_fn = scanline;
 	scanline_ctx = ctx;
+	active_width = timing->h_active_pixels;
+	active_height = timing->v_active_lines;
+	/* sysclk = TMDS bit clock: one line is 10 sysclk per pixel clock. */
+	line_budget = 10u * (timing->h_front_porch + timing->h_sync_width +
+	    timing->h_back_porch + timing->h_active_pixels);
 
 	/*
-	 * arduino-pico already runs sysclk at F_CPU (platformio.ini) but only
-	 * raises VREG to 1.15 V. PicoDVI's tested setting for 252 MHz is
-	 * 1.20 V; bump it, let it settle, then make sure the clock is exactly
-	 * the TMDS bit rate (25.2 MHz pixel clock x 10).
+	 * Order matters when speeding up: voltage first (and let it settle),
+	 * then a flash timing that's valid at every clock the switch passes
+	 * through (board.h), then the clock, then the final flash timing.
+	 * arduino-pico starts us at F_CPU = 252 MHz with VREG at 1.15 V.
 	 */
-	vreg_set_voltage(VREG_VOLTAGE_1_20);
+	uint32_t sys_hz = timing->bit_clk_khz * 1000u;
+#ifdef VEETEE_FLASH_PROBE
+	board_flash_probe_reference();
+#endif
+	vreg_set_voltage(mode_hw[mode].vreg);
 	busy_wait_ms(10);
-	if (clock_get_hz(clk_sys) != VIDEO_SYSCLK_KHZ * 1000u &&
-	    !set_sys_clock_khz(VIDEO_SYSCLK_KHZ, false))
-		panic("video: cannot reach %u kHz sysclk", VIDEO_SYSCLK_KHZ);
+	board_flash_timing_transition(sys_hz > clock_get_hz(clk_sys) ?
+	    sys_hz : clock_get_hz(clk_sys));
+	if (clock_get_hz(clk_sys) != sys_hz &&
+	    !set_sys_clock_khz(timing->bit_clk_khz, false))
+		panic("video: cannot reach %lu kHz sysclk",
+		    (unsigned long)timing->bit_clk_khz);
+	board_flash_timing(sys_hz);	/* now exactly right for the new clock */
+#ifdef VEETEE_FLASH_PROBE
+	board_flash_probe(sys_hz, &video_flash_probe_result);
+#endif
 
-	dvi0.timing = &dvi_timing_640x480p_60hz;
+	dvi0.timing = timing;
 	dvi0.ser_cfg = pizero_dvi_cfg;
 	if (pio_set_gpio_base(dvi0.ser_cfg.pio, 16) != PICO_OK)
 		panic("video: cannot rebase PIO to GPIO 16-47");

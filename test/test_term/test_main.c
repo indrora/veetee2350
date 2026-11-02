@@ -63,6 +63,7 @@ cell_bg(const struct cell *cell)
 void
 setUp(void)
 {
+	render_set_screen(&render, 640, 480);
 	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render,
 	    capture_output, nullptr));
 	reply_len = 0;

@@ -30,6 +30,7 @@ enum setup_action {
 };
 
 enum setup_item {
+	ITEM_RESOLUTION,
 	ITEM_FONT,
 	ITEM_ROWS,
 	ITEM_SCHEME,
@@ -53,13 +54,19 @@ struct setup {
 	struct grid	*grid;
 	const struct font *font;	/* to look up glyphs while drawing */
 	unsigned	 selected;	/* enum setup_item */
+	unsigned	 running_resolution;	/* mode the hardware is in now */
 	bool		 editing;	/* typing into the answerback field */
 	char		 message[64];
 };
 
-/* Open SET-UP on `grid` (any size >= 64x22) editing a copy of `current`. */
+/*
+ * Open SET-UP on `grid` (any size >= 64x22) editing a copy of `current`.
+ * `running_resolution` is the video mode actually in use, so the menu can
+ * flag a pending change (which needs a restart).
+ */
 void	setup_begin(struct setup *setup, const struct settings *current,
-	    struct grid *grid, const struct font *font);
+	    struct grid *grid, const struct font *font,
+	    unsigned running_resolution);
 
 /* Handle one key; redraws as needed. */
 enum setup_action setup_key(struct setup *setup, const struct key_event *key);
@@ -69,7 +76,11 @@ void	setup_message(struct setup *setup, const char *text);
 
 void	setup_draw(struct setup *setup);
 
-/* Rows a font gives with this rows setting (resolves SETTINGS_ROWS_AUTO). */
-unsigned setup_rows_for(const struct font_builtin *builtin, unsigned rows);
+/*
+ * Rows a font gives on a screen `height` pixels tall with this rows
+ * setting (resolves SETTINGS_ROWS_AUTO, caps at what fits).
+ */
+unsigned setup_rows_for(const struct font_builtin *builtin, unsigned rows,
+	    unsigned height);
 
 #endif /* SETUP_H */

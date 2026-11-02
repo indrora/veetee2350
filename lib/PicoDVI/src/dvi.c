@@ -50,7 +50,13 @@ void dvi_init(struct dvi_inst *inst, uint spinlock_tmds_queue, uint spinlock_col
 #if DVI_MONOCHROME_TMDS
 		tmdsbuf = malloc(inst->timing->h_active_pixels / DVI_SYMBOLS_PER_WORD * sizeof(uint32_t));
 #else
-		tmdsbuf = malloc(3 * inst->timing->h_active_pixels / DVI_SYMBOLS_PER_WORD * sizeof(uint32_t));
+		// VeeTee patch: slack for the unrolled SIO encode loop, which
+		// writes in blocks of 4*TMDS_ENCODE_UNROLL words and can run up to
+		// one block minus a word past the end of the last lane (e.g. 720 px
+		// with unroll 4: 360 words/lane is not a multiple of 16). See
+		// PATCHES.md #5.
+		tmdsbuf = malloc(3 * inst->timing->h_active_pixels / DVI_SYMBOLS_PER_WORD * sizeof(uint32_t)
+		    + 4 * TMDS_ENCODE_UNROLL * sizeof(uint32_t));
 #endif
 		if (!tmdsbuf)
 			panic("TMDS buffer allocation failed");

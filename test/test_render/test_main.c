@@ -16,7 +16,7 @@
 static struct font font;
 static struct grid grid;
 static struct render render;
-static uint16_t pixels[RENDER_WIDTH] __attribute__((aligned(4)));
+static uint16_t pixels[RENDER_MAX_WIDTH] __attribute__((aligned(4)));
 
 static struct cell
 blank_cell(void)
@@ -31,7 +31,8 @@ setUp(void)
 
 	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtins[0].data,
 	    font_builtins[0].len));
-	render_grid_size(&font, &cols, &rows);
+	render_set_screen(&render, 640, 480);
+	render_grid_size(&font, 640, 480, &cols, &rows);
 	TEST_ASSERT_TRUE(grid_init(&grid, cols, rows, blank_cell()));
 	render_init(&render, &font, &grid);
 	grid.cursor_visible = false;
@@ -135,7 +136,8 @@ test_border_for_uneven_font(void)
 
 	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font13, font_builtins[1].data,
 	    font_builtins[1].len));
-	render_grid_size(&font13, &cols, &rows);
+	render_set_screen(&render13, 640, 480);
+	render_grid_size(&font13, 640, 480, &cols, &rows);
 	TEST_ASSERT_EQUAL(36, rows);
 	TEST_ASSERT_TRUE(grid_init(&grid13, cols, rows,
 	    grid_make_cell(0, WHITE, BLUE, 0)));
@@ -149,6 +151,32 @@ test_border_for_uneven_font(void)
 	font_free(&font13);
 }
 
+static void
+test_720p_geometry(void)
+{
+	/* 1280x720 with the 8x16 font: 160x45, exactly filling the screen. */
+	struct grid wide;
+	struct render render720;
+	unsigned cols, rows;
+
+	render_set_screen(&render720, 1280, 720);
+	render_grid_size(&font, 1280, 720, &cols, &rows);
+	TEST_ASSERT_EQUAL(160, cols);
+	TEST_ASSERT_EQUAL(45, rows);
+	TEST_ASSERT_TRUE(grid_init(&wide, cols, rows, blank_cell()));
+	grid_row(&wide, 44)[159] = grid_make_cell(font_glyph_for(&font, 'Z'),
+	    WHITE, BLUE, 0);
+	render_init(&render720, &font, &wide);
+	render720.grid->cursor_visible = false;
+	TEST_ASSERT_EQUAL(0, render720.x_offset);
+	TEST_ASSERT_EQUAL(0, render720.y_offset);
+	render_scanline(pixels, 719, &render720);	/* last line of row 44 */
+	for (unsigned x = 0; x < 8; x++)
+		TEST_ASSERT_EQUAL_HEX16(expected('Z', 15, x, WHITE, BLUE),
+		    pixels[1272 + x]);
+	grid_free(&wide);
+}
+
 int
 main(void)
 {
@@ -159,5 +187,6 @@ main(void)
 	RUN_TEST(test_block_cursor);
 	RUN_TEST(test_scroll_up_reuses_rows);
 	RUN_TEST(test_border_for_uneven_font);
+	RUN_TEST(test_720p_geometry);
 	return UNITY_END();
 }

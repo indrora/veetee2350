@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "render.h"
+#include "video_modes.h"
 
 /* Menu colours: VT-style light text on blue, selection inverted. */
 #define MENU_FG		grid_rgb565(230, 230, 230)
@@ -25,12 +26,13 @@
 static const char *const cursor_names[] = {"block", "underline", "bar"};
 
 unsigned
-setup_rows_for(const struct font_builtin *builtin, unsigned rows)
+setup_rows_for(const struct font_builtin *builtin, unsigned rows,
+    unsigned screen_height)
 {
 	unsigned width, height;
 
 	font_builtin_cell(builtin, &width, &height);
-	unsigned fit = RENDER_HEIGHT / height;
+	unsigned fit = screen_height / height;
 	if (fit > GRID_MAX_ROWS)
 		fit = GRID_MAX_ROWS;
 	if (rows == SETTINGS_ROWS_AUTO || rows > fit)
@@ -76,19 +78,31 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 {
 	const struct settings *work = &setup->work;
 	const struct font_builtin *builtin = work_font(setup);
+	const struct video_mode *mode = &video_modes[work->resolution %
+	    VIDEO_MODE_COUNT];
 	unsigned width, height;
 
 	switch (item) {
-	case ITEM_FONT:
-		font_builtin_cell(builtin, &width, &height);
-		snprintf(out, len, "%s  (%ux%u cell, %ux%u)", builtin->name,
-		    width, height, RENDER_WIDTH / width,
-		    setup_rows_for(builtin, work->rows));
+	case ITEM_RESOLUTION:
+		snprintf(out, len, "%s%s", mode->name,
+		    work->resolution != setup->running_resolution ?
+		    "  (restarts on exit)" : "");
 		break;
+	case ITEM_FONT: {
+		font_builtin_cell(builtin, &width, &height);
+		unsigned cols = mode->width / width;
+		if (cols > GRID_MAX_COLS)
+			cols = GRID_MAX_COLS;
+		snprintf(out, len, "%s  (%ux%u cell, %ux%u)", builtin->name,
+		    width, height, cols,
+		    setup_rows_for(builtin, work->rows, mode->height));
+		break;
+	}
 	case ITEM_ROWS:
 		if (work->rows == SETTINGS_ROWS_AUTO)
 			snprintf(out, len, "auto (%u)",
-			    setup_rows_for(builtin, SETTINGS_ROWS_AUTO));
+			    setup_rows_for(builtin, SETTINGS_ROWS_AUTO,
+			    mode->height));
 		else
 			snprintf(out, len, "%u", work->rows);
 		break;
@@ -123,6 +137,7 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 }
 
 static const char *const item_labels[ITEM_COUNT] = {
+	[ITEM_RESOLUTION] = "Resolution",
 	[ITEM_FONT] = "Font",
 	[ITEM_ROWS] = "Rows",
 	[ITEM_SCHEME] = "Colours",
@@ -182,7 +197,7 @@ setup_draw(struct setup *setup)
 	    "Type the answerback; Enter or Esc to finish." :
 	    "Up/Down: select   Left/Right/Enter: change", DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL,
-	    "Font, rows and colours apply on exit (terminal resets).",
+	    "Font/rows/colours reset the terminal; resolution restarts it.",
 	    DIM_FG, MENU_BG);
 	put(setup, help_row + 3, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
@@ -197,13 +212,14 @@ setup_message(struct setup *setup, const char *text)
 
 void
 setup_begin(struct setup *setup, const struct settings *current,
-    struct grid *grid, const struct font *font)
+    struct grid *grid, const struct font *font, unsigned running_resolution)
 {
 	memset(setup, 0, sizeof(*setup));
 	setup->work = *current;
 	setup->grid = grid;
 	setup->font = font;
-	setup->selected = ITEM_FONT;
+	setup->running_resolution = running_resolution;
+	setup->selected = ITEM_RESOLUTION;
 	setup_draw(setup);
 }
 
@@ -231,6 +247,10 @@ change_value(struct setup *setup, int step)
 	struct settings *work = &setup->work;
 
 	switch (setup->selected) {
+	case ITEM_RESOLUTION:
+		work->resolution = (uint8_t)cycle(work->resolution,
+		    VIDEO_MODE_COUNT, step);
+		break;
 	case ITEM_FONT: {
 		unsigned index = (unsigned)(work_font(setup) - font_builtins);
 		index = cycle(index, font_builtin_count, step);

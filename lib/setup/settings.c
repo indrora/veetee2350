@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "grid.h"
+#include "video_modes.h"
 
 static const struct {
 	const char	*name;
@@ -25,6 +26,7 @@ void
 settings_defaults(struct settings *settings)
 {
 	memset(settings, 0, sizeof(*settings));
+	settings->resolution = VIDEO_MODE_640x480;
 	strcpy(settings->font, "notjam-clean-16");
 	settings->rows = SETTINGS_ROWS_AUTO;
 	settings->scheme = SCHEME_XTERM;
@@ -75,6 +77,7 @@ settings_valid(const struct settings *settings)
 	    settings->version == SETTINGS_VERSION &&
 	    settings->size == sizeof(*settings) &&
 	    settings->scheme < SCHEME_COUNT &&
+	    settings->resolution < VIDEO_MODE_COUNT &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
 }
 

@@ -12,6 +12,7 @@ was learned.
 6. [Switching fonts live](006-font-switching.md)
 7. [A keyboard port, and making core 1 flash-free](007-keyboard-port.md)
 8. [SET-UP](008-set-up.md)
+9. [Six resolutions, two lurking bugs](009-resolutions.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

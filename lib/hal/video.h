@@ -17,21 +17,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define VIDEO_WIDTH	640
-#define VIDEO_HEIGHT	480
+#include "video_modes.h"
 
 /*
- * One 640x480p60 line is 800 pixel clocks including blanking. At one TMDS
- * bit per sysclk cycle and 10 bits per pixel, that is 8000 sysclk cycles
- * per line at 252 MHz. Encode (core 1) and render (core 0) must each stay
- * below it on average, or DVI emits "late" lines (solid colour) to resync.
- */
-#define VIDEO_SYSCLK_KHZ		252000
-#define VIDEO_LINE_BUDGET_CYCLES	8000
-
-/*
- * Fill `pixels` (VIDEO_WIDTH RGB565 values, 4-byte aligned) for visible
- * line `line` (0..VIDEO_HEIGHT-1). Runs on core 0 in IRQ context; must
+ * Fill `pixels` (video_width() RGB565 values, 4-byte aligned) for visible
+ * line `line` (0..video_height()-1). Runs on core 0 in IRQ context; must
  * live in RAM (__not_in_flash_func) and must not block. Lines are always
  * requested in display order.
  */
@@ -47,11 +37,18 @@ struct video_stats {
 };
 
 /*
- * Raise VREG, confirm sysclk is 252 MHz, bring up PIO/DMA serialisers and
- * launch core 1. Never returns failure: if video can't start the device is
- * useless, so it panics (STYLE.md §7). Call once, from core 0.
+ * Start output in `mode` (enum video_mode_id, see video_modes.h): set the
+ * core voltage, flash timing and sysclk for the mode, bring up the PIO/DMA
+ * serialisers and launch core 1. Never returns failure: if video can't
+ * start the device is useless, so it panics (STYLE.md §7). Call once, from
+ * core 0, at boot; changing mode means rebooting.
  */
-void	video_init(video_scanline_fn scanline, void *ctx);
+void	video_init(unsigned mode, video_scanline_fn scanline, void *ctx);
+
+/* The running mode's active size, and sysclk cycles per line (budget). */
+unsigned video_width(void);
+unsigned video_height(void);
+unsigned video_line_budget(void);
 
 /* Snapshot of scanout statistics; safe to call from core 0 at any time. */
 void	video_get_stats(struct video_stats *out);

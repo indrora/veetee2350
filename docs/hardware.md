@@ -81,6 +81,59 @@ Gotcha: arduino-pico hooks the shared SIO_IRQ_BELL even in single-core
 mode, and watches doorbell 0 with an "idle forever" handler. The video
 ring therefore uses doorbell 7.
 
+## Output resolutions (SET-UP → Resolution)
+
+All of these are verified on the Genki. Changing the resolution saves
+the settings and reboots, because the clock, VREG and DVI timing are
+only set at boot.
+
+| Mode | sysclk | VREG | Cycles/line | Grid (8×16 font) |
+|------|--------|------|-------------|------------------|
+| 640×480 @ 60 | 252 MHz | 1.20 V | 8 000 | 80×30 |
+| 720×480 @ 60 | 270 MHz | 1.20 V | 8 580 | 90×30 |
+| 800×480 @ 60 | 295 MHz | 1.20 V | 9 920 | 100×30 |
+| 960×540 @ 60 | 372 MHz | 1.30 V | 11 040 | 120×33 |
+| 1280×720 @ 30 | 372 MHz | 1.30 V | 16 500 | 160×45 |
+| 1280×720 @ 24 | 297 MHz | 1.20 V | 16 500 | 160×45 |
+
+At 720×480, encode is 4 977 and render 4 083 of the 8 580 cycles (and
+the other modes scale the same way). 1280×720 @ 24 is the 720p30 frame
+with a slower pixel clock: the per-line budget is the same, but the
+overclock is far gentler.
+
+### Flash (QSPI) timing at high clocks
+
+The flash clock is sysclk / CLKDIV, and the flash is rated to 133 MHz.
+`board_flash_timing()` picks CLKDIV = ⌈sysclk/133 MHz⌉ (min 2), and
+RXDELAY = CLKDIV, plus 1 if the flash clock is above 100 MHz. A
+`pizero-flashprobe` build re-reads the firmware image uncached at every
+RXDELAY and reports which ones work:
+
+| sysclk | CLKDIV | Working RXDELAY | Chosen |
+|--------|--------|-----------------|--------|
+| 252 MHz | 2 | 1–4 | 3 |
+| 270 MHz | 3 | 1–5 | 3 |
+| 295 MHz | 3 | 1–6 | 3 |
+| 372 MHz | 3 | 2–6 | 4 |
+
+Two traps:
+1. **`set_sys_clock_khz()` runs from flash** and briefly parks clk_sys
+   on the 48 MHz USB PLL. RXDELAY 4 is too late at 48 MHz, so 960×540
+   hard-faulted inside `clock_configure`. During the switch we use a
+   transition timing (CLKDIV + 1, RXDELAY 3) that works at every clock it
+   passes through.
+2. **`flash_range_erase/program` re-enter XIP with boot defaults**
+   (CLKDIV 2). `flashcfg_write()` runs from RAM and restores the timing
+   before anything fetches from flash.
+
+### Crash guard
+
+An 8 s watchdog is fed from the main loop. Two watchdog-timeout resets
+in a row boot the next session on factory defaults; the saved settings
+are left alone. A HardFault handler records PC/LR (plus r0, r2, r5)
+in watchdog scratch registers, and the next boot prints them on the
+banner (and over serial in `pizero-stats`), ready for `addr2line`.
+
 ## Capture
 
 The Genki ShadowCast 2 upscales 640×480 to 2560×1440 (stretched to
