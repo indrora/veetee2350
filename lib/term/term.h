@@ -119,6 +119,28 @@ struct term_pen {
 	bool		strike;
 };
 
+/*
+ * A printer for Media Copy (MC, "CSI ... i"). The terminal turns print
+ * screen, print line and auto print into text -- UTF-8, trailing blanks
+ * trimmed, CR LF after each line, as a VT sends to its printer port --
+ * and passes printer-controller data through untouched. Where it goes
+ * is the embedder's business (VeeTee: a file on the SD card).
+ */
+enum term_printer_status {
+	TERM_PRINTER_READY,
+	TERM_PRINTER_NOT_READY,		/* e.g. no card in the slot */
+	TERM_PRINTER_NONE,		/* switched off */
+};
+
+struct term_printer {
+	/* Bytes for the printer; false if they couldn't be printed. */
+	bool	(*write)(const uint8_t *bytes, size_t len, void *ctx);
+	/* A print job (screen, line, controller session) is complete. */
+	void	(*job_done)(void *ctx);
+	enum term_printer_status (*status)(void *ctx);
+	void	*ctx;
+};
+
 struct term {
 	VTerm		*vt;
 	VTermState	*state;
@@ -168,6 +190,14 @@ struct term {
 
 	/* Sixel images as graphic cells (graphics.c). */
 	struct graphics	 graphics;
+
+	/* Media Copy (printer.c). */
+	struct term_printer printer;
+	bool		 has_printer;
+	bool		 print_controller;	/* CSI 5 i ... CSI 4 i */
+	bool		 auto_print;		/* CSI ? 5 i */
+	uint8_t		 mc_held[4];	/* a possible CSI 4/5 i, held back */
+	uint8_t		 mc_held_len;
 };
 
 /*
@@ -206,6 +236,10 @@ struct term {
  */
 void	term_set_graphics_budget(struct term *term, size_t budget,
 	    graphics_heap_fn heap_free);
+
+/* Attach a printer (nullptr: none -- MC is ignored, DSR says so). */
+void	term_set_printer(struct term *term,
+	    const struct term_printer *printer);
 
 /* Hard reset (like RIS), then re-apply the configured modes. */
 void	term_reset(struct term *term);

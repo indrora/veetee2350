@@ -24,6 +24,7 @@
 #include "font.h"
 #include "keys.h"
 #include "render.h"
+#include "printer_sd.h"
 #include "screenshot.h"
 #include "settings.h"
 #include "storage.h"
@@ -208,6 +209,7 @@ apply_settings(void)
 	    sizeof(options.answerback));
 	if (!term_configure(&term, settings_font(), &options))
 		panic("term: cannot apply settings (memory)");
+	printer_sd_enable(&term, settings.printer != 0);
 }
 
 static void
@@ -377,7 +379,7 @@ take_screenshot(void)
 	if (!screenshot_save(&render, settings.screenshot_format, path,
 	    sizeof(path), error, sizeof(error))) {
 		if (in_setup) {
-			char text[80];
+			char text[96];
 			snprintf(text, sizeof(text), "Screenshot failed: %s",
 			    error);
 			setup_message(&setup, text);
@@ -603,6 +605,7 @@ app_poll(void)
 	poll_keyboard();
 	poll_bootsel();
 	poll_bell();
+	printer_sd_poll();
 #ifdef VEETEE_SERIAL_STATS
 	report_stats();
 #endif

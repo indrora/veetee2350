@@ -14,8 +14,9 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	7	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
-				   6 card fonts and schemes, 7 screenshots */
+#define SETTINGS_VERSION	8	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+				   6 card fonts and schemes, 7 screenshots,
+				   8 printer */
 #define SETTINGS_FONT_MAX	32	/* built-in name, or "sd:" + card file */
 #define SETTINGS_SCHEME_MAX	32	/* card scheme file name, no ".yaml" */
 #define SETTINGS_CARD_PREFIX	"sd:"
@@ -83,6 +84,7 @@ struct settings {
 	uint8_t		alt_screen;
 	uint8_t		sixel;
 	uint8_t		screenshot_format;	/* enum screenshot_format */
+	uint8_t		printer;	/* Media Copy to /print on the card */
 	uint32_t	crc;
 };
 

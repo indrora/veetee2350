@@ -209,6 +209,10 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 	case ITEM_SIXEL:
 		snprintf(out, len, "%s", work->sixel ? "on" : "off");
 		break;
+	case ITEM_PRINTER:
+		snprintf(out, len, "%s", work->printer ?
+		    "on: SD card  (/print/NNNN.txt)" : "off");
+		break;
 	case ITEM_SCREENSHOT:
 		snprintf(out, len, "%s", work->screenshot_format == SHOT_QOI ?
 		    "QOI  (/screens/NNNN.qoi, small)" :
@@ -261,6 +265,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_SIXEL] = "Sixel graphics",
 	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_SCREENSHOT] = "Screenshot (F12)",
+	[ITEM_PRINTER] = "Printer",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
 	[ITEM_WRAP] = "Auto wrap",
@@ -307,9 +312,19 @@ setup_draw(struct setup *setup)
 
 	fill_row(setup, 0, TITLE_FG, TITLE_BG);
 	put(setup, 0, 1, "VeeTee 2350 SET-UP", TITLE_FG, TITLE_BG);
-	put(setup, 0, grid->cols - 21, "BOOTSEL / F3: leave", TITLE_FG,
-	    TITLE_BG);
-	put(setup, 0, 22, setup->storage, TITLE_FG, TITLE_BG);
+	/*
+	 * Short screens (24 rows) have no row to spare for messages: the
+	 * title row carries the message, or the card status, instead of the
+	 * BOOTSEL/F3 hint (the Exit item says F3 / Esc).
+	 */
+	if (roomy(setup)) {
+		put(setup, 0, grid->cols - 21, "BOOTSEL / F3: leave",
+		    TITLE_FG, TITLE_BG);
+		put(setup, 0, 22, setup->storage, TITLE_FG, TITLE_BG);
+	} else {
+		put(setup, 0, 22, setup->message[0] != '\0' ?
+		    setup->message : setup->storage, TITLE_FG, TITLE_BG);
+	}
 
 	for (unsigned item = 0; item < ITEM_COUNT; item++) {
 		bool selected = item == setup->selected;
@@ -332,11 +347,6 @@ setup_draw(struct setup *setup)
 		put(setup, 1, LABEL_COL, "Font, size, emulation, colours: "
 		    "reset the terminal.  Resolution: restarts.", DIM_FG,
 		    MENU_BG);
-	if (!roomy(setup) && setup->message[0] != '\0' && !setup->editing) {
-		put(setup, help_row, LABEL_COL, setup->message, TITLE_BG,
-		    MENU_BG);
-		return;
-	}
 	put(setup, help_row, LABEL_COL, setup->editing ?
 	    "Type the answerback; Enter or Esc to finish." :
 	    "Up/Down select   Left/Right/Enter change   S save   F3 leave",
@@ -448,6 +458,9 @@ change_value(struct setup *setup, int step)
 		break;
 	case ITEM_SIXEL:
 		work->sixel = !work->sixel;
+		break;
+	case ITEM_PRINTER:
+		work->printer = !work->printer;
 		break;
 	case ITEM_SCREENSHOT:
 		work->screenshot_format = (uint8_t)cycle(

@@ -166,6 +166,14 @@ honoured for 0/2); pixel aspect is always 1:1; graphics on double-size
 lines aren't drawn; a font switch or DECCOLM drops all images (the pool
 is handed back so the grids can be rebuilt).
 
+## Printer (Media Copy)
+
+With "Printer" on in SET-UP, MC controls print to `/print/NNNN.txt` on
+the SD card: `CSI i` (screen or scrolling region, DECPEX/DECPFF
+honoured), `CSI ? 1 i` (cursor line), `CSI ? 5/4 i` (auto print),
+`CSI 5 i` ... `CSI 4 i` (printer controller mode, raw). `CSI ? 15 n`
+reports ready / not ready / no printer. See devlog 018.
+
 ## Conformance (esctest2)
 
 esctest2 runs unattended through `tools/hostshell.py` (see devlog 012):

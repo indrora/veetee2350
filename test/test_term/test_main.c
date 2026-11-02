@@ -777,6 +777,126 @@ test_sixel_after_font_switch(void)
 	TEST_ASSERT_EQUAL(1, term.screen->cursor_row);
 }
 
+/* --- Media Copy -------------------------------------------------------- */
+
+static char printed[4096];
+static size_t printed_len;
+static unsigned print_jobs;
+static enum term_printer_status printer_state;
+
+static bool
+fake_print(const uint8_t *bytes, size_t len, void *ctx)
+{
+	(void)ctx;
+	memcpy(printed + printed_len, bytes, len);
+	printed_len += len;
+	printed[printed_len] = '\0';
+	return true;
+}
+
+static void
+fake_job_done(void *ctx)
+{
+	(void)ctx;
+	print_jobs++;
+}
+
+static enum term_printer_status
+fake_status(void *ctx)
+{
+	(void)ctx;
+	return printer_state;
+}
+
+static void
+attach_printer(void)
+{
+	static const struct term_printer printer = {
+		.write = fake_print, .job_done = fake_job_done,
+		.status = fake_status,
+	};
+	printed_len = 0;
+	printed[0] = '\0';
+	print_jobs = 0;
+	printer_state = TERM_PRINTER_READY;
+	term_set_printer(&term, &printer);
+}
+
+static void
+test_print_screen_and_line(void)
+{
+	attach_printer();
+	feed("hello\r\n\r\nworld  \x1b[i");
+	/* 30 rows, trailing blanks dropped, CR LF each. */
+	TEST_ASSERT_EQUAL_STRING_LEN("hello\r\n\r\nworld\r\n\r\n", printed,
+	    18);
+	unsigned lines = 0;
+	for (size_t i = 0; i < printed_len; i++)
+		lines += printed[i] == '\n';
+	TEST_ASSERT_EQUAL(30, lines);
+	TEST_ASSERT_EQUAL(1, print_jobs);
+
+	/* Without DECPEX only the scrolling region is printed. */
+	printed_len = 0;
+	feed("\x1b[1;2r\x1b[0i");
+	TEST_ASSERT_EQUAL_STRING("hello\r\n\r\n", printed);
+
+	/* Print cursor line. */
+	printed_len = 0;
+	feed("\x1b[r\x1b[3;1H\x1b[?1i");
+	TEST_ASSERT_EQUAL_STRING("world\r\n", printed);
+}
+
+static void
+test_auto_print(void)
+{
+	attach_printer();
+	feed("\x1b[?5iabc\r\ndef\r\n\x1b[?4ighi\r\n");
+	TEST_ASSERT_EQUAL_STRING("abc\r\ndef\r\n", printed);
+	TEST_ASSERT_EQUAL(glyph('g'), cell_at(2, 0)->glyph);	/* still shown */
+}
+
+static void
+test_printer_controller(void)
+{
+	attach_printer();
+	/* Split across chunks, mid-sequence both ways. */
+	feed("x\x1b[");
+	feed("5iHEL");
+	feed("LO\x1b");
+	feed("[4iy");
+	TEST_ASSERT_EQUAL_STRING("HELLO", printed);
+	TEST_ASSERT_EQUAL(1, print_jobs);
+	TEST_ASSERT_EQUAL(glyph('x'), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph('y'), cell_at(0, 1)->glyph);
+
+	/* Look-alikes go where they belong: ESC [ 5 m is blink. */
+	printed_len = 0;
+	printed[0] = '\0';
+	feed("\x1b[5mZ\x1b[0m");
+	TEST_ASSERT_EQUAL(0, printed_len);
+	TEST_ASSERT_EQUAL(glyph('Z'), cell_at(0, 2)->glyph);
+	TEST_ASSERT_TRUE(cell_at(0, 2)->attr & CELL_BLINK);
+	/* ...and inside controller mode, ESC [ 5 m is printer data. */
+	feed("\x1b[5i\x1b[5m\x1b[4i");
+	TEST_ASSERT_EQUAL_STRING("\x1b[5m", printed);
+}
+
+static void
+test_printer_status(void)
+{
+	feed("\x1b[?15n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?13n", reply);	/* no printer */
+	attach_printer();
+	reply_len = 0;
+	feed("\x1b[?15n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?10n", reply);
+	printer_state = TERM_PRINTER_NOT_READY;
+	reply_len = 0;
+	feed("\x1b[?15n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?11n", reply);
+}
+
 int
 main(void)
 {
@@ -819,5 +939,9 @@ main(void)
 	RUN_TEST(test_sixel_scrolls);
 	RUN_TEST(test_sixel_queries_and_off);
 	RUN_TEST(test_sixel_after_font_switch);
+	RUN_TEST(test_print_screen_and_line);
+	RUN_TEST(test_auto_print);
+	RUN_TEST(test_printer_controller);
+	RUN_TEST(test_printer_status);
 	return UNITY_END();
 }

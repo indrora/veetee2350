@@ -16,6 +16,13 @@
 #include "colour.h"
 #include "vterm_internal.h"	/* modes and margins (vendored libvterm) */
 
+/* printer.c (Media Copy). */
+void	mc_feed(struct term *term, const uint8_t *bytes, size_t len);
+void	printer_print_screen(struct term *term);
+void	printer_print_line(struct term *term);
+void	term_feed_through(struct term *term, const uint8_t *bytes,
+	    size_t len);
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1294,6 +1301,24 @@ fb_csi(const char *leader, const long args[], int argcount,
 	}
 
 	/*
+	 * Media Copy (printer.c). CSI 4 i / 5 i (controller mode) are
+	 * recognised before libvterm sees them; arriving here means there's
+	 * no printer, and like the other MC controls they do nothing.
+	 */
+	if ((private || no_leader) && intermed == nullptr && command == 'i') {
+		long what = first == CSI_ARG_MISSING ? 0 : first;
+		if (no_leader && what == 0)
+			printer_print_screen(term);
+		else if (private && what == 1)
+			printer_print_line(term);
+		else if (private && (what == 4 || what == 5))
+			term->auto_print = what == 5 && term->has_printer;
+		else if (private && (what == 10 || what == 11))
+			printer_print_screen(term);	/* one page: same */
+		return 1;
+	}
+
+	/*
 	 * XTSMGRAPHICS, "CSI ? Pi ; Pa ; Pv S": graphics capabilities, as
 	 * Sixel-aware programs (notcurses, chafa) ask before sending images.
 	 * Pi 1 = colour registers, 2 = Sixel geometry; Pa 1 read, 2 reset,
@@ -1419,7 +1444,6 @@ fb_csi(const char *leader, const long args[], int argcount,
 			long		 request;
 			const char	*reply;
 		} reports[] = {
-			{15, "\x1b[?13n"},		/* printer: none */
 			{25, "\x1b[?20n"},		/* UDKs unlocked */
 			{26, "\x1b[?27;1;0;0n"},	/* keyboard: US, ready */
 			{53, "\x1b[?50n"},		/* locator: none */
@@ -1429,6 +1453,15 @@ fb_csi(const char *leader, const long args[], int argcount,
 			{75, "\x1b[?70n"},		/* data integrity: ok */
 			{85, "\x1b[?83n"},		/* multi-session: none */
 		};
+		if (first == 15) {	/* printer: ready / not ready / none */
+			enum term_printer_status status = term->has_printer ?
+			    term->printer.status(term->printer.ctx) :
+			    TERM_PRINTER_NONE;
+			send_printf(term, "\x1b[?%un", status ==
+			    TERM_PRINTER_READY ? 10u : status ==
+			    TERM_PRINTER_NOT_READY ? 11u : 13u, 0, 0, 0);
+			return 1;
+		}
 		for (size_t i = 0; i < sizeof(reports) / sizeof(reports[0]);
 		    i++) {
 			if (reports[i].request == first) {
@@ -1860,13 +1893,24 @@ feed_8bit(struct term *term, const uint8_t *bytes, size_t len)
 		vterm_input_write(term->vt, out, used);
 }
 
+/* Into libvterm (via the 8-bit translation if UTF-8 is off). */
 void
-term_feed(struct term *term, const uint8_t *bytes, size_t len)
+term_feed_through(struct term *term, const uint8_t *bytes, size_t len)
 {
 	if (term->options.utf8)
 		vterm_input_write(term->vt, (const char *)bytes, len);
 	else
 		feed_8bit(term, bytes, len);
+}
+
+void
+term_feed(struct term *term, const uint8_t *bytes, size_t len)
+{
+	/* With a printer, Media Copy needs a look at the bytes first. */
+	if (term->has_printer)
+		mc_feed(term, bytes, len);
+	else
+		term_feed_through(term, bytes, len);
 
 	/*
 	 * Font switches requested by OSC 50 are applied here, outside
