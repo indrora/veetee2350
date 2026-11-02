@@ -21,6 +21,7 @@ what changed since the last run, which is how regressions get caught
 | 20 | 484 | XTSAVE / XTRESTORE |
 | 21–22 | 488 | tabs at the right margin, DECSET 41, alternate-screen clearing |
 | 23 | 489 | CHA and HPA under origin mode |
+| 24 | 491 | DECNCSM only at VT510 level; OSC 104 resets the special colours |
 
 That's libvterm patches 10 to 26 (`lib/libvterm/PATCHES.md`). Most are
 a few lines each; a few of them are worth telling.
@@ -64,6 +65,17 @@ code, to be sure) cleared it on every entry. xterm clears at
 different moments per mode: 47 never, 1047 on the way out, 1049 on
 the way in. Patch 25 does that.
 
+## Colours that leaked between tests
+
+`ResetSpecialColor_Multiple` passed alone and failed in the full run.
+esctest resets colours between tests with a bare OSC 104, and in xterm
+that resets the special colours (bold, underline, blink, reverse,
+italic; OSC 4 indices 256–260) as well as the 256-colour palette.
+VeeTee's OSC 104 only did the palette, so a special colour set by an
+earlier test was still there, and became the "original" the next test
+compared against. Now a bare OSC 104 resets them too, and 104;256–260
+reset them one at a time.
+
 ## What's left
 
 Most of the remaining failures can't or shouldn't be fixed:
@@ -74,8 +86,12 @@ Most of the remaining failures can't or shouldn't be fixed:
   the screen size comes from SET-UP.
 - ISO protected areas (SPA/EPA): libvterm's non-selective erase is
   shared with RIS.
-- The special-colour reset tests look order-dependent (they compare
-  against a colour an earlier test changed); not confirmed yet.
+- `ResetSpecialColor_Dynamic` resets the foreground (OSC 110) and
+  expects black, because esctest's per-test reset sets OSC 10/11 to
+  black on white "to work around a bug". OSC 110 goes back to the
+  configured scheme, so the test only passes with a black-on-white
+  scheme. (That reset is also why the board's screen was black on
+  white for the picture above.)
 
 Firmware update from the SD card is still waiting: it can brick the
 board, and someone has to be awake to hold BOOTSEL.

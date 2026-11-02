@@ -657,6 +657,17 @@ field_number(const char *field, size_t len)
 	return value;
 }
 
+/* One OSC 104 (palette 0-255, specials 256-260) or 105 (specials) reset. */
+static void
+reset_colour(struct term *term, int command, long index)
+{
+	if (command == 104 && index < 256)
+		palette_set(term, (int)index, term->palette_initial[index]);
+	else
+		memcpy(term->special_colours[command == 105 ? index :
+		    index - 256], term->options.fg_rgb, 3);
+}
+
 /*
  * OSC 4 / 5 (pairs of index ; spec), 104 / 105 (reset listed or all),
  * 10-19 (successive specs), 110-119 (reset). "?" queries.
@@ -701,28 +712,25 @@ handle_colour_osc(struct term *term, int command, const char *buf, size_t len)
 	}
 	case 104:
 	case 105: {
-		int limit = command == 104 ? 256 : 5;	/* (104 ;256+ not handled) */
+		/*
+		 * As with OSC 4, 104's indices 256..260 are the special
+		 * colours, and a bare OSC 104 resets those too: xterm's
+		 * "reset all" runs over its whole colour table, specials
+		 * included. (esctest relies on it: its per-test reset is a
+		 * bare OSC 104, so specials changed by one test would
+		 * otherwise leak into the next.)
+		 */
+		int limit = command == 104 ? 256 + 5 : 5;
 		bool any = false;
 		while (next_field(buf, len, &at, &field, &field_len)) {
 			long index = field_number(field, field_len);
 			if (index < 0 || index >= limit)
 				continue;
 			any = true;
-			if (command == 104)
-				palette_set(term, (int)index,
-				    term->palette_initial[index]);
-			else
-				memcpy(term->special_colours[index],
-				    term->options.fg_rgb, 3);
+			reset_colour(term, command, index);
 		}
-		for (int index = 0; !any && index < limit; index++) {
-			if (command == 104)
-				palette_set(term, index,
-				    term->palette_initial[index]);
-			else
-				memcpy(term->special_colours[index],
-				    term->options.fg_rgb, 3);
-		}
+		for (int index = 0; !any && index < limit; index++)
+			reset_colour(term, command, index);
 		break;
 	}
 	default:

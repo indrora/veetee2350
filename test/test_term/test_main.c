@@ -1203,6 +1203,24 @@ test_hpa_origin(void)
 	feed("\x1b[?6l\x1b[s\x1b[?69l\x1b[r");
 }
 
+static void
+test_osc104_specials(void)
+{
+	/* A bare OSC 104 resets the special colours too (as 4;256+). */
+	feed("\x1b]4;256;rgb:8080/8080/8080\x1b\\\x1b]104\x1b\\");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b]5;0;?\x1b\\");
+	TEST_ASSERT_NULL(strstr(reply, "8080"));
+	/* So does OSC 104;257 for special colour 1. */
+	feed("\x1b]5;1;rgb:8080/8080/8080\x1b\\\x1b]104;257\x1b\\");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b]5;1;?\x1b\\");
+	TEST_ASSERT_NULL(strstr(reply, "8080"));
+	TEST_ASSERT_NOT_NULL(strstr(reply, "\x1b]5;1;rgb:"));
+}
+
 int
 main(void)
 {
@@ -1258,6 +1276,7 @@ main(void)
 	RUN_TEST(test_more_fix);
 	RUN_TEST(test_altbuf_47);
 	RUN_TEST(test_hpa_origin);
+	RUN_TEST(test_osc104_specials);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

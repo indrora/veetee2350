@@ -851,7 +851,7 @@ Traceback (most recent call last):
     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
     raise e
-esctypes.TestFailure: Test failed: expected ';256;rgb:1a1a/1313/0f0f' but got ';256;rgb:8080/8080/8080'
+esctypes.TestFailure: Test failed: expected ';256;rgb:1a1a/1313/0f0f' but got ';256;rgb:e5e5/e5e5/e5e5'
 
 
 Run test: DA2Tests.test_DA2_0
@@ -1608,40 +1608,7 @@ Run test: DECSCLTests.test_DECSCL_Level2DoesntSupportDECRQM
 Passed.
 
 Run test: DECSCLTests.test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM
-*** TEST DECSCLTests.test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  [Previous line repeated 1 more time]
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decscl.py", line 89, in test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM
-    AssertScreenCharsInRectEqual(Rect(1, 1, 1, 1), [empty()])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=1, y=1) expected ' ' (0x20) but got '1' (0x31)
-Actual:
-1
-
-Expected:
- 
-
+Passed.
 
 Run test: DECSCLTests.test_DECSCL_Level5_SupportsDECNCSM
 Skipped because terminal lacks requisite capability: (4, 5)
@@ -2591,27 +2558,7 @@ esctypes.TestFailure: Test failed: expected ';rgb:0000/0000/0000' but got ';rgb:
 
 
 Run test: ResetSpecialColorTests.test_ResetSpecialColor_Multiple
-*** TEST ResetSpecialColorTests.test_ResetSpecialColor_Multiple FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/reset_special_color.py", line 63, in test_ResetSpecialColor_Multiple
-    AssertEQ(actual1, original1)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected ';256;rgb:8080/8080/8080' but got ';256;rgb:e5e5/e5e5/e5e5'
-
+Passed.
 
 Run test: ResetSpecialColorTests.test_ResetSpecialColor_Multiple2
 Passed.
@@ -3030,7 +2977,7 @@ Passed.
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth
 Passed.
 
-*** 489 tests passed, 41 known bugs, 37 TESTS FAILED ***
+*** 491 tests passed, 41 known bugs, 35 TESTS FAILED ***
 Failing tests:
 ChangeColorTests.test_ChangeColor_CIELab
 ChangeColorTests.test_ChangeColor_CIELuv
@@ -3057,7 +3004,6 @@ DATests.test_DA_0
 DATests.test_DA_NoParameter
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECRQSSTests.test_DECRQSS_DECSNLS
-DECSCLTests.test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM
 DECSEDTests.test_DECSED_doesNotRespectISOProtect
 DECSELTests.test_DECSEL_doesNotRespectISOProtect
 DECSETTests.test_DECSET_Allow80To132
@@ -3067,5 +3013,4 @@ EDTests.test_ED_respectsISOProtection
 ELTests.test_EL_respectsISOProtection
 RISTests.test_RIS_ResetDECCOLM
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
-ResetSpecialColorTests.test_ResetSpecialColor_Multiple
 XtermWinopsTests.test_XtermWinops_DECSLPP

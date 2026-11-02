@@ -190,7 +190,7 @@ cd tools && python3 hostshell.py /dev/cu.usbmodem*1 --type \
 python3 tools/esc_summary.py run.log [--failures] [--compare old.log]
 ```
 
-Latest: **489 / 567** pass (86%) at 640×480 (baseline 169). `docs/esctest-latest.log`
+Latest: **491 / 567** pass (87%) at 640×480 (baseline 169). `docs/esctest-latest.log`
 holds the full log; `docs/esctest-baseline.log` the first run.
 
 ## Known gaps
