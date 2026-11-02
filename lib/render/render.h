@@ -30,7 +30,7 @@
 
 struct render {
 	const struct font *font;
-	struct grid	*grid;
+	struct grid * volatile grid;	/* swapped by render_set_grid */
 	uint16_t	 x_offset;	/* even, so cell pixels stay word-aligned */
 	uint16_t	 y_offset;
 	uint8_t		 strike_row;
@@ -60,6 +60,17 @@ void	render_init(struct render *render, const struct font *font,
  * Resume with render_init() on the new pair.
  */
 void	render_pause(struct render *render);
+
+/*
+ * Show a different grid of the same size (alternate screen switch). A
+ * single pointer store: core 1 reads render->grid once per scanline, so
+ * the switch lands on a line boundary.
+ */
+static inline void
+render_set_grid(struct render *render, struct grid *grid)
+{
+	render->grid = grid;
+}
 
 /* video_scanline_fn-compatible: ctx is the struct render. */
 void	render_scanline(uint16_t *pixels, unsigned line, void *ctx);

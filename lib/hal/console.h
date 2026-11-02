@@ -11,6 +11,8 @@
 #include <stddef.h>
 
 void	console_write(const char *buf, size_t len);
+/* Non-blocking: copy up to `cap` received bytes into buf, return count. */
+size_t	console_read(char *buf, size_t cap);
 void	console_printf(const char *fmt, ...)
 	    __attribute__((format(printf, 1, 2)));
 

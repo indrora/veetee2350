@@ -1,0 +1,11 @@
+{
+  "name": "libvterm",
+  "version": "0.3.3",
+  "description": "Vendored libvterm by Paul Evans (MIT). Only the parser/state layer is used by VeeTee; see PATCHES.md.",
+  "license": "MIT",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include",
+    "flags": "-std=gnu11 -O2 -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers"
+  }
+}

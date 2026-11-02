@@ -18,6 +18,18 @@ console_write(const char *buf, size_t len)
 	Serial.write(reinterpret_cast<const uint8_t *>(buf), len);
 }
 
+size_t
+console_read(char *buf, size_t cap)
+{
+	size_t avail = (size_t)Serial.available();
+
+	if (avail == 0)
+		return 0;
+	if (avail > cap)
+		avail = cap;
+	return Serial.readBytes(buf, avail);
+}
+
 void
 setup(void)
 {
