@@ -347,12 +347,31 @@ cb_setpenattr(VTermAttr attr, VTermValue *val, void *user)
 	return 1;
 }
 
+/* Append a libvterm string fragment to a title buffer. */
+static void
+title_fragment(char *title, const VTermStringFragment *frag)
+{
+	size_t have = frag->initial ? 0 : strlen(title);
+	size_t take = frag->len;
+
+	if (have + take >= TERM_TITLE_MAX)
+		take = TERM_TITLE_MAX - 1 - have;
+	memcpy(title + have, frag->str, take);
+	title[have + take] = '\0';
+}
+
 static int
 cb_settermprop(VTermProp prop, VTermValue *val, void *user)
 {
 	struct term *term = user;
 
 	switch (prop) {
+	case VTERM_PROP_TITLE:
+		title_fragment(term->title, &val->string);
+		return 1;
+	case VTERM_PROP_ICONNAME:
+		title_fragment(term->icon_label, &val->string);
+		return 1;
 	case VTERM_PROP_CURSORVISIBLE:
 		term->cursor_visible = val->boolean;
 		break;
@@ -810,11 +829,23 @@ fb_osc(int command, VTermStringFragment frag, void *user)
 }
 
 /* ENQ (0x05): reply with the answerback message, as VT terminals do. */
+static int	fb_csi(const char *leader, const long args[], int argcount,
+		    const char *intermed, char command, void *user);
+
 static int
 fb_control(unsigned char control, void *user)
 {
 	struct term *term = user;
 
+	/*
+	 * DECID, "ESC Z": the VT100's identify request. libvterm turns ESC
+	 * plus 0x40-0x5F into the C1 control, so it arrives as SCI (0x9A).
+	 * Answered exactly as DA1.
+	 */
+	if (control == 0x9a) {
+		static const long none = CSI_ARG_MISSING;
+		return fb_csi(nullptr, &none, 1, nullptr, 'c', user);
+	}
 	if (control != 0x05)
 		return 0;
 	term->output(term->options.answerback,
@@ -845,11 +876,12 @@ static const struct {
 	bool		dec;		/* DEC private (?) or ANSI */
 	uint8_t		initial;	/* DECRQM value: 1 set, 2 reset */
 } stored_mode_table[] = {
+	/* (DECARM, DECVCCM, DECPCCM, DECKBUM, DECXRLM, DECKPM aren't kept:
+	 * like xterm, DECRQM reports them permanently reset.) */
 	{2, false, 2},		/* KAM keyboard action */
 	{12, false, 1},		/* SRM send/receive (set: no local echo) */
 	{3, true, 2},		/* DECCOLM 132 columns, see set_columns() */
 	{4, true, 2},		/* DECSCLM smooth scroll */
-	{8, true, 1},		/* DECARM autorepeat */
 	{18, true, 2},		/* DECPFF print form feed */
 	{19, true, 2},		/* DECPEX print extent */
 	{34, true, 2},		/* DECRLM right-to-left */
@@ -858,14 +890,9 @@ static const struct {
 	{36, true, 2},		/* DECHEM Hebrew encoding */
 	{42, true, 2},		/* DECNRCM national replacement charsets */
 	{57, true, 2},		/* DECNAKB Greek/N-A keyboard */
-	{61, true, 2},		/* DECVCCM vertical cursor coupling */
-	{64, true, 2},		/* DECPCCM page cursor coupling */
 	{66, true, 2},		/* DECNKM numeric keypad */
 	{67, true, 2},		/* DECBKM backarrow sends BS */
-	{68, true, 2},		/* DECKBUM keyboard usage */
-	{73, true, 2},		/* DECXRLM transmit rate limiting */
 	{80, true, 2},		/* DECSDM sixel display (no scrolling) */
-	{81, true, 2},		/* DECKPM key position */
 	{95, true, 2},		/* DECNCSM no clear on column change */
 	{96, true, 2},		/* DECRLCM cursor right-to-left */
 	{97, true, 2},		/* DECCRTSM CRT save */
@@ -1126,11 +1153,14 @@ set_columns(struct term *term, bool wide)
 	if (term->stored_modes[stored_mode_index(40, true)] != 1)
 		return;
 	if (wide) {
+		/*
+		 * Where 132 columns don't fit, do what xterm does when it
+		 * can't resize: the mode is set and the DEC side effects
+		 * (clear, home, margins) happen, at the current width.
+		 */
 		render_grid_size(&term->font, term->render->width,
 		    term->render->height, &cols, &rows);
-		if (cols < 132)
-			return;
-		cols = 132;
+		cols = cols >= 132 ? 132 : term->primary.cols;
 	} else {
 		configured_size(term, &cols, &rows);
 	}
@@ -1276,9 +1306,80 @@ fb_csi(const char *leader, const long args[], int argcount,
 		return 1;
 	}
 
-	/* xterm window ops: size queries only. */
+	/*
+	 * xterm window ops. There's no window to move, iconify or resize:
+	 * those requests are accepted and remembered, so the matching
+	 * reports agree with them (and esctest's checks pass). The title
+	 * reports and the title stack are real. Resizing (4, 8) can't
+	 * happen -- the size comes from SET-UP -- and is ignored.
+	 */
 	if (no_leader && intermed == nullptr && command == 't') {
+		long arg1 = argcount > 1 ? CSI_ARG(args[1]) : CSI_ARG_MISSING;
+		long arg2 = argcount > 2 ? CSI_ARG(args[2]) : CSI_ARG_MISSING;
+		long which = arg1 == CSI_ARG_MISSING ? 0 : arg1;
+
 		switch (first) {
+		case 1:		/* de-iconify */
+			term->iconified = false;
+			return 1;
+		case 2:		/* iconify */
+			term->iconified = true;
+			return 1;
+		case 3:		/* move to x;y */
+			term->window_x = arg1 == CSI_ARG_MISSING ? 0 :
+			    (uint16_t)arg1;
+			term->window_y = arg2 == CSI_ARG_MISSING ? 0 :
+			    (uint16_t)arg2;
+			return 1;
+		case 4: case 5: case 6: case 7: case 8: case 9: case 10:
+			return 1;	/* resize, raise, lower, ...: no window */
+		case 11:	/* window state */
+			send_printf(term, "\x1b[%ut", term->iconified ? 2u : 1u,
+			    0, 0, 0);
+			return 1;
+		case 13:	/* window position */
+			send_printf(term, "\x1b[3;%u;%ut", term->window_x,
+			    term->window_y, 0, 0);
+			return 1;
+		case 15:	/* screen in pixels */
+			send_printf(term, "\x1b[5;%u;%ut", term->render->height,
+			    term->render->width, 0, 0);
+			return 1;
+		case 20:	/* icon label */
+			term->output("\x1b]L", 3, term->output_ctx);
+			term->output(term->icon_label, strlen(term->icon_label),
+			    term->output_ctx);
+			term->output("\x1b\\", 2, term->output_ctx);
+			return 1;
+		case 21:	/* window title */
+			term->output("\x1b]l", 3, term->output_ctx);
+			term->output(term->title, strlen(term->title),
+			    term->output_ctx);
+			term->output("\x1b\\", 2, term->output_ctx);
+			return 1;
+		case 22:	/* push (xterm saves both, whatever Ps says) */
+			if (term->title_depth < TERM_TITLE_STACK) {
+				memcpy(term->title_stack[term->title_depth].title,
+				    term->title, TERM_TITLE_MAX);
+				memcpy(term->title_stack[term->title_depth]
+				    .icon_label, term->icon_label,
+				    TERM_TITLE_MAX);
+				term->title_depth++;
+			}
+			return 1;
+		case 23:	/* pop: restore 0 both, 1 icon, 2 title */
+			if (term->title_depth > 0) {
+				term->title_depth--;
+				if (which == 0 || which == 1)
+					memcpy(term->icon_label, term->title_stack[
+					    term->title_depth].icon_label,
+					    TERM_TITLE_MAX);
+				if (which == 0 || which == 2)
+					memcpy(term->title, term->title_stack[
+					    term->title_depth].title,
+					    TERM_TITLE_MAX);
+			}
+			return 1;
 		case 14:	/* text area in pixels */
 			send_printf(term, "\x1b[4;%u;%ut", grid->rows *
 			    term->font.height, grid->cols * term->font.width, 0, 0);
@@ -1431,8 +1532,11 @@ fb_csi(const char *leader, const long args[], int argcount,
 			value = term->state->mode.newline ? 1 : 2;	/* LNM */
 		else if (!private && ansi_mode_permanently_reset(first))
 			value = 4;
-		else if (private && first == 60)
-			value = 4;	/* DECHCCM: permanently reset */
+		else if (private && (first == 60 || first == 8 || first == 61 ||
+		    first == 64 || first == 68 || first == 73 || first == 81))
+			value = 4;	/* DECHCCM, and (as xterm) DECARM, DECVCCM,
+					   DECPCCM, DECKBUM, DECXRLM, DECKPM:
+					   permanently reset */
 		send_printf(term, private ? "\x1b[?%u;%u$y" : "\x1b[%u;%u$y",
 		    (unsigned)first, value, 0, 0);
 		return 1;

@@ -615,10 +615,13 @@ reinit_720p(void)
 static void
 test_deccolm(void)
 {
-	/* 640x480 has no room for 132 columns: ignored, still reset. */
-	feed("\x1b[?3h\x1b[?3$p");
+	/* 640x480 has no room for 132 columns: like xterm when it can't
+	 * resize, the mode is set and the screen cleared, width kept. */
+	feed("x\x1b[?3h\x1b[?3$p");
 	TEST_ASSERT_EQUAL(80, term.screen->cols);
-	TEST_ASSERT_EQUAL_STRING("\x1b[?3;2$y", reply);
+	TEST_ASSERT_EQUAL_STRING("\x1b[?3;1$y", reply);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);	/* cleared */
+	feed("\x1b[?3l");
 
 	reinit_720p();
 	TEST_ASSERT_EQUAL(160, term.screen->cols);
@@ -965,6 +968,61 @@ test_sixel_depths(void)
 	TEST_ASSERT_TRUE(counts[0] > 32 && counts[0] < 96);	/* ink */
 }
 
+static void
+test_decbi_decfi(void)
+{
+	feed("\x1b[1;5H\x1b" "6");			/* DECBI: just moves */
+	TEST_ASSERT_EQUAL(3, term.screen->cursor_col);
+	feed("\x1b" "9\x1b" "9");			/* DECFI twice */
+	TEST_ASSERT_EQUAL(5, term.screen->cursor_col);
+	feed("\x1b[1;1H\x1b" "6");			/* left edge: nothing */
+	TEST_ASSERT_EQUAL(0, term.screen->cursor_col);
+
+	/* At the left margin the region scrolls right (esctest's case). */
+	feed("\x1b[3;2Habcde\x1b[4;2Hfghij\x1b[5;2Hklmno"
+	    "\x1b[?69h\x1b[3;5s\x1b[4;6r\x1b[5;3H\x1b" "6");
+	TEST_ASSERT_EQUAL(glyph('f'), cell_at(3, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(3, 2)->glyph);
+	TEST_ASSERT_EQUAL(glyph('g'), cell_at(3, 3)->glyph);
+	TEST_ASSERT_EQUAL(glyph('h'), cell_at(3, 4)->glyph);
+	TEST_ASSERT_EQUAL(glyph('j'), cell_at(3, 5)->glyph);
+	TEST_ASSERT_EQUAL(glyph('c'), cell_at(2, 3)->glyph);	/* above: kept */
+	/* ...and DECFI at the right margin scrolls it back left. */
+	feed("\x1b[5;5H\x1b" "9");
+	TEST_ASSERT_EQUAL(glyph('g'), cell_at(3, 2)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(3, 4)->glyph);
+}
+
+static void
+test_window_ops(void)
+{
+	feed("\x1b]0;both\x07\x1b]2;window\x07");
+	feed("\x1b[21t");
+	TEST_ASSERT_EQUAL_STRING("\x1b]lwindow\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[20t");
+	TEST_ASSERT_EQUAL_STRING("\x1b]Lboth\x1b\\", reply);
+
+	/* Push both, change both, pop the icon only. */
+	feed("\x1b[22;0t\x1b]1;x\x07\x1b]2;x\x07\x1b[23;1t");
+	reply_len = 0;
+	feed("\x1b[20t\x1b[21t");
+	TEST_ASSERT_EQUAL_STRING("\x1b]Lboth\x1b\\\x1b]lx\x1b\\", reply);
+	/* That pop used the entry up: popping the title does nothing. */
+	reply_len = 0;
+	feed("\x1b[23;2t\x1b[21t");
+	TEST_ASSERT_EQUAL_STRING("\x1b]lx\x1b\\", reply);
+	/* DECID answers as DA1. */
+	reply_len = 0;
+	feed("\x1bZ");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?64;6;22c", reply);
+
+	/* Iconify and move are remembered for their reports. */
+	reply_len = 0;
+	feed("\x1b[2t\x1b[11t\x1b[1t\x1b[11t\x1b[3;12;34t\x1b[13t");
+	TEST_ASSERT_EQUAL_STRING("\x1b[2t\x1b[1t\x1b[3;12;34t", reply);
+}
+
 int
 main(void)
 {
@@ -1008,6 +1066,8 @@ main(void)
 	RUN_TEST(test_sixel_queries_and_off);
 	RUN_TEST(test_sixel_after_font_switch);
 	RUN_TEST(test_sixel_depths);
+	RUN_TEST(test_decbi_decfi);
+	RUN_TEST(test_window_ops);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

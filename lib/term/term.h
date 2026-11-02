@@ -142,6 +142,9 @@ struct term_printer {
 	void	*ctx;
 };
 
+#define TERM_TITLE_MAX		64
+#define TERM_TITLE_STACK	10	/* as xterm */
+
 struct term {
 	VTerm		*vt;
 	VTermState	*state;
@@ -191,6 +194,24 @@ struct term {
 
 	/* Sixel images as graphic cells (graphics.c). */
 	struct graphics	 graphics;
+
+	/*
+	 * xterm window state, for the window ops (CSI ... t) and their
+	 * reports. There is no window: titles, the title stack, iconified
+	 * and position are kept so the reports agree with the requests.
+	 */
+	char		 title[TERM_TITLE_MAX];		/* OSC 2 (and 0) */
+	char		 icon_label[TERM_TITLE_MAX];	/* OSC 1 (and 0) */
+	/* As xterm: every push saves both names; a pop restores the ones
+	 * asked for and always consumes the entry. */
+	struct {
+		char	 title[TERM_TITLE_MAX];
+		char	 icon_label[TERM_TITLE_MAX];
+	}		 title_stack[TERM_TITLE_STACK];
+	uint8_t		 title_depth;
+	bool		 iconified;
+	uint16_t	 window_x;
+	uint16_t	 window_y;
 
 	/* Media Copy (printer.c). */
 	struct term_printer printer;

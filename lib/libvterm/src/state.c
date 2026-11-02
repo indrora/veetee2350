@@ -482,7 +482,13 @@ static int on_control(unsigned char control, void *user)
     break;
 
   case 0x0d: // CR - ECMA-48 8.3.15
-    state->pos.col = 0;
+    /* VeeTee patch 11: to the left margin from at or right of it (or
+     * in origin mode), else to column 1. */
+    if(state->mode.leftrightmargin &&
+       (state->pos.col >= state->scrollregion_left || state->mode.origin))
+      state->pos.col = state->scrollregion_left;
+    else
+      state->pos.col = 0;
     break;
 
   case 0x0e: // LS1 - ECMA-48 8.3.76
@@ -661,6 +667,19 @@ static int on_escape(const char *bytes, size_t len, void *user)
         for(pos.row = 0; pos.row < state->rows; pos.row++)
           for(pos.col = 0; pos.col < ROWWIDTH(state, pos.row); pos.col++)
             putglyph(state, E, 1, pos);
+        /* VeeTee patch 12: DEC STD 070 -- DECALN also resets the
+         * margins and homes the cursor. */
+        {
+          VTermPos oldpos = state->pos;
+          state->scrollregion_top = 0;
+          state->scrollregion_bottom = -1;
+          state->scrollregion_left = 0;
+          state->scrollregion_right = -1;
+          state->pos.row = 0;
+          state->pos.col = 0;
+          state->at_phantom = 0;
+          updatecursor(state, &oldpos, 1);
+        }
         break;
       }
 
@@ -686,6 +705,41 @@ static int on_escape(const char *bytes, size_t len, void *user)
     }
 
     return 2;
+
+  /* VeeTee patch 10: DECBI / DECFI, VT420 back / forward index. The
+   * cursor moves one column left / right; at the left / right margin,
+   * inside the margins, the region's contents scroll sideways a column
+   * instead. Outside the margins it only moves, and at the screen's edge
+   * nothing happens. */
+  case '6': // DECBI
+  case '9': // DECFI
+  {
+    int left = SCROLLREGION_LEFT(state), right = SCROLLREGION_RIGHT(state);
+    int top = state->scrollregion_top, bottom = SCROLLREGION_BOTTOM(state);
+    VTermPos oldpos = state->pos;
+    int inside = state->pos.col >= left && state->pos.col < right &&
+                 state->pos.row >= top && state->pos.row < bottom;
+    VTermRect rect = {
+      .start_row = top, .end_row = bottom,
+      .start_col = left, .end_col = right,
+    };
+
+    if(bytes[0] == '6') {
+      if(inside && state->pos.col == left)
+        scroll(state, rect, 0, -1);
+      else if(state->pos.col > 0)
+        state->pos.col--;
+    }
+    else {
+      if(inside && state->pos.col == right - 1)
+        scroll(state, rect, 0, 1);
+      else if(state->pos.col < THISROWWIDTH(state) - 1)
+        state->pos.col++;
+    }
+    state->at_phantom = 0;
+    updatecursor(state, &oldpos, 1);
+    return 1;
+  }
 
   case '7': // DECSC
     savecursor(state, 1);
@@ -1040,43 +1094,62 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
 
     break;
 
+  /* VeeTee patch 11: relative motions stop at a margin when they start
+   * inside it (at or within it), else at the edge of the screen, as
+   * xterm does; CNL/CPL go to the left margin like CR. */
   case 0x41: // CUU - ECMA-48 8.3.22
+  case 0x46: // CPL - ECMA-48 8.3.13
+  {
+    int top = state->pos.row >= state->scrollregion_top ?
+              state->scrollregion_top : 0;
     count = CSI_ARG_COUNT(args[0]);
     state->pos.row -= count;
+    LBOUND(state->pos.row, top);
+    if(command == 0x46)
+      state->pos.col = state->mode.leftrightmargin &&
+                       state->pos.col >= state->scrollregion_left ?
+                       state->scrollregion_left : 0;
     state->at_phantom = 0;
     break;
+  }
 
   case 0x42: // CUD - ECMA-48 8.3.19
+  case 0x45: // CNL - ECMA-48 8.3.12
+  {
+    int bottom = state->pos.row < SCROLLREGION_BOTTOM(state) ?
+                 SCROLLREGION_BOTTOM(state) - 1 : state->rows - 1;
     count = CSI_ARG_COUNT(args[0]);
     state->pos.row += count;
+    UBOUND(state->pos.row, bottom);
+    if(command == 0x45)
+      state->pos.col = state->mode.leftrightmargin &&
+                       state->pos.col >= state->scrollregion_left ?
+                       state->scrollregion_left : 0;
     state->at_phantom = 0;
     break;
+  }
 
   case 0x43: // CUF - ECMA-48 8.3.20
+  {
+    int right = state->pos.col < SCROLLREGION_RIGHT(state) ?
+                SCROLLREGION_RIGHT(state) - 1 : THISROWWIDTH(state) - 1;
     count = CSI_ARG_COUNT(args[0]);
     state->pos.col += count;
+    UBOUND(state->pos.col, right);
     state->at_phantom = 0;
     break;
+  }
 
   case 0x44: // CUB - ECMA-48 8.3.18
+  {
+    int left = state->pos.col >= SCROLLREGION_LEFT(state) ?
+               SCROLLREGION_LEFT(state) : 0;
     count = CSI_ARG_COUNT(args[0]);
     state->pos.col -= count;
+    LBOUND(state->pos.col, left);
     state->at_phantom = 0;
     break;
-
-  case 0x45: // CNL - ECMA-48 8.3.12
-    count = CSI_ARG_COUNT(args[0]);
-    state->pos.col = 0;
-    state->pos.row += count;
-    state->at_phantom = 0;
-    break;
-
-  case 0x46: // CPL - ECMA-48 8.3.13
-    count = CSI_ARG_COUNT(args[0]);
-    state->pos.col = 0;
-    state->pos.row -= count;
-    state->at_phantom = 0;
-    break;
+  }
 
   case 0x47: // CHA - ECMA-48 8.3.9
     val = CSI_ARG_OR(args[0], 1);
@@ -1441,10 +1514,18 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
         break;
       case 6: // CPR - cursor position report
         /* VeeTee patch: DECXCPR (the "?" form) includes the page, 1. */
+        /* VeeTee patch 11: in origin mode, relative to the margins. */
+      {
+        int row = state->pos.row + 1, col = state->pos.col + 1;
+        if(state->mode.origin) {
+          row -= state->scrollregion_top;
+          col -= SCROLLREGION_LEFT(state);
+        }
         if(leader_byte == '?')
-          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d;1R", state->pos.row + 1, state->pos.col + 1);
+          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d;1R", row, col);
         else
-          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "%d;%dR", state->pos.row + 1, state->pos.col + 1);
+          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "%d;%dR", row, col);
+      }
         break;
       default:
         /* VeeTee patch: other status reports go to the CSI fallback. */

@@ -137,8 +137,9 @@ shrinks a full-width screen, but vttest's "80-column" screens only look
 right with a fixed 80×N size.) Rows don't change.
 
 132 needs 1056 px with an 8-pixel font, so only the 720p modes can do
-it; elsewhere the request is ignored, as xterm ignores it with 80/132
-switching disallowed. Mode 40 (xterm's "allow 80⇄132") is set by default
+it; elsewhere, like xterm when it can't resize its window, the mode is
+set and the DEC side effects happen (clear, home, margins) at the
+current width. Mode 40 (xterm's "allow 80⇄132") is set by default
 and can turn DECCOLM off; mode 95 (DECNCSM) keeps the screen contents
 across a switch. A switch clears the screen, homes the cursor, resets
 the margins and, with DECSET 2048 on, sends the host a size report.
@@ -186,7 +187,7 @@ cd tools && python3 hostshell.py /dev/cu.usbmodem*1 --type \
 python3 tools/esc_summary.py run.log [--failures] [--compare old.log]
 ```
 
-Latest: **408 / 567** pass (72%) at 640×480; 409 at 1280×720, where DECCOLM works (baseline 169). `docs/esctest-latest.log`
+Latest: **451 / 567** pass (80%) at 640×480 (baseline 169). `docs/esctest-latest.log`
 holds the full log; `docs/esctest-baseline.log` the first run.
 
 ## Known gaps
@@ -197,9 +198,9 @@ holds the full log; `docs/esctest-baseline.log` the first run.
 | Italic renders upright, bold is colour-only | No italic or bold font faces. Could synthesize bold with a 1 px smear. |
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |
-| DECCOLM (132 columns) ignored at 640×480, 800×480 and 960×540 | 132 × 8 px doesn't fit. Honoured at both 720p modes (see "132 columns" above). A narrow font would allow it elsewhere. |
-| Window ops (iconify, move, title stack, label reports) | There is no window. 19 esctest failures. |
-| DECBI/DECFI, DECCARA/DECRARA | Not implemented yet. |
+| DECCOLM can't widen at 640×480, 800×480 and 960×540 | 132 × 8 px doesn't fit: the mode is set, the width stays. Real 132 columns at both 720p modes. A narrow font would allow it elsewhere. |
+| Window resizing (CSI 4/8 t) | There is no window; the size comes from SET-UP. Iconify/move are remembered for their reports; titles, icon labels and the title stack are real. |
+| DECCARA/DECRARA | Not implemented (bold and inverse aren't stored per cell). DECBI/DECFI are (libvterm patch 10). |
 | Xcms colour spaces in OSC 4/10–19 | Only `rgb:`, `rgbi:` and `#hex` are parsed. |
 | DECSLPP / DECSNLS (set lines per page) | Reported, not settable: the row count comes from SET-UP. |
 | 8-bit GR is Latin-1, not DEC Supplemental Graphics | libvterm has no 96-character sets. Close, but not identical for VT220 apps. |

@@ -41,7 +41,10 @@ def parse(path: Path) -> dict[str, tuple[str, str]]:
             outcome = "pass"
         elif "FAILED:" in line and line.startswith("*** TEST"):
             outcome = "fail"
-        elif line.startswith("EXPECTED FAILURE") and outcome is None:
+        elif line.startswith("Skipped because") and outcome is None:
+            outcome = "skipped"
+        elif (line.startswith("EXPECTED FAILURE") or
+              line.startswith("Fails as expected")) and outcome is None:
             outcome = "expected-fail"
         stripped = line.strip()
         if outcome == "fail" and (stripped.startswith("Assert") or

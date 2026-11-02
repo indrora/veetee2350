@@ -217,24 +217,7 @@ Run test: CHATests.test_CHA_OutOfBoundsLarge
 Passed.
 
 Run test: CHATests.test_CHA_RespectsOriginMode
-*** TEST CHATests.test_CHA_RespectsOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cha.py", line 88, in test_CHA_RespectsOriginMode
-    AssertEQ(position.x(), 1)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '1' but got '5'
-
+Passed.
 
 Run test: CHATests.test_CHA_ZeroParam
 Passed.
@@ -275,44 +258,10 @@ Run test: CNLTests.test_CNL_StopsAtBottomLine
 Passed.
 
 Run test: CNLTests.test_CNL_StopsAtBottomLineWhenBegunBelowScrollRegion
-*** TEST CNLTests.test_CNL_StopsAtBottomLineWhenBegunBelowScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cnl.py", line 55, in test_CNL_StopsAtBottomLineWhenBegunBelowScrollRegion
-    AssertEQ(position.x(), 5)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '5' but got '1'
-
+Passed.
 
 Run test: CNLTests.test_CNL_StopsAtBottomMarginInScrollRegion
-*** TEST CNLTests.test_CNL_StopsAtBottomMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cnl.py", line 75, in test_CNL_StopsAtBottomMarginInScrollRegion
-    AssertEQ(position.y(), 4)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '4' but got '30'
-
+Passed.
 
 Run test: CPLTests.test_CPL_DefaultParam
 Passed.
@@ -324,116 +273,25 @@ Run test: CPLTests.test_CPL_StopsAtTopLine
 Passed.
 
 Run test: CPLTests.test_CPL_StopsAtTopLineWhenBegunAboveScrollRegion
-*** TEST CPLTests.test_CPL_StopsAtTopLineWhenBegunAboveScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cpl.py", line 55, in test_CPL_StopsAtTopLineWhenBegunAboveScrollRegion
-    AssertEQ(position.x(), 5)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '5' but got '1'
-
+Passed.
 
 Run test: CPLTests.test_CPL_StopsAtTopMarginInScrollRegion
-*** TEST CPLTests.test_CPL_StopsAtTopMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cpl.py", line 75, in test_CPL_StopsAtTopMarginInScrollRegion
-    AssertEQ(position.y(), 2)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '2' but got '1'
-
+Passed.
 
 Run test: CRTests.test_CR_Basic
 Passed.
 
 Run test: CRTests.test_CR_MovesToLeftMarginWhenLeftOfLeftMarginInOriginMode
-*** TEST CRTests.test_CR_MovesToLeftMarginWhenLeftOfLeftMarginInOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cr.py", line 59, in test_CR_MovesToLeftMarginWhenLeftOfLeftMarginInOriginMode
-    AssertScreenCharsInRectEqual(Rect(5, 1, 5, 1), ["x"])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=5, y=1) expected 'x' (0x78) but got ' ' (0x20)
-Actual:
- 
-
-Expected:
-x
-
+Passed.
 
 Run test: CRTests.test_CR_MovesToLeftMarginWhenRightOfLeftMargin
-*** TEST CRTests.test_CR_MovesToLeftMarginWhenRightOfLeftMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cr.py", line 24, in test_CR_MovesToLeftMarginWhenRightOfLeftMargin
-    AssertEQ(GetCursorPosition(), Point(5, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=5, y=1)' but got 'Point(x=1, y=1)'
-
+Passed.
 
 Run test: CRTests.test_CR_MovesToLeftOfScreenWhenLeftOfLeftMargin
 Passed.
 
 Run test: CRTests.test_CR_StaysPutWhenAtLeftMargin
-*** TEST CRTests.test_CR_StaysPutWhenAtLeftMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cr.py", line 45, in test_CR_StaysPutWhenAtLeftMargin
-    AssertEQ(GetCursorPosition(), Point(5, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=5, y=1)' but got 'Point(x=1, y=1)'
-
+Passed.
 
 Run test: CUBTests.test_CUB_AfterNoWrappedInlines
 *** TEST CUBTests.test_CUB_AfterNoWrappedInlines FAILED:
@@ -494,24 +352,7 @@ Run test: CUBTests.test_CUB_StopsAtLeftEdgeWhenBegunLeftOfScrollRegion
 Passed.
 
 Run test: CUBTests.test_CUB_StopsAtLeftMarginInScrollRegion
-*** TEST CUBTests.test_CUB_StopsAtLeftMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cub.py", line 77, in test_CUB_StopsAtLeftMarginInScrollRegion
-    AssertEQ(GetCursorPosition().x(), 5)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '5' but got '1'
-
+Passed.
 
 Run test: CUDTests.test_CUD_DefaultParam
 Passed.
@@ -526,21 +367,7 @@ Run test: CUDTests.test_CUD_StopsAtBottomLineWhenBegunBelowScrollRegion
 Passed.
 
 Run test: CUDTests.test_CUD_StopsAtBottomMarginInScrollRegion
-*** TEST CUDTests.test_CUD_StopsAtBottomMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cud.py", line 62, in test_CUD_StopsAtBottomMarginInScrollRegion
-    AssertEQ(GetCursorPosition().y(), 4)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '4' but got '30'
-
+Passed.
 
 Run test: CUFTests.test_CUF_DefaultParam
 Passed.
@@ -552,24 +379,7 @@ Run test: CUFTests.test_CUF_StopsAtRightEdgeWhenBegunRightOfScrollRegion
 Passed.
 
 Run test: CUFTests.test_CUF_StopsAtRightMarginInScrollRegion
-*** TEST CUFTests.test_CUF_StopsAtRightMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cuf.py", line 68, in test_CUF_StopsAtRightMarginInScrollRegion
-    AssertEQ(GetCursorPosition().x(), 10)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '10' but got '80'
-
+Passed.
 
 Run test: CUFTests.test_CUF_StopsAtRightSide
 Passed.
@@ -584,24 +394,7 @@ Run test: CUPTests.test_CUP_OutOfBoundsParams
 Passed.
 
 Run test: CUPTests.test_CUP_RespectsOriginMode
-*** TEST CUPTests.test_CUP_RespectsOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cup.py", line 99, in test_CUP_RespectsOriginMode
-    AssertEQ(position.x(), 1)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '1' but got '5'
-
+Passed.
 
 Run test: CUPTests.test_CUP_RowOnly
 Passed.
@@ -622,21 +415,7 @@ Run test: CUUTests.test_CUU_StopsAtTopLineWhenBegunAboveScrollRegion
 Passed.
 
 Run test: CUUTests.test_CUU_StopsAtTopMarginInScrollRegion
-*** TEST CUUTests.test_CUU_StopsAtTopMarginInScrollRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cuu.py", line 60, in test_CUU_StopsAtTopMarginInScrollRegion
-    AssertEQ(GetCursorPosition().y(), 2)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '2' but got '1'
-
+Passed.
 
 Run test: ChangeColorTests.test_ChangeColor_CIELab
 *** TEST ChangeColorTests.test_ChangeColor_CIELab FAILED:
@@ -1269,7 +1048,7 @@ Traceback (most recent call last):
     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
     raise e
-esctypes.TestFailure: Test failed: expected '13' but got '3'
+esctypes.TestFailure: Test failed: expected '13' but got '4'
 
 
 Run test: DATests.test_DA_NoParameter
@@ -1292,7 +1071,7 @@ Traceback (most recent call last):
     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
     raise e
-esctypes.TestFailure: Test failed: expected '13' but got '3'
+esctypes.TestFailure: Test failed: expected '13' but got '4'
 
 
 Run test: DCHTests.test_DCH_DefaultParam
@@ -1350,152 +1129,22 @@ Run test: DECALNTests.test_DECALN_FillsScreen
 Passed.
 
 Run test: DECALNTests.test_DECALN_MovesCursorHome
-*** TEST DECALNTests.test_DECALN_MovesCursorHome FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decaln.py", line 35, in test_DECALN_MovesCursorHome
-    AssertEQ(GetCursorPosition(), Point(1, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=1, y=1)' but got 'Point(x=5, y=5)'
-
+Passed.
 
 Run test: DECBITests.test_DECBI_Basic
-*** TEST DECBITests.test_DECBI_Basic FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decbi.py", line 21, in test_DECBI_Basic
-    AssertEQ(GetCursorPosition(), Point(4, 6))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=4, y=6)' but got 'Point(x=5, y=6)'
-
+Passed.
 
 Run test: DECBITests.test_DECBI_LeftOfMargin
-*** TEST DECBITests.test_DECBI_LeftOfMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decbi.py", line 70, in test_DECBI_LeftOfMargin
-    AssertEQ(GetCursorPosition(), Point(1, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=1, y=1)' but got 'Point(x=2, y=1)'
-
+Passed.
 
 Run test: DECBITests.test_DECBI_NoWrapOnLeftEdge
 Passed.
 
 Run test: DECBITests.test_DECBI_Scrolls
-*** TEST DECBITests.test_DECBI_Scrolls FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decbi.py", line 52, in test_DECBI_Scrolls
-    AssertScreenCharsInRectEqual(Rect(2, 3, 6, 7),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 ["abcde",
-                                 ^^^^^^^^^
-    ...<2 lines>...
-                                  "p" + blank() + "qrt",
-                                  ^^^^^^^^^^^^^^^^^^^^^^
-                                  "uvwxy"])
-                                  ^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=4) expected ' ' (0x20) but got 'g' (0x67)
-At Point(x=4, y=4) expected 'g' (0x67) but got 'h' (0x68)
-At Point(x=5, y=4) expected 'h' (0x68) but got 'i' (0x69)
-At Point(x=3, y=5) expected ' ' (0x20) but got 'l' (0x6c)
-At Point(x=4, y=5) expected 'l' (0x6c) but got 'm' (0x6d)
-At Point(x=5, y=5) expected 'm' (0x6d) but got 'n' (0x6e)
-At Point(x=3, y=6) expected ' ' (0x20) but got 'q' (0x71)
-At Point(x=4, y=6) expected 'q' (0x71) but got 'r' (0x72)
-At Point(x=5, y=6) expected 'r' (0x72) but got 's' (0x73)
-Actual:
-abcde
-fghij
-klmno
-pqrst
-uvwxy
-
-Expected:
-abcde
-f ghj
-k lmo
-p qrt
-uvwxy
-
+Passed.
 
 Run test: DECBITests.test_DECBI_WholeScreenScrolls
-*** TEST DECBITests.test_DECBI_WholeScreenScrolls FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decbi.py", line 85, in test_DECBI_WholeScreenScrolls
-    AssertScreenCharsInRectEqual(Rect(1, 1, 2, 1), [blank() + "x"])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=1, y=1) expected ' ' (0x20) but got 'x' (0x78)
-At Point(x=2, y=1) expected 'x' (0x78) but got ' ' (0x20)
-Actual:
-x 
-
-Expected:
- x
-
+Passed.
 
 Run test: DECCRATests.test_DECCRA_cursorDoesNotMove
 Passed.
@@ -1600,137 +1249,19 @@ Run test: DECERATests.test_DECERA_respectsOriginMode
 Passed.
 
 Run test: DECFITests.test_DECFI_Basic
-*** TEST DECFITests.test_DECFI_Basic FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decfi.py", line 43, in test_DECFI_Basic
-    AssertEQ(GetCursorPosition(), Point(6, 6))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=6, y=6)' but got 'Point(x=5, y=6)'
-
+Passed.
 
 Run test: DECFITests.test_DECFI_NoWrapOnRightEdge
 Passed.
 
 Run test: DECFITests.test_DECFI_RightOfMargin
-*** TEST DECFITests.test_DECFI_RightOfMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decfi.py", line 91, in test_DECFI_RightOfMargin
-    AssertEQ(GetCursorPosition(), Point(7, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=7, y=1)' but got 'Point(x=6, y=1)'
-
+Passed.
 
 Run test: DECFITests.test_DECFI_Scrolls
-*** TEST DECFITests.test_DECFI_Scrolls FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decfi.py", line 75, in test_DECFI_Scrolls
-    AssertScreenCharsInRectEqual(Rect(2, 3, 6, 7),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 ["abcde",
-                                 ^^^^^^^^^
-    ...<2 lines>...
-                                  "prs" + empty() + "t",
-                                  ^^^^^^^^^^^^^^^^^^^^^^
-                                  "uvwxy"])
-                                  ^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=4) expected 'h' (0x68) but got 'g' (0x67)
-At Point(x=4, y=4) expected 'i' (0x69) but got 'h' (0x68)
-At Point(x=5, y=4) expected ' ' (0x20) but got 'i' (0x69)
-At Point(x=3, y=5) expected 'm' (0x6d) but got 'l' (0x6c)
-At Point(x=4, y=5) expected 'n' (0x6e) but got 'm' (0x6d)
-At Point(x=5, y=5) expected ' ' (0x20) but got 'n' (0x6e)
-At Point(x=3, y=6) expected 'r' (0x72) but got 'q' (0x71)
-At Point(x=4, y=6) expected 's' (0x73) but got 'r' (0x72)
-At Point(x=5, y=6) expected ' ' (0x20) but got 's' (0x73)
-Actual:
-abcde
-fghij
-klmno
-pqrst
-uvwxy
-
-Expected:
-abcde
-fhi j
-kmn o
-prs t
-uvwxy
-
+Passed.
 
 Run test: DECFITests.test_DECFI_WholeScreenScrolls
-*** TEST DECFITests.test_DECFI_WholeScreenScrolls FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decfi.py", line 103, in test_DECFI_WholeScreenScrolls
-    AssertScreenCharsInRectEqual(Rect(size.width() - 1, 1, size.width(), 1),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                 ["x" + empty()])
-                                 ^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=79, y=1) expected 'x' (0x78) but got ' ' (0x20)
-At Point(x=80, y=1) expected ' ' (0x20) but got 'x' (0x78)
-Actual:
- x
-
-Expected:
-x 
-
+Passed.
 
 Run test: DECFRATests.test_DECFRA_basic
 Passed.
@@ -1916,18 +1447,30 @@ Run test: DECRQMTests.test_DECRQM_DEC_DECAAM
 Skipped because terminal lacks requisite capability: (4, 5)
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECARM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECARM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: xterm always returns 4 (permanently reset)
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 209, in test_DECRQM_DEC_DECARM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECARM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[8, 2]' but got '[8, 4]'
+KNOWN BUG: 
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECARSM
 Skipped because terminal lacks requisite capability: (4, 5)
@@ -1966,32 +1509,56 @@ Run test: DECRQMTests.test_DECRQM_DEC_DECHEM
 Skipped because terminal lacks requisite capability: (4, 5)
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECKBUM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECKBUM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: Not supported
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 294, in test_DECRQM_DEC_DECKBUM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECKBUM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[68, 2]' but got '[68, 4]'
+KNOWN BUG: 
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECKPM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECKPM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: Not supported
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 314, in test_DECRQM_DEC_DECKPM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECKPM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[81, 2]' but got '[81, 4]'
+KNOWN BUG: 
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECLRMM
 Passed.
@@ -2021,18 +1588,30 @@ Run test: DECRQMTests.test_DECRQM_DEC_DECOSCNM
 Skipped because terminal lacks requisite capability: (4, 5)
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECPCCM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECPCCM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: Not supported
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 275, in test_DECRQM_DEC_DECPCCM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECPCCM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[64, 2]' but got '[64, 4]'
+KNOWN BUG: 
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECPEX
 Passed.
@@ -2056,32 +1635,56 @@ Run test: DECRQMTests.test_DECRQM_DEC_DECTCEM
 Passed.
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECVCCM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECVCCM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: Not supported
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 268, in test_DECRQM_DEC_DECVCCM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECVCCM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[61, 2]' but got '[61, 4]'
+KNOWN BUG: 
 
 Run test: DECRQMTests.test_DECRQM_DEC_DECXRLM
-*** TEST DECRQMTests.test_DECRQM_DEC_DECXRLM FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 448, in func_wrapper
-    raise esctypes.InternalError("Should have failed")
-esctypes.InternalError: Should have failed
-
+Fails as expected: Not supported
+KNOWN BUG: Traceback (most recent call last):
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 438, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
+KNOWN BUG:     func(self, *args, **kwargs)
+KNOWN BUG:     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 307, in test_DECRQM_DEC_DECXRLM
+KNOWN BUG:     self.doModifiableDecTest(esccmd.DECXRLM)
+KNOWN BUG:     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqm.py", line 47, in doModifiableDecTest
+KNOWN BUG:     AssertEQ(self.requestDECMode(mode), [mode, 2])
+KNOWN BUG:     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+KNOWN BUG:     Raise(esctypes.TestFailure(actual, expected))
+KNOWN BUG:     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KNOWN BUG:   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+KNOWN BUG:     raise e
+KNOWN BUG: esctypes.TestFailure: Test failed: expected '[73, 2]' but got '[73, 4]'
+KNOWN BUG: 
 
 Run test: DECRQSSTests.test_DECRQSS_DECELF
 Fails as expected: Not implemented.
@@ -3125,7 +2728,7 @@ Traceback (most recent call last):
     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
     raise e
-esctypes.TestFailure: Test failed: expected '2' but got '5'
+esctypes.TestFailure: Test failed: expected '2' but got '1'
 
 
 Run test: HPATests.test_HPA_StopsAtRightEdge
@@ -3180,24 +2783,7 @@ Run test: HVPTests.test_HVP_OutOfBoundsParams
 Passed.
 
 Run test: HVPTests.test_HVP_RespectsOriginMode
-*** TEST HVPTests.test_HVP_RespectsOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/hvp.py", line 99, in test_HVP_RespectsOriginMode
-    AssertEQ(position.x(), 1)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '1' but got '5'
-
+Passed.
 
 Run test: HVPTests.test_HVP_RowOnly
 Passed.
@@ -3581,26 +3167,7 @@ Run test: RISTests.test_RIS_ResetTabs
 Passed.
 
 Run test: RISTests.test_RIS_ResetTitleMode
-*** TEST RISTests.test_RIS_ResetTitleMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/ris.py", line 57, in test_RIS_ResetTitleMode
-    AssertEQ(GetWindowTitle(), "ab")
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: RITests.test_RI_8bit
 Fails as expected: Terminal "xterm" requires option "disableWideChars" for this test to pass.
@@ -3898,27 +3465,7 @@ Run test: SMTests.test_SM_LNM
 Passed.
 
 Run test: SMTitleTests.test_SMTitle_SetHexQueryHex
-Fails as expected: Terminal "xterm" requires option "xtermWinopsEnabled" for this test to pass.
-
-EXPECTED FAILURE (MISSING OPTION): Traceback (most recent call last):
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 395, in func_wrapper
-EXPECTED FAILURE (MISSING OPTION):     func(self, *args, **kwargs)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/sm_title.py", line 76, in test_SMTitle_SetHexQueryHex
-EXPECTED FAILURE (MISSING OPTION):     AssertEQ(GetWindowTitle(), "6162")
-EXPECTED FAILURE (MISSING OPTION):              ~~~~~~~~~~~~~~^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-EXPECTED FAILURE (MISSING OPTION):     return escio.ReadOSC("l")
-EXPECTED FAILURE (MISSING OPTION):            ~~~~~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-EXPECTED FAILURE (MISSING OPTION):     ReadOrDie(ESC)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-EXPECTED FAILURE (MISSING OPTION):     c = read(1)
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-EXPECTED FAILURE (MISSING OPTION):     raise esctypes.InternalError("Timeout waiting to read.")
-EXPECTED FAILURE (MISSING OPTION): esctypes.InternalError: Timeout waiting to read.
-EXPECTED FAILURE (MISSING OPTION): 
+Passed.
 
 Run test: SMTitleTests.test_SMTitle_SetHexQueryUTF8
 Fails as expected: Terminal "xterm" requires option "xtermWinopsEnabled" for this test to pass.
@@ -3935,18 +3482,13 @@ EXPECTED FAILURE (MISSING OPTION):     func(self, *args, **kwargs)
 EXPECTED FAILURE (MISSING OPTION):     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
 EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/sm_title.py", line 19, in test_SMTitle_SetHexQueryUTF8
 EXPECTED FAILURE (MISSING OPTION):     AssertEQ(GetWindowTitle(), "ab")
-EXPECTED FAILURE (MISSING OPTION):              ~~~~~~~~~~~~~~^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-EXPECTED FAILURE (MISSING OPTION):     return escio.ReadOSC("l")
-EXPECTED FAILURE (MISSING OPTION):            ~~~~~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-EXPECTED FAILURE (MISSING OPTION):     ReadOrDie(ESC)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-EXPECTED FAILURE (MISSING OPTION):     c = read(1)
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-EXPECTED FAILURE (MISSING OPTION):     raise esctypes.InternalError("Timeout waiting to read.")
-EXPECTED FAILURE (MISSING OPTION): esctypes.InternalError: Timeout waiting to read.
+EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+EXPECTED FAILURE (MISSING OPTION):     Raise(esctypes.TestFailure(actual, expected))
+EXPECTED FAILURE (MISSING OPTION):     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+EXPECTED FAILURE (MISSING OPTION):     raise e
+EXPECTED FAILURE (MISSING OPTION): esctypes.TestFailure: Test failed: expected 'ab' but got '6162'
 EXPECTED FAILURE (MISSING OPTION): 
 
 Run test: SMTitleTests.test_SMTitle_SetUTF8QueryHex
@@ -3964,42 +3506,17 @@ EXPECTED FAILURE (MISSING OPTION):     func(self, *args, **kwargs)
 EXPECTED FAILURE (MISSING OPTION):     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
 EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/sm_title.py", line 57, in test_SMTitle_SetUTF8QueryHex
 EXPECTED FAILURE (MISSING OPTION):     AssertEQ(GetWindowTitle(), "6162")
-EXPECTED FAILURE (MISSING OPTION):              ~~~~~~~~~~~~~~^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-EXPECTED FAILURE (MISSING OPTION):     return escio.ReadOSC("l")
-EXPECTED FAILURE (MISSING OPTION):            ~~~~~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-EXPECTED FAILURE (MISSING OPTION):     ReadOrDie(ESC)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-EXPECTED FAILURE (MISSING OPTION):     c = read(1)
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-EXPECTED FAILURE (MISSING OPTION):     raise esctypes.InternalError("Timeout waiting to read.")
-EXPECTED FAILURE (MISSING OPTION): esctypes.InternalError: Timeout waiting to read.
+EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+EXPECTED FAILURE (MISSING OPTION):     Raise(esctypes.TestFailure(actual, expected))
+EXPECTED FAILURE (MISSING OPTION):     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+EXPECTED FAILURE (MISSING OPTION):     raise e
+EXPECTED FAILURE (MISSING OPTION): esctypes.TestFailure: Test failed: expected '6162' but got 'ab'
 EXPECTED FAILURE (MISSING OPTION): 
 
 Run test: SMTitleTests.test_SMTitle_SetUTF8QueryUTF8
-Fails as expected: Terminal "xterm" requires option "xtermWinopsEnabled" for this test to pass.
-
-EXPECTED FAILURE (MISSING OPTION): Traceback (most recent call last):
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 395, in func_wrapper
-EXPECTED FAILURE (MISSING OPTION):     func(self, *args, **kwargs)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/sm_title.py", line 38, in test_SMTitle_SetUTF8QueryUTF8
-EXPECTED FAILURE (MISSING OPTION):     AssertEQ(GetWindowTitle(), "ab")
-EXPECTED FAILURE (MISSING OPTION):              ~~~~~~~~~~~~~~^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-EXPECTED FAILURE (MISSING OPTION):     return escio.ReadOSC("l")
-EXPECTED FAILURE (MISSING OPTION):            ~~~~~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-EXPECTED FAILURE (MISSING OPTION):     ReadOrDie(ESC)
-EXPECTED FAILURE (MISSING OPTION):     ~~~~~~~~~^^^^^
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-EXPECTED FAILURE (MISSING OPTION):     c = read(1)
-EXPECTED FAILURE (MISSING OPTION):   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-EXPECTED FAILURE (MISSING OPTION):     raise esctypes.InternalError("Timeout waiting to read.")
-EXPECTED FAILURE (MISSING OPTION): esctypes.InternalError: Timeout waiting to read.
-EXPECTED FAILURE (MISSING OPTION): 
+Passed.
 
 Run test: SOSTests.test_SOS_8bit
 Fails as expected: Terminal "xterm" requires option "disableWideChars" for this test to pass.
@@ -4084,24 +3601,7 @@ Run test: VPATests.test_VPA_DoesNotChangeColumn
 Passed.
 
 Run test: VPATests.test_VPA_IgnoresOriginMode
-*** TEST VPATests.test_VPA_IgnoresOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/vpa.py", line 67, in test_VPA_IgnoresOriginMode
-    AssertEQ(position.y(), 2)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '2' but got '7'
-
+Passed.
 
 Run test: VPATests.test_VPA_StopsAtBottomEdge
 Passed.
@@ -4229,28 +3729,7 @@ Run test: XtermWinopsTests.test_XtermWinops_Fullscreen
 Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_IconifyDeiconfiy
-*** TEST XtermWinopsTests.test_XtermWinops_IconifyDeiconfiy FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 145, in test_XtermWinops_IconifyDeiconfiy
-    AssertEQ(GetIsIconified(), True)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 178, in GetIsIconified
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_MaximizeWindow_Horizontally
 Passed.
@@ -4262,44 +3741,10 @@ Run test: XtermWinopsTests.test_XtermWinops_MaximizeWindow_Vertically
 Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_MoveToXY
-*** TEST XtermWinopsTests.test_XtermWinops_MoveToXY FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 162, in test_XtermWinops_MoveToXY
-    origin = GetWindowPosition()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 171, in GetWindowPosition
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_MoveToXY_Defaults
-*** TEST XtermWinopsTests.test_XtermWinops_MoveToXY_Defaults FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 185, in test_XtermWinops_MoveToXY_Defaults
-    origin = GetWindowPosition()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 171, in GetWindowPosition
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIcon
 *** TEST XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIcon FAILED:
@@ -4313,43 +3758,19 @@ Traceback (most recent call last):
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
     func(self, *args, **kwargs)
     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 605, in test_XtermWinops_PushIconAndWindow_PopIcon
-    AssertEQ(GetWindowTitle(), string)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 625, in test_XtermWinops_PushIconAndWindow_PopIcon
+    AssertEQ(GetWindowTitle(), "x")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+    Raise(esctypes.TestFailure(actual, expected))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+    raise e
+esctypes.TestFailure: Test failed: expected 'x' but got '1793620069.8387468'
 
 
 Run test: XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIconAndWindow
-*** TEST XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIconAndWindow FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 574, in test_XtermWinops_PushIconAndWindow_PopIconAndWindow
-    AssertEQ(GetWindowTitle(), string)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopWindow
 *** TEST XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopWindow FAILED:
@@ -4363,181 +3784,37 @@ Traceback (most recent call last):
   File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
     func(self, *args, **kwargs)
     ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 642, in test_XtermWinops_PushIconAndWindow_PopWindow
-    AssertEQ(GetWindowTitle(), string)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 663, in test_XtermWinops_PushIconAndWindow_PopWindow
+    AssertEQ(GetIconTitle(), "x")
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
+    Raise(esctypes.TestFailure(actual, expected))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
+    raise e
+esctypes.TestFailure: Test failed: expected 'x' but got '1793620069.850042'
 
 
 Run test: XtermWinopsTests.test_XtermWinops_PushIconThenWindowThenPopBoth
-*** TEST XtermWinopsTests.test_XtermWinops_PushIconThenWindowThenPopBoth FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 731, in test_XtermWinops_PushIconThenWindowThenPopBoth
-    AssertEQ(GetWindowTitle(), string1)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushIcon_PopIcon
-*** TEST XtermWinopsTests.test_XtermWinops_PushIcon_PopIcon FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 683, in test_XtermWinops_PushIcon_PopIcon
-    AssertEQ(GetWindowTitle(), "x")
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Icon
-*** TEST XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Icon FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 755, in test_XtermWinops_PushMultiplePopMultiple_Icon
-    AssertEQ(GetIconTitle(), string2)
-             ~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 51, in GetIconTitle
-    return escio.ReadOSC("L")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Window
-*** TEST XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Window FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 783, in test_XtermWinops_PushMultiplePopMultiple_Window
-    AssertEQ(GetWindowTitle(), string2)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_PushWindow_PopWindow
-*** TEST XtermWinopsTests.test_XtermWinops_PushWindow_PopWindow FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 704, in test_XtermWinops_PushWindow_PopWindow
-    AssertEQ(GetIconTitle(), "x")
-             ~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 51, in GetIconTitle
-    return escio.ReadOSC("L")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ReportIconLabel
-*** TEST XtermWinopsTests.test_XtermWinops_ReportIconLabel FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 557, in test_XtermWinops_ReportIconLabel
-    AssertEQ(GetIconTitle(), string)
-             ~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 51, in GetIconTitle
-    return escio.ReadOSC("L")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ReportWindowLabel
-*** TEST XtermWinopsTests.test_XtermWinops_ReportWindowLabel FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 564, in test_XtermWinops_ReportWindowLabel
-    AssertEQ(GetWindowTitle(), string)
-             ~~~~~~~~~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 55, in GetWindowTitle
-    return escio.ReadOSC("l")
-           ~~~~~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 163, in ReadOSC
-    ReadOrDie(ESC)
-    ~~~~~~~~~^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 154, in ReadOrDie
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizeChars_BothParameters
 Passed.
@@ -4555,103 +3832,21 @@ Run test: XtermWinopsTests.test_XtermWinops_ResizeChars_ZeroWidth
 Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_BothParameters
-*** TEST XtermWinopsTests.test_XtermWinops_ResizePixels_BothParameters FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 203, in test_XtermWinops_ResizePixels_BothParameters
-    maximum_size = GetScreenSizePixels()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 116, in GetScreenSizePixels
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedHeight
-*** TEST XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedHeight FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 226, in test_XtermWinops_ResizePixels_OmittedHeight
-    maximum_size = GetScreenSizePixels()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 116, in GetScreenSizePixels
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedWidth
-*** TEST XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedWidth FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 248, in test_XtermWinops_ResizePixels_OmittedWidth
-    maximum_size = GetScreenSizePixels()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 116, in GetScreenSizePixels
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroHeight
-*** TEST XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroHeight FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 327, in test_XtermWinops_ResizePixels_ZeroHeight
-    maximum_size = GetScreenSizePixels()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 116, in GetScreenSizePixels
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth
-*** TEST XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_winops.py", line 272, in test_XtermWinops_ResizePixels_ZeroWidth
-    maximum_size = GetScreenSizePixels()
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 116, in GetScreenSizePixels
-    params = escio.ReadCSI("t")
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 176, in ReadCSI
-    c = read(1)
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escio.py", line 245, in read
-    raise esctypes.InternalError("Timeout waiting to read.")
-esctypes.InternalError: Timeout waiting to read.
+Passed.
 
-
-*** 408 tests passed, 37 known bugs, 122 TESTS FAILED ***
+*** 451 tests passed, 41 known bugs, 75 TESTS FAILED ***
 Failing tests:
 BSTests.test_BS_InitialReverseWraparound
 BSTests.test_BS_ReverseWrapGoesToBottom
@@ -4659,22 +3854,9 @@ BSTests.test_BS_ReverseWrapStartingInDoWrapPosition
 BSTests.test_BS_ReverseWrapWithLeftRight
 BSTests.test_BS_ReversewrapFromLeftEdgeToRightMargin
 BSTests.test_BS_StopsAtLeftMargin
-CHATests.test_CHA_RespectsOriginMode
 CHTTests.test_CHT_IgnoresScrollingRegion
-CNLTests.test_CNL_StopsAtBottomLineWhenBegunBelowScrollRegion
-CNLTests.test_CNL_StopsAtBottomMarginInScrollRegion
-CPLTests.test_CPL_StopsAtTopLineWhenBegunAboveScrollRegion
-CPLTests.test_CPL_StopsAtTopMarginInScrollRegion
-CRTests.test_CR_MovesToLeftMarginWhenLeftOfLeftMarginInOriginMode
-CRTests.test_CR_MovesToLeftMarginWhenRightOfLeftMargin
-CRTests.test_CR_StaysPutWhenAtLeftMargin
 CUBTests.test_CUB_AfterNoWrappedInlines
 CUBTests.test_CUB_AfterOneWrappedInline
-CUBTests.test_CUB_StopsAtLeftMarginInScrollRegion
-CUDTests.test_CUD_StopsAtBottomMarginInScrollRegion
-CUFTests.test_CUF_StopsAtRightMarginInScrollRegion
-CUPTests.test_CUP_RespectsOriginMode
-CUUTests.test_CUU_StopsAtTopMarginInScrollRegion
 ChangeColorTests.test_ChangeColor_CIELab
 ChangeColorTests.test_ChangeColor_CIELuv
 ChangeColorTests.test_ChangeColor_CIEXYZ
@@ -4699,23 +3881,8 @@ ChangeSpecialColorTests.test_ChangeSpecialColor_TekHVC
 DATests.test_DA_0
 DATests.test_DA_NoParameter
 DCHTests.test_DCH_WorksOutsideTopBottomMargin
-DECALNTests.test_DECALN_MovesCursorHome
-DECBITests.test_DECBI_Basic
-DECBITests.test_DECBI_LeftOfMargin
-DECBITests.test_DECBI_Scrolls
-DECBITests.test_DECBI_WholeScreenScrolls
-DECFITests.test_DECFI_Basic
-DECFITests.test_DECFI_RightOfMargin
-DECFITests.test_DECFI_Scrolls
-DECFITests.test_DECFI_WholeScreenScrolls
 DECIDTests.test_DECID_Basic
 DECRCTests.test_SaveRestoreCursor_AltVsMain
-DECRQMTests.test_DECRQM_DEC_DECARM
-DECRQMTests.test_DECRQM_DEC_DECKBUM
-DECRQMTests.test_DECRQM_DEC_DECKPM
-DECRQMTests.test_DECRQM_DEC_DECPCCM
-DECRQMTests.test_DECRQM_DEC_DECVCCM
-DECRQMTests.test_DECRQM_DEC_DECXRLM
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECRQSSTests.test_DECRQSS_DECSNLS
 DECSCLTests.test_DECSCL_Level2DoesntSupportDECRQM
@@ -4739,39 +3906,20 @@ EDTests.test_ED_respectsISOProtection
 ELTests.test_EL_respectsISOProtection
 FFTests.test_FF_MovesDoesNotScrollOutsideLeftRight
 HPATests.test_HPA_IgnoresOriginMode
-HVPTests.test_HVP_RespectsOriginMode
 INDTests.test_IND_MovesDoesNotScrollOutsideLeftRight
 LFTests.test_LF_MovesDoesNotScrollOutsideLeftRight
 NELTests.test_NEL_MovesDoesNotScrollOutsideLeftRight
 REPTests.test_REP_RespectsLeftRightMargins
 REPTests.test_REP_RespectsTopBottomMargins
 RISTests.test_RIS_ResetDECCOLM
-RISTests.test_RIS_ResetTitleMode
 RITests.test_RI_MovesDoesNotScrollOutsideLeftRight
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
 ResetSpecialColorTests.test_ResetSpecialColor_Multiple
 SCORCTests.test_SaveRestoreCursor_AltVsMain
 SMTests.test_SM_IRM_TruncatesAtRightMargin
-VPATests.test_VPA_IgnoresOriginMode
 VTTests.test_VT_MovesDoesNotScrollOutsideLeftRight
 XtermSaveTests.test_XtermSave_SaveResetState
 XtermSaveTests.test_XtermSave_SaveSetState
 XtermWinopsTests.test_XtermWinops_DECSLPP
-XtermWinopsTests.test_XtermWinops_IconifyDeiconfiy
-XtermWinopsTests.test_XtermWinops_MoveToXY
-XtermWinopsTests.test_XtermWinops_MoveToXY_Defaults
 XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIcon
-XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopIconAndWindow
 XtermWinopsTests.test_XtermWinops_PushIconAndWindow_PopWindow
-XtermWinopsTests.test_XtermWinops_PushIconThenWindowThenPopBoth
-XtermWinopsTests.test_XtermWinops_PushIcon_PopIcon
-XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Icon
-XtermWinopsTests.test_XtermWinops_PushMultiplePopMultiple_Window
-XtermWinopsTests.test_XtermWinops_PushWindow_PopWindow
-XtermWinopsTests.test_XtermWinops_ReportIconLabel
-XtermWinopsTests.test_XtermWinops_ReportWindowLabel
-XtermWinopsTests.test_XtermWinops_ResizePixels_BothParameters
-XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedHeight
-XtermWinopsTests.test_XtermWinops_ResizePixels_OmittedWidth
-XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroHeight
-XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth

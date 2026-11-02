@@ -88,3 +88,28 @@ never did, and the code only ran when there was no resize callback.
 Growing the screen (a smaller font, a bigger SET-UP size) then wrote past
 the end of both arrays. The reallocation now always runs, against the
 old row count, before the embedder's resize callback.
+
+## 10. DECBI / DECFI (`src/state.c`)
+
+`ESC 6` (back index) and `ESC 9` (forward index), VT420. libvterm had
+neither, and escape sequences have no embedder fallback, so they're
+handled in `on_escape()`: move the cursor a column; at the left/right
+margin (inside the margins) scroll the region's contents sideways
+instead, with libvterm's own `scroll()`.
+
+## 11. Margins for cursor motion; origin-relative reports (`src/state.c`)
+
+As xterm (and esctest) expect with DECSLRM/DECSTBM margins:
+- CR goes to the left margin from at or right of it (or in origin
+  mode), else to column 1; CNL/CPL do the same for the column.
+- CUU/CUD/CUF/CUB/CNL/CPL stop at the margin when they start at or
+  inside it, else at the screen edge.
+- CPR / DECXCPR report the position relative to the margins in origin
+  mode (libvterm reported absolute positions).
+
+## 12. DECALN resets margins and homes (`src/state.c`)
+
+DEC STD 070 (and xterm): after filling the screen with E, DECALN resets
+the top/bottom and left/right margins and moves the cursor home.
+libvterm only filled the screen.
+
