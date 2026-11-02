@@ -1221,6 +1221,25 @@ test_osc104_specials(void)
 	TEST_ASSERT_NOT_NULL(strstr(reply, "\x1b]5;1;rgb:"));
 }
 
+static void
+test_iso_protection(void)
+{
+	/* SPA ... EPA protects "ab"; EL then spares it, ECH too. */
+	feed("\x1b[2J\x1b[1;1H\x1bVab\x1bWcd\r\x1b[2K");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 2)->glyph);
+	feed("\x1b[1;1H\x1b[4X");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+	/* DECSERA doesn't honour ISO protection. */
+	feed("\x1b[1;1;1;2${");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 1)->glyph);
+	/* DECSCA protection doesn't stop a plain ED. */
+	feed("\x1b[1\"qx\x1b[0\"q\x1b[2J");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 2)->glyph);
+}
+
 int
 main(void)
 {
@@ -1277,6 +1296,7 @@ main(void)
 	RUN_TEST(test_altbuf_47);
 	RUN_TEST(test_hpa_origin);
 	RUN_TEST(test_osc104_specials);
+	RUN_TEST(test_iso_protection);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

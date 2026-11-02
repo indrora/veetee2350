@@ -1031,11 +1031,17 @@ rect_operation(struct term *term, const long args[], int argcount,
 		return;
 	}
 	if (command == 'z' || command == '{') {
+		/*
+		 * DECERA erases everything; DECSERA spares protected cells,
+		 * but only DEC (DECSCA) protection: after SPA (libvterm patch
+		 * 27) the protection is ISO's, which DECSERA doesn't honour.
+		 */
 		struct cell blank = erase_cell(term);
+		bool spare = command == '{' && !term->state->protect_iso;
 		for (long row = top; row <= bottom; row++) {
 			struct cell *cells = grid_row(grid, (unsigned)row);
 			for (long col = left; col <= right; col++)
-				if (command == 'z' ||
+				if (!spare ||
 				    !(cells[col].attr & CELL_PROTECTED))
 					cells[col] = blank;
 		}

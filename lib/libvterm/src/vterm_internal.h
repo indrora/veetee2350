@@ -140,6 +140,9 @@ struct VTermState
   int bold_is_highbright;
 
   unsigned int protected_cell : 1;
+  /* VeeTee patch 27: protection was last set by SPA (ISO 6429), not
+   * DECSCA. ISO-protected cells survive ED, EL and ECH as well. */
+  unsigned int protect_iso : 1;
 
   /* VeeTee patch 18: DECSCL conformance level (1 = VT100 ... 5 = VT500),
    * set by the embedder; 0 means no limits. Below 4 DECLRMM is refused,

@@ -213,3 +213,13 @@ Under DECOM, CHA and HPA columns count from the left margin, as CUP's
 do and as libvterm's VPA already did for rows (xterm's `CursorSet`).
 esctest names the test "HPA_IgnoresOriginMode", but what it checks
 (HPA 2 reads back as column 2 through an origin-relative CPR) needs this.
+
+## 27. ISO protected areas: SPA / EPA (`src/state.c`, `src/vterm_internal.h`)
+
+SPA (ESC V, C1 0x96) starts protected text and EPA (ESC W, 0x97) ends
+it, sharing the protected bit with DECSCA. As in xterm, the state
+remembers which of the two set protection last (`protect_iso`): after
+SPA, plain ED, EL and ECH also leave protected cells alone (they erase
+"selectively"); after DECSCA only DECSED/DECSEL do. Soft and hard reset
+go back to DEC rules, so RIS still clears everything. (term.c's
+DECSERA reads `protect_iso` too: it honours DEC protection only.)

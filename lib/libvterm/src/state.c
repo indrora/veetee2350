@@ -609,6 +609,15 @@ static int on_control(unsigned char control, void *user)
     state->gl_set = 0;
     break;
 
+  case 0x96: // SPA - ECMA-48 8.3.144; VeeTee patch 27
+    state->protected_cell = 1;
+    state->protect_iso = 1;
+    break;
+
+  case 0x97: // EPA - ECMA-48 8.3.46; VeeTee patch 27
+    state->protected_cell = 0;
+    break;
+
   case 0x84: // IND - DEPRECATED but implemented for completeness
     linefeed(state);
     break;
@@ -1436,7 +1445,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
 
   case 0x4a: // ED - ECMA-48 8.3.39
   case LEADER('?', 0x4a): // DECSED - Selective Erase in Display
-    selective = (leader_byte == '?');
+    /* VeeTee patch 27: after SPA, plain ED/EL spare protected cells. */
+    selective = (leader_byte == '?') || state->protect_iso;
     switch(CSI_ARG(args[0])) {
     case CSI_ARG_MISSING:
     case 0:
@@ -1485,7 +1495,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
 
   case 0x4b: // EL - ECMA-48 8.3.41
   case LEADER('?', 0x4b): // DECSEL - Selective Erase in Line
-    selective = (leader_byte == '?');
+    /* VeeTee patch 27: after SPA, plain ED/EL spare protected cells. */
+    selective = (leader_byte == '?') || state->protect_iso;
     rect.start_row = state->pos.row;
     rect.end_row   = state->pos.row + 1;
 
@@ -1589,7 +1600,7 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     rect.end_col   = state->pos.col + count;
     UBOUND(rect.end_col, THISROWWIDTH(state));
 
-    erase(state, rect, 0);
+    erase(state, rect, state->protect_iso);   /* VeeTee patch 27 */
     break;
 
   case 0x5a: // CBT - ECMA-48 8.3.7
@@ -1856,6 +1867,7 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   case INTERMED('"', 0x71): // DECSCA - DEC select character protection attribute
     val = CSI_ARG_OR(args[0], 0);
 
+    state->protect_iso = 0;               /* VeeTee patch 27: DEC rules */
     switch(val) {
     case 0: case 2:
       state->protected_cell = 0;
@@ -2583,6 +2595,7 @@ void vterm_state_reset(VTermState *state, int hard)
   state->gsingle_set = 0;
 
   state->protected_cell = 0;
+  state->protect_iso = 0;             /* VeeTee patch 27 */
 
   // Initialise the props
   settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, 1);
