@@ -14,12 +14,19 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	6	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
-				   6 card fonts and schemes */
+#define SETTINGS_VERSION	7	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+				   6 card fonts and schemes, 7 screenshots */
 #define SETTINGS_FONT_MAX	32	/* built-in name, or "sd:" + card file */
 #define SETTINGS_SCHEME_MAX	32	/* card scheme file name, no ".yaml" */
 #define SETTINGS_CARD_PREFIX	"sd:"
 #define SETTINGS_ANSWERBACK_MAX	32
+
+/* F12 saves the screen to /screens on the card in this format. */
+enum screenshot_format {
+	SHOT_BMP,		/* 16-bit RGB565, opens anywhere */
+	SHOT_QOI,		/* lossless, a fraction of the size */
+	SHOT_COUNT
+};
 
 enum colour_scheme {
 	SCHEME_XTERM,		/* light grey on black (xterm default) */
@@ -75,6 +82,7 @@ struct settings {
 	uint8_t		utf8;
 	uint8_t		alt_screen;
 	uint8_t		sixel;
+	uint8_t		screenshot_format;	/* enum screenshot_format */
 	uint32_t	crc;
 };
 

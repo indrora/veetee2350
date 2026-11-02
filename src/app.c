@@ -24,6 +24,7 @@
 #include "font.h"
 #include "keys.h"
 #include "render.h"
+#include "screenshot.h"
 #include "settings.h"
 #include "storage.h"
 #include "setup.h"
@@ -361,11 +362,50 @@ forward_key(const struct key_event *key)
 		term_feed(&term, key->raw, key->raw_len);
 }
 
+/*
+ * F12: save the screen to the card. Success flashes the screen (or, in
+ * SET-UP, names the file on the message line); failure gets the
+ * Configuration Error treatment, since a silent failure would look like
+ * success.
+ */
+static void
+take_screenshot(void)
+{
+	char path[32], error[64];
+	uint32_t start = now_ms();
+
+	if (!screenshot_save(&render, settings.screenshot_format, path,
+	    sizeof(path), error, sizeof(error))) {
+		if (in_setup) {
+			char text[80];
+			snprintf(text, sizeof(text), "Screenshot failed: %s",
+			    error);
+			setup_message(&setup, text);
+			return;
+		}
+		config_problem("Screenshot", error);
+		show_config_problems();
+		return;
+	}
+	if (in_setup) {
+		char text[64];
+		snprintf(text, sizeof(text), "Saved %s (%lu ms)", path,
+		    (unsigned long)(now_ms() - start));
+		setup_message(&setup, text);
+	} else if (!bell_flashing) {
+		term.screen->reverse_video = !term.reverse_video;
+		bell_flashing = true;
+		bell_until = make_timeout_time_ms(VISUAL_BELL_MS);
+	}
+}
+
 static void
 handle_key(const struct key_event *key)
 {
 	if (in_config_error)
 		dismiss_config_error();
+	else if (key->code == KEY_F12)
+		take_screenshot();
 	else if (in_setup)
 		setup_handle(key);
 	else if (key->code == KEY_F3)

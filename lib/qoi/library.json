@@ -1,0 +1,8 @@
+{
+  "name": "qoi",
+  "version": "0.1.0",
+  "description": "Streaming QOI image encoder (pure, no allocation)",
+  "build": {
+    "flags": "-O2"
+  }
+}

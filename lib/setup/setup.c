@@ -209,6 +209,11 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 	case ITEM_SIXEL:
 		snprintf(out, len, "%s", work->sixel ? "on" : "off");
 		break;
+	case ITEM_SCREENSHOT:
+		snprintf(out, len, "%s", work->screenshot_format == SHOT_QOI ?
+		    "QOI  (/screens/NNNN.qoi, small)" :
+		    "BMP  (/screens/NNNN.bmp, opens anywhere)");
+		break;
 	case ITEM_SCHEME:
 		if (work->scheme_file[0] == '\0')
 			snprintf(out, len, "%s",
@@ -255,6 +260,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_ALTSCREEN] = "Alternate screen",
 	[ITEM_SIXEL] = "Sixel graphics",
 	[ITEM_SCHEME] = "Colour scheme",
+	[ITEM_SCREENSHOT] = "Screenshot (F12)",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
 	[ITEM_WRAP] = "Auto wrap",
@@ -273,10 +279,21 @@ static const char *const item_labels[ITEM_COUNT] = {
  * Screen row of each item. Everything (title, note, 20 items, help,
  * message) fits exactly in 24 rows, so SET-UP works on an 80x24 terminal.
  */
-static unsigned
-item_row(unsigned item)
+/*
+ * Room for the note on row 1 and a separate message line? On a short
+ * screen (24 rows: the Rainbow font, or a fixed 80x24) the items start
+ * on row 1 and the message, when there is one, replaces the help line.
+ */
+static bool
+roomy(const struct setup *setup)
 {
-	return FIRST_ROW + item;
+	return setup->grid->rows >= FIRST_ROW + ITEM_COUNT + 2;
+}
+
+static unsigned
+item_row(const struct setup *setup, unsigned item)
+{
+	return (roomy(setup) ? FIRST_ROW : 1) + item;
 }
 
 void
@@ -298,7 +315,7 @@ setup_draw(struct setup *setup)
 		bool selected = item == setup->selected;
 		uint16_t fg = selected ? MENU_BG : MENU_FG;
 		uint16_t bg = selected ? MENU_FG : MENU_BG;
-		unsigned row = item_row(item);
+		unsigned row = item_row(setup, item);
 
 		if (selected) {
 			grid_clear_span(grid, row, LABEL_COL - 1,
@@ -310,9 +327,16 @@ setup_draw(struct setup *setup)
 		put(setup, row, VALUE_COL, value, fg, bg);
 	}
 
-	put(setup, 1, LABEL_COL, "Font, size, emulation, colours: reset the "
-	    "terminal.  Resolution: restarts.", DIM_FG, MENU_BG);
-	unsigned help_row = item_row(ITEM_EXIT) + 1;
+	unsigned help_row = item_row(setup, ITEM_EXIT) + 1;
+	if (roomy(setup))
+		put(setup, 1, LABEL_COL, "Font, size, emulation, colours: "
+		    "reset the terminal.  Resolution: restarts.", DIM_FG,
+		    MENU_BG);
+	if (!roomy(setup) && setup->message[0] != '\0' && !setup->editing) {
+		put(setup, help_row, LABEL_COL, setup->message, TITLE_BG,
+		    MENU_BG);
+		return;
+	}
 	put(setup, help_row, LABEL_COL, setup->editing ?
 	    "Type the answerback; Enter or Esc to finish." :
 	    "Up/Down select   Left/Right/Enter change   S save   F3 leave",
@@ -424,6 +448,10 @@ change_value(struct setup *setup, int step)
 		break;
 	case ITEM_SIXEL:
 		work->sixel = !work->sixel;
+		break;
+	case ITEM_SCREENSHOT:
+		work->screenshot_format = (uint8_t)cycle(
+		    work->screenshot_format, SHOT_COUNT, step);
 		break;
 	case ITEM_SCHEME: {
 		unsigned total = SCHEME_COUNT + setup->card.scheme_count;

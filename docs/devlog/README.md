@@ -20,6 +20,7 @@ was learned.
 14. [Sixel](014-sixel.md)
 15. [Old-school fonts, and an SD card slot](015-oldschool-fonts.md)
 16. [Fonts and colour schemes from the SD card](016-card-fonts-schemes.md)
+17. [Screenshots, by the terminal itself](017-screenshots.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

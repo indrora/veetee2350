@@ -98,6 +98,7 @@ settings_valid(const struct settings *settings)
 	    settings->term_size < SIZE_COUNT &&
 	    settings->emulation < EMU_COUNT &&
 	    settings->colour_depth < DEPTH_COUNT &&
+	    settings->screenshot_format < SHOT_COUNT &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
 }
 

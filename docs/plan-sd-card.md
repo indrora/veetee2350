@@ -63,7 +63,8 @@ Settings grow a scheme name and a printer setting (`SETTINGS_VERSION`
 
 - Steps 1-5 done (devlogs 015, 016). Card lists cached in
   /veetee/catalog.bin. Boot is video first, then card.
-- Next: 6 screenshots (F12), 7 printer, 8 firmware update.
+- Step 6 done: F12 screenshots, BMP or QOI (devlog 017).
+- Next: 7 printer, 8 firmware update.
 - Proposed phase G (from the user): lower colour depths -- Sixel tiles at
   8/4/2/1 bpp (2-8x the cells), and 6-byte palette-indexed text cells
   when <= 256 colours (halves the grids; matters most at 720p).
