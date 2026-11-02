@@ -1,0 +1,9 @@
+{
+  "name": "PicoDVI",
+  "version": "0.0.0+dccd738",
+  "description": "Vendored libdvi from Wren6991/PicoDVI (BSD-3-Clause), patched for RP2350B high GPIOs. See PATCHES.md.",
+  "license": "BSD-3-Clause",
+  "frameworks": "arduino",
+  "platforms": "raspberrypi",
+  "build": { "srcDir": "src", "includeDir": "src" }
+}
