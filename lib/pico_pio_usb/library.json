@@ -1,0 +1,12 @@
+{
+  "name": "pico_pio_usb",
+  "version": "0.5.2+waveshare",
+  "description": "Pico-PIO-USB (sekigon-gonnoc, MIT): USB host/device in PIO, from Waveshare's RP2350-PiZero demo. See PROVENANCE.md.",
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "raspberrypi",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src"
+  }
+}

@@ -45,5 +45,7 @@ void	usbhost_set_leds(uint8_t leds);
 
 /* "off: clock 315 MHz" / "on, 1 keyboard" -- for the boot banner. */
 const char *usbhost_describe(void);
+/* The same, worked out afresh (debug builds' stats line). */
+const char *usbhost_refresh(void);
 
 #endif /* HAL_USBHOST_H */

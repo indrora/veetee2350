@@ -10,6 +10,7 @@ them that are compiled in.
 |---|---|---|
 | PicoDVI (libdvi), Luke Wren | `lib/PicoDVI/` (vendored, patched: `PATCHES.md`) | BSD 3-Clause, `lib/PicoDVI/LICENSE` |
 | libvterm, Paul Evans | `lib/libvterm/` (vendored, patched: `PATCHES.md`) | MIT, `lib/libvterm/LICENSE` |
+| Pico-PIO-USB 0.5.2, sekigon-gonnoc (via Waveshare's demo) | `lib/pico_pio_usb/` (vendored: `PROVENANCE.md`) | MIT, `lib/pico_pio_usb/LICENSE` |
 | arduino-pico core, Pico SDK, Adafruit TinyUSB, SdFat | fetched by PlatformIO | LGPL / BSD / MIT (their packages) |
 
 ## Fonts

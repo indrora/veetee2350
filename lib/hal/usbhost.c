@@ -7,10 +7,13 @@
  * when the header can be found.
  *
  * PIO and DMA: PIO 0 is the DVI output (rebased to GPIO 16-47), so
- * PIO-USB gets PIO 1, whose default window (GPIO 0-31) covers 28 and 29:
- * transmit on SM 0, receive on SM 1, end-of-packet on SM 2. Its transmit
- * DMA channel is fixed in its config (channel 0 by default, which libdvi
- * may have claimed), so it gets one we know is free.
+ * PIO-USB transmits on PIO 1 and receives (with its end-of-packet
+ * detector) on PIO 2; both default windows (GPIO 0-31) cover 28 and 29.
+ * Not one block for both: the two programs each use PIO interrupt flag 1
+ * for something different, and in one block they trip each other
+ * (every SETUP failed; lib/pico_pio_usb/PATCHES.md, patch 3). The
+ * transmit DMA channel is fixed in its config (channel 0 by default,
+ * which libdvi may have claimed), so it gets one we know is free.
  */
 #include "usbhost.h"
 
@@ -50,14 +53,22 @@ usbhost_describe(void)
 	return missing;
 }
 
+const char *
+usbhost_refresh(void)
+{
+	return missing;
+}
+
 #else /* Pico-PIO-USB is here */
 
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/gpio.h"
 #include "hardware/irq.h"
 #include "hardware/timer.h"
 #include "pico/time.h"
 #include "pio_usb.h"
+#include "pio_usb_ll.h"
 #include "tusb.h"
 
 #define USBHOST_PIN_DP		28
@@ -68,7 +79,7 @@ static usbhost_report_fn report_fn;
 static usbhost_event_fn event_fn;
 static void *callback_ctx;
 static bool running;
-static char state[48] = "off";
+static char state[112] = "off";
 
 static struct {
 	bool	 used;
@@ -76,6 +87,10 @@ static struct {
 	uint8_t	 instance;
 } keyboards[USBHOST_KEYBOARDS];
 static uint8_t leds;
+/* Any device at all, and HID interfaces of any kind: for describe(). */
+static unsigned devices, hid_interfaces;
+static uint16_t last_vid, last_pid;
+static uint8_t last_protocol = 0xff;
 
 static unsigned
 keyboard_count(void)
@@ -90,9 +105,27 @@ keyboard_count(void)
 static void
 describe(void)
 {
+	if (running && devices == 0) {
+		/* Nothing enumerated: what the root port itself sees. */
+		root_port_t *root = PIO_USB_ROOT_PORT(0);
+		const pio_usb_veetee_stats_t *bus = &pio_usb_veetee_stats;
+		snprintf(state, sizeof(state), "on, no device: %s%s;"
+		    " conn %lu rst %lu ok %lu err %lu stall %lu nak %lu"
+		    " noreply %lu",
+		    root->connected ? "connected" : "nothing",
+		    root->connected ? (root->is_fullspeed ? " FS" : " LS") :
+		    "", (unsigned long)bus->connects,
+		    (unsigned long)bus->resets, (unsigned long)bus->completes,
+		    (unsigned long)bus->errors, (unsigned long)bus->stalls,
+		    (unsigned long)bus->naks, (unsigned long)bus->no_reply);
+		return;
+	}
 	if (running)
-		snprintf(state, sizeof(state), "on, %u keyboard%s",
-		    keyboard_count(), keyboard_count() == 1 ? "" : "s");
+		snprintf(state, sizeof(state), "on, %u keyboard%s; %u device%s"
+		    " (last %04x:%04x), %u HID (last protocol %u)",
+		    keyboard_count(), keyboard_count() == 1 ? "" : "s", devices,
+		    devices == 1 ? "" : "s", last_vid, last_pid, hid_interfaces,
+		    last_protocol);
 }
 
 bool
@@ -112,9 +145,9 @@ usbhost_init(usbhost_report_fn report, usbhost_event_fn event, void *ctx)
 	config.pin_dp = USBHOST_PIN_DP;
 	config.pio_tx_num = 1;
 	config.sm_tx = 0;
-	config.pio_rx_num = 1;
-	config.sm_rx = 1;
-	config.sm_eop = 2;
+	config.pio_rx_num = 2;	/* not 1: see the PIO note at the top */
+	config.sm_rx = 0;
+	config.sm_eop = 1;
 	/* A free channel: claimed to find it, released for PIO-USB to
 	 * claim (it panics if it's taken). */
 	int channel = dma_claim_unused_channel(true);
@@ -169,6 +202,13 @@ usbhost_describe(void)
 	return state;
 }
 
+const char *
+usbhost_refresh(void)
+{
+	describe();
+	return state;
+}
+
 /* --- TinyUSB host callbacks (from tuh_task, so in usbhost_poll) ------- */
 
 static void
@@ -185,14 +225,34 @@ announce(uint8_t dev, const char *what)
 		event_fn(text, callback_ctx);
 }
 
+/* Any device: counted, so "no keyboard" can be told from "nothing". */
+void
+tuh_mount_cb(uint8_t dev)
+{
+	devices++;
+	(void)tuh_vid_pid_get(dev, &last_vid, &last_pid);
+	describe();
+}
+
+void
+tuh_umount_cb(uint8_t dev)
+{
+	(void)dev;
+	if (devices > 0)
+		devices--;
+	describe();
+}
+
 void
 tuh_hid_mount_cb(uint8_t dev, uint8_t instance, uint8_t const *desc,
     uint16_t desc_len)
 {
 	(void)desc;
 	(void)desc_len;
-	if (tuh_hid_interface_protocol(dev, instance) !=
-	    HID_ITF_PROTOCOL_KEYBOARD)
+	hid_interfaces++;
+	last_protocol = tuh_hid_interface_protocol(dev, instance);
+	describe();
+	if (last_protocol != HID_ITF_PROTOCOL_KEYBOARD)
 		return;		/* mice, media keys: not yet */
 	for (unsigned i = 0; i < USBHOST_KEYBOARDS; i++) {
 		if (keyboards[i].used)

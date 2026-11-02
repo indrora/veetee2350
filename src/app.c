@@ -891,6 +891,7 @@ report_stats(void)
 	    (unsigned long)stats.max_render_cycles,
 	    (unsigned long)stats.starved, (unsigned long)stats.yields,
 	    video_line_budget());
+	usbio_printf("[usb] keyboard port %s\r\n", usbhost_refresh());
 #ifdef VEETEE_RENDER_PROFILE
 	/* Overlay composition (Tools menu, user lights), per composed line. */
 	/* Running totals (render.h): this second's share is the change. */
