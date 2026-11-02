@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "build.h"
 #include "render.h"
 #include "term.h"
 #include "video_modes.h"
@@ -252,8 +253,12 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		    SETTINGS_PEEK_TIMES]);
 		break;
 	case ITEM_PROFILER:
-		snprintf(out, len, "%s", work->profiler_bar ?
-		    "on  (cycles a line vs. budget, top of screen)" : "off");
+		snprintf(out, len, "%s",
+		    work->profiler_bar == PROFILER_ON ?
+		    "on  (cycles a line vs. budget, top of screen)" :
+		    work->profiler_bar == PROFILER_DEBUG ?
+		    (VEETEE_DEBUG_BUILD ? "debug builds  (this is one: on)" :
+		    "debug builds  (off here)") : "off");
 		break;
 	case ITEM_SCREENSHOT:
 		snprintf(out, len, "%s", work->screenshot_format == SHOT_QOI ?
@@ -538,10 +543,16 @@ change_value(struct setup *setup, int step)
 	struct settings *work = &setup->work;
 
 	switch (setup->selected) {
-	case ITEM_RESOLUTION:
-		work->resolution = (uint8_t)cycle(work->resolution,
-		    VIDEO_MODE_COUNT, step);
+	case ITEM_RESOLUTION: {
+		/* In SET-UP's order (video_modes.h), not storage order. */
+		unsigned at = 0;
+		for (unsigned i = 0; i < VIDEO_MODE_COUNT; i++)
+			if (video_mode_order[i] == work->resolution)
+				at = i;
+		work->resolution = video_mode_order[cycle(at, VIDEO_MODE_COUNT,
+		    step)];
 		break;
+	}
 	case ITEM_FONT: {
 		unsigned total = font_builtin_count + setup->card.font_count;
 		int current = work_font_index(setup);
@@ -610,7 +621,8 @@ change_value(struct setup *setup, int step)
 		    SETTINGS_PEEK_TIMES, step);
 		break;
 	case ITEM_PROFILER:
-		work->profiler_bar = !work->profiler_bar;
+		work->profiler_bar = (uint8_t)cycle(work->profiler_bar,
+		    PROFILER_MODES, step);
 		break;
 	case ITEM_SCREENSHOT:
 		work->screenshot_format = (uint8_t)cycle(

@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "build.h"
 #include "capture_sd.h"
 #include "card.h"
 #include "flashcfg.h"
@@ -921,6 +922,11 @@ app_init(void)
 	    term.font_source->name, term.screen->cols, term.screen->rows,
 	    term.graphics.tiles, settings_origin);
 	term_feed(&term, (const uint8_t *)detail, (size_t)len);
+	if (VEETEE_DEBUG_BUILD) {
+		static const char debug[] = "\x1b[1mdebug build:\x1b[22m"
+		    VEETEE_DEBUG_FEATURES "\r\n";
+		term_feed(&term, (const uint8_t *)debug, sizeof(debug) - 1);
+	}
 #ifdef VEETEE_FLASH_PROBE
 	extern struct board_flash_probe video_flash_probe_result;
 	const struct board_flash_probe *probe = &video_flash_probe_result;
@@ -957,7 +963,8 @@ update_meter(void)
 	struct render_meter *meter = &render.meter;
 	struct video_stats stats;
 
-	meter->on = settings.profiler_bar;
+	meter->on = settings.profiler_bar == PROFILER_ON ||
+	    (settings.profiler_bar == PROFILER_DEBUG && VEETEE_DEBUG_BUILD);
 	if (!meter->on || render.frame == last_frame)
 		return;
 	last_frame = render.frame;

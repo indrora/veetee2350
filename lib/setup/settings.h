@@ -84,6 +84,20 @@ enum replay_newlines {
 	NEWLINES_COUNT
 };
 
+/*
+ * The profiler bar (render.h): off, on, or on only in a debug build
+ * (build.h) -- the default, so a debug build shows its numbers without
+ * a debug build's boot ever changing what's saved (forcing the setting
+ * on at boot did: a save in a debug build carried it into normal ones,
+ * devlog 025).
+ */
+enum profiler_bar_mode {
+	PROFILER_OFF,
+	PROFILER_ON,
+	PROFILER_DEBUG,
+	PROFILER_MODES
+};
+
 /* How long a peeking status line stays up: 3, 5, 7 or 10 seconds. */
 #define SETTINGS_PEEK_TIMES	4
 extern const uint8_t settings_peek_seconds[SETTINGS_PEEK_TIMES];
@@ -155,7 +169,7 @@ struct settings {
 	uint8_t		peek_time;	/* index into settings_peek_seconds */
 	uint8_t		capture;	/* host output to /capture on the card */
 	struct hotkey	hotkeys[TOOL_COUNT];
-	uint8_t		profiler_bar;	/* per-line cycle bars, top of screen */
+	uint8_t		profiler_bar;	/* enum profiler_bar_mode */
 	uint8_t		replay_newlines;	/* enum replay_newlines */
 	uint32_t	crc;
 };

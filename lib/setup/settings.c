@@ -40,8 +40,11 @@ void
 settings_defaults(struct settings *settings)
 {
 	memset(settings, 0, sizeof(*settings));
+	/* 60 Hz, not 72: the ShadowCast capture card won't take VESA-only
+	 * 640x480 @ 72, and factory defaults (or the crash fallback) must
+	 * come up on a picture (devlog 025). */
 	settings->resolution = VIDEO_MODE_640x480;
-	strcpy(settings->font, "notjam-clean-16");
+	strcpy(settings->font, "ati-smallw-6x8");	/* devlog 025 */
 	settings->term_size = SIZE_FULL;
 	settings->scheme = SCHEME_XTERM;
 	settings->cursor_shape = CURSOR_BLOCK;
@@ -63,6 +66,8 @@ settings_defaults(struct settings *settings)
 	 * unbound (KEY_NONE is 0). */
 	settings->hotkeys[TOOL_MENU] = (struct hotkey){KEY_F3, 0, KEY_MOD_CTRL};
 	settings->hotkeys[TOOL_SCREENSHOT] = (struct hotkey){KEY_F12, 0, 0};
+	/* Debug builds show what they measure (build.h). */
+	settings->profiler_bar = PROFILER_DEBUG;
 	settings_seal(settings);
 }
 
