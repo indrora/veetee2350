@@ -541,6 +541,7 @@ app_init(void)
 	render.live = true;	/* from now on, render_pause must wait */
 	/* After video_init: its TMDS buffers come off the heap first. */
 	term_set_graphics_budget(&term, GRAPHICS_BUDGET, board_free_heap);
+	term_set_keepalive(&term, board_watchdog_feed);
 	apply_settings();	/* may read the card */
 
 	static const char banner[] =

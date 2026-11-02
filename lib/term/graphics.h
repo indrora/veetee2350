@@ -30,6 +30,16 @@
 
 struct term;
 
+/* One six-pixel band of an image being dithered (graphics.c). */
+struct dither {
+	unsigned	 width;		/* image pixels across (to the edge) */
+	unsigned	 y;		/* top pixel row of the band held */
+	bool		 dirty;
+	uint16_t	*band;		/* 6 x width: register + 1, 0 unpainted */
+	int16_t		(*err_this)[3];	/* width + 2: error onto this row */
+	int16_t		(*err_next)[3];	/* width + 2: ... and the next */
+};
+
 /* Bytes the heap can still hand out (board-specific). */
 typedef size_t (*graphics_heap_fn)(void);
 
@@ -54,6 +64,13 @@ struct graphics {
 	unsigned	 palette_used;
 	uint16_t	 reg_rgb[SIXEL_REGISTERS];	/* register -> RGB565 */
 	uint16_t	 reg_slot[SIXEL_REGISTERS];	/* -> slot, lazily */
+
+	/* Below 8 bits a pixel: a fixed palette, and dithering into it. */
+	uint8_t		 fixed_rgb[16][3];
+	unsigned	 fixed_count;	/* candidates (1 bit: ink + bg) */
+	struct dither	*dither;	/* while an image arrives, if memory */
+	void		(*keepalive)(void);	/* during long work: feed the
+						   watchdog (set by the app) */
 
 	/* The image being received. */
 	struct sixel_decoder decoder;

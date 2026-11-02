@@ -911,39 +911,58 @@ use_sixel_depth(unsigned bpp)
 	TEST_ASSERT_EQUAL(bpp, term.graphics.bpp);
 }
 
+/* Count each palette slot over the cell at (row, col). */
+static void
+count_slots(unsigned row, unsigned col, unsigned counts[256])
+{
+	memset(counts, 0, 256 * sizeof(unsigned));
+	for (unsigned y = 0; y < term.graphics.tile_height; y++)
+		for (unsigned x = 0; x < term.graphics.tile_width; x++)
+			counts[tile_px(row, col, x, y)]++;
+}
+
 static void
 test_sixel_depths(void)
 {
+	unsigned counts[256];
+
+	/* 4 bits: the fixed CGA palette, dithered. */
 	use_sixel_depth(4);
 	TEST_ASSERT_EQUAL(4, term.graphics.tile_row_bytes);	/* 8 px */
-	feed("\x1bPq#1;2;100;0;0#2;2;0;0;100#1~#2~#1~\x1b\\");
-	unsigned red = tile_px(0, 0, 0, 0), blue = tile_px(0, 0, 1, 0);
-	TEST_ASSERT_EQUAL_HEX16(0xf800, term.graphics.palette[red]);
-	TEST_ASSERT_EQUAL_HEX16(0x001f, term.graphics.palette[blue]);
-	TEST_ASSERT_EQUAL(red, tile_px(0, 0, 2, 5));
-	TEST_ASSERT_EQUAL(15, tile_px(0, 0, 3, 0));	/* transparent */
-
-	/* 20 distinct colours: only 15 slots, the rest take the nearest. */
-	char image[512] = "\x1bPq";
-	for (int i = 0; i < 20; i++) {
-		char one[24];
-		snprintf(one, sizeof(one), "#%d;2;%d;%d;0#%d~", i + 3, i * 5,
-		    100 - i * 5, i + 3);
-		strcat(image, one);
-	}
-	strcat(image, "\x1b\\");
-	feed("\x1b[2;1H");
-	feed(image);
 	TEST_ASSERT_EQUAL(15, term.graphics.palette_used);
+	TEST_ASSERT_EQUAL_HEX16(0xa800, term.graphics.palette[4]); /* red */
+	/* A 40% blue 8x12 block (two bands), unpainted below: between
+	 * black and CGA blue (0x0000aa), so a mix of the two. */
+	feed("\x1b[H\x1bPq#1;2;0;0;40#1!8~-#1!8~\x1b\\");
+	count_slots(0, 0, counts);
+	TEST_ASSERT_EQUAL(8 * 12, counts[0] + counts[1]);
+	TEST_ASSERT_TRUE(counts[0] > 8 && counts[1] > 8);	/* dithered */
+	TEST_ASSERT_EQUAL(8 * 4, counts[15]);	/* rows 12-15 untouched */
 
-	/* 2 bits: four pixels a byte, and the renderer unpacks them. */
+	/* 2 bits: black, grey, white. A 25% grey is mostly a mix of black
+	 * and grey. */
 	use_sixel_depth(2);
-	feed("\x1b[H\x1bPq#1;2;100;0;0#1~?~\x1b\\");
+	TEST_ASSERT_EQUAL(3, term.graphics.palette_used);
+	feed("\x1b[H\x1bPq#1;2;25;25;25#1!8~-#1!8~-#1!8~\x1b\\");
+	count_slots(0, 0, counts);
+	TEST_ASSERT_TRUE(counts[0] > 16 && counts[1] > 16);
+	TEST_ASSERT_EQUAL(0, counts[2]);			/* no white */
+
+	/* The renderer unpacks 2-bit rows: white, transparent, white. */
+	feed("\x1b[2J\x1b[2;1H\x1bPq#1;2;100;100;100#1~?~\x1b\\");
 	uint16_t line[640];
-	render_scanline(line, render.y_offset, &render);	/* top row */
-	TEST_ASSERT_EQUAL_HEX16(0xf800, line[render.x_offset]);
-	TEST_ASSERT_EQUAL_HEX16(cell_at(0, 0)->bg, line[render.x_offset + 1]);
-	TEST_ASSERT_EQUAL_HEX16(0xf800, line[render.x_offset + 2]);
+	render_scanline(line, render.y_offset + term.font.height, &render);
+	TEST_ASSERT_EQUAL_HEX16(0xffff, line[render.x_offset]);
+	TEST_ASSERT_EQUAL_HEX16(cell_at(1, 0)->bg, line[render.x_offset + 1]);
+	TEST_ASSERT_EQUAL_HEX16(0xffff, line[render.x_offset + 2]);
+
+	/* 1 bit: ink (the foreground) or nothing. A 50% grey is about half
+	 * ink, half see-through. */
+	use_sixel_depth(1);
+	TEST_ASSERT_EQUAL(1, term.graphics.palette_used);
+	feed("\x1b[H\x1bPq#1;2;50;50;50#1!8~-#1!8~-#1!8~\x1b\\");
+	count_slots(0, 0, counts);
+	TEST_ASSERT_TRUE(counts[0] > 32 && counts[0] < 96);	/* ink */
 }
 
 int

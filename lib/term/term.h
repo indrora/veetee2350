@@ -237,6 +237,8 @@ struct term {
  */
 void	term_set_graphics_budget(struct term *term, size_t budget,
 	    graphics_heap_fn heap_free);
+/* Called now and then during long image work (dithering a big image). */
+void	term_set_keepalive(struct term *term, void (*keepalive)(void));
 
 /* Attach a printer (nullptr: none -- MC is ignored, DSR says so). */
 void	term_set_printer(struct term *term,

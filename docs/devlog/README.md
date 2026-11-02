@@ -22,6 +22,7 @@ was learned.
 16. [Fonts and colour schemes from the SD card](016-card-fonts-schemes.md)
 17. [Screenshots, by the terminal itself](017-screenshots.md)
 18. [Turning on the printer](018-printer.md)
+19. [Fewer bytes, fewer bits, and Floyd–Steinberg](019-colour-depth.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

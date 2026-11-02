@@ -155,11 +155,11 @@ when the pool runs out.
 
 | | |
 |---|---|
-| Pool | up to 256 KB: 2048 cells (85% of 80×30) at 640×480; less at 720p, where the grids are big. The boot banner shows the count. |
-| Colours | 256 registers per image (1070 private by default); up to 255 distinct colours on screen at once, then nearest match |
+| Pool | up to 256 KB: at 8 bits 2048 cells (85% of 80×30) at 640×480, twice as many per halving of depth; less at 720p, where the grids are big. The boot banner shows the count. |
+| Colours | 256 registers per image (1070 private by default). At 8 bits a pixel up to 255 distinct colours on screen, then nearest match; at 4/2/1 bits a fixed palette (CGA / greys / foreground ink) with Floyd–Steinberg dithering |
 | Modes | 80 DECSDM (no scrolling, image at top-left), 1070 private registers, 8452 cursor right of image |
 | Queries | DA1 adds `4`; XTSMGRAPHICS (`CSI ? 1/2 ; 1 S`) reports 256 registers and the text area in pixels |
-| SET-UP | "Sixel graphics" on/off; on by default for the VT340 and xterm levels |
+| SET-UP | "Sixel graphics": off / 8 / 4 / 2 / 1 bits a pixel (2048 / 4096 / 8192 / 16384 cells at 640x480); VT340 defaults to 4, xterm to 8 |
 
 Limits: pixels an image never paints stay transparent (P2 is not
 honoured for 0/2); pixel aspect is always 1:1; graphics on double-size

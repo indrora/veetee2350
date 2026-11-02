@@ -37,7 +37,8 @@
  * The image palette, read by the renderer for every picture pixel. In
  * main SRAM those reads queue behind core 1's DVI encoder (which has
  * bus priority); in scratch RAM they don't: a full-width picture line
- * went from ~9800 to ~ cycles. One terminal, one palette.
+ * went from ~9800 to ~9460 cycles (most of the win came later, from
+ * inlining the decode). One terminal, one palette.
  */
 static uint16_t palette_store[256] SCRATCH_DATA;
 
@@ -220,62 +221,270 @@ scroll_screen(struct term *term, unsigned count)
 	term->graphics.origin_row -= (int)count;
 }
 
+/*
+ * Put `count` pixels of palette slot `slot` on image pixel row `py`
+ * from column `x`, scrolling the screen if the row is below it (sixel
+ * scrolling). False means stop: clipped by DECSDM, or the pool is full.
+ */
+static bool
+plot_row(struct term *term, unsigned x, unsigned py, unsigned count,
+    unsigned slot)
+{
+	struct graphics *graphics = &term->graphics;
+	struct grid *grid = term->screen;
+	const unsigned tile_width = graphics->tile_width;
+	int row = graphics->origin_row + (int)(py / graphics->tile_height);
+	unsigned sub = py % graphics->tile_height;
+
+	if (row >= (int)grid->rows) {
+		if (term_dec_mode(term, 80))	/* DECSDM: clip */
+			return false;
+		scroll_screen(term, (unsigned)row - grid->rows + 1);
+		row = grid->rows - 1;
+	}
+	if (row < 0)
+		return true;	/* scrolled off the top */
+
+	/* Walk the run cell by cell. */
+	unsigned px = x, end = x + count;
+	while (px < end) {
+		unsigned col = graphics->origin_col + px / tile_width;
+		unsigned first = px % tile_width;
+		unsigned span = tile_width - first;
+		if (span > end - px)
+			span = end - px;
+		if (col >= grid->cols)
+			break;		/* clipped at the right */
+		uint8_t *tile = cell_tile(term, (unsigned)row, col);
+		if (tile == nullptr)
+			return false;	/* pool exhausted */
+		uint8_t *line = tile + sub * graphics->tile_row_bytes;
+		if (graphics->bpp == 8) {
+			memset(line + first, (int)slot, span);
+		} else {
+			unsigned bpp = graphics->bpp;
+			unsigned mask = (1u << bpp) - 1;
+			for (unsigned i = first; i < first + span; i++) {
+				unsigned bit = i * bpp;
+				uint8_t *byte = &line[bit >> 3];
+				*byte = (uint8_t)((*byte & ~(mask << (bit & 7))) |
+				    (slot << (bit & 7)));
+			}
+		}
+		px += span;
+	}
+	return true;
+}
+
+/* --- dithering (4, 2 and 1 bits a pixel) ----------------------------- */
+
+/*
+ * Below 8 bits a pixel the palette is fixed -- dithering needs one that
+ * spans the colour space rather than whatever an image asked for first:
+ *
+ *   4 bits  the 16 CGA colours less dark grey (one index is transparent)
+ *   2 bits  black, grey, white: a greyscale dither
+ *   1 bit   one ink, the terminal's foreground colour, against its
+ *           background (choosing the background leaves the pixel
+ *           transparent): the monochrome-terminal look
+ *
+ * and images are Floyd-Steinberg dithered into it. Sixel paints a band
+ * six pixels tall one colour register at a time, so a pixel's colour is
+ * only known once its band is complete: paints are recorded per band as
+ * register numbers (0 = unpainted), and when the next band starts (or
+ * the image ends) the band is dithered row by row, left to right. Error
+ * goes 7/16 right, 3/16 down-left, 5/16 down, 1/16 down-right, and the
+ * last row's carries into the next band. Unpainted pixels stay
+ * transparent and neither take nor pass on error. Without memory for
+ * the band (~18 bytes per pixel of width) images fall back to nearest
+ * colour, as at 8 bits.
+ */
+static const uint8_t cga15[15][3] = {
+	{0x00, 0x00, 0x00}, {0x00, 0x00, 0xaa}, {0x00, 0xaa, 0x00},
+	{0x00, 0xaa, 0xaa}, {0xaa, 0x00, 0x00}, {0xaa, 0x00, 0xaa},
+	{0xaa, 0x55, 0x00}, {0xaa, 0xaa, 0xaa}, {0x55, 0x55, 0xff},
+	{0x55, 0xff, 0x55}, {0x55, 0xff, 0xff}, {0xff, 0x55, 0x55},
+	{0xff, 0x55, 0xff}, {0xff, 0xff, 0x55}, {0xff, 0xff, 0xff},
+};
+static const uint8_t grey3[3][3] = {
+	{0x00, 0x00, 0x00}, {0x80, 0x80, 0x80}, {0xff, 0xff, 0xff},
+};
+
+/* Fill the fixed palette for this depth (slots, and the RGB to dither to). */
+static void
+fixed_palette(struct term *term)
+{
+	struct graphics *graphics = &term->graphics;
+	const uint8_t (*colours)[3] = graphics->bpp == 4 ? cga15 : grey3;
+	unsigned count = graphics->bpp == 4 ? 15 : graphics->bpp == 2 ? 3 : 1;
+
+	if (graphics->bpp == 1)
+		colours = (const uint8_t (*)[3])&term->options.fg_rgb;
+	for (unsigned slot = 0; slot < count; slot++) {
+		memcpy(graphics->fixed_rgb[slot], colours[slot], 3);
+		graphics->palette[slot] = rgb565(colours[slot][0],
+		    colours[slot][1], colours[slot][2]);
+	}
+	graphics->palette_used = count;
+	/* At 1 bit the background is a candidate too: it means "leave
+	 * transparent", the only other thing one bit can say. */
+	memcpy(graphics->fixed_rgb[count], term->options.bg_rgb, 3);
+	graphics->fixed_count = count + (graphics->bpp == 1);
+}
+
+static unsigned
+nearest_fixed(const struct graphics *graphics, int red, int green, int blue)
+{
+	unsigned best = 0, best_distance = UINT32_MAX;
+
+	for (unsigned i = 0; i < graphics->fixed_count; i++) {
+		int dr = red - graphics->fixed_rgb[i][0];
+		int dg = green - graphics->fixed_rgb[i][1];
+		int db = blue - graphics->fixed_rgb[i][2];
+		/* Weighted like the eye: green counts most, blue least. */
+		unsigned distance = (unsigned)(3 * dr * dr + 4 * dg * dg +
+		    2 * db * db);
+		if (distance < best_distance) {
+			best = i;
+			best_distance = distance;
+		}
+	}
+	return best;
+}
+
+static int
+clamp255(int value)
+{
+	return value < 0 ? 0 : value > 255 ? 255 : value;
+}
+
+/* Dither the recorded band (top pixel row `y`) onto the screen. */
+static void
+flush_band(struct term *term)
+{
+	struct graphics *graphics = &term->graphics;
+	struct dither *dither = graphics->dither;
+	const unsigned width = dither->width;
+
+	if (!dither->dirty)
+		return;
+	for (unsigned r = 0; r < 6; r++) {
+		const uint16_t *regs = dither->band + r * width;
+		int16_t (*err)[3] = dither->err_this;
+		int16_t (*below)[3] = dither->err_next;
+
+		memset(below, 0, (width + 2) * sizeof(*below));
+		if (graphics->keepalive != nullptr)	/* big images take a while */
+			graphics->keepalive();
+		for (unsigned x = 0; x < width; x++) {
+			if (regs[x] == 0)
+				continue;	/* unpainted: transparent */
+			uint16_t want = graphics->reg_rgb[regs[x] - 1];
+			int red = clamp255(((want >> 11) << 3) + err[x + 1][0] / 16);
+			int green = clamp255((((want >> 5) & 63) << 2) +
+			    err[x + 1][1] / 16);
+			int blue = clamp255(((want & 31) << 3) + err[x + 1][2] / 16);
+			unsigned pick = nearest_fixed(graphics, red, green, blue);
+			int e[3] = {
+				red - graphics->fixed_rgb[pick][0],
+				green - graphics->fixed_rgb[pick][1],
+				blue - graphics->fixed_rgb[pick][2],
+			};
+			for (int c = 0; c < 3; c++) {
+				err[x + 2][c] = (int16_t)(err[x + 2][c] + 7 * e[c]);
+				below[x][c] = (int16_t)(below[x][c] + 3 * e[c]);
+				below[x + 1][c] = (int16_t)(below[x + 1][c] +
+				    5 * e[c]);
+				below[x + 2][c] = (int16_t)(below[x + 2][c] + e[c]);
+			}
+			/* Index fixed_count-1 at 1 bit is the background. */
+			unsigned slot = pick < graphics->palette_used ? pick :
+			    graphics->transparent;
+			if (slot != graphics->transparent &&
+			    !plot_row(term, x, dither->y + r, 1, slot))
+				break;
+		}
+		dither->err_this = below;	/* next row reads what this wrote */
+		dither->err_next = err;
+	}
+	memset(dither->band, 0, 6 * width * sizeof(*dither->band));
+	dither->dirty = false;
+}
+
+/* Buffers for one image; none (nearest colour) if memory is short. */
+static void
+dither_begin(struct term *term)
+{
+	struct graphics *graphics = &term->graphics;
+	unsigned cols = term->screen->cols;
+	unsigned width = cols > graphics->origin_col ?
+	    (cols - graphics->origin_col) * graphics->tile_width : 0;
+	struct dither *dither;
+
+	if (width == 0)
+		return;
+	dither = calloc(1, sizeof(*dither));
+	if (dither == nullptr)
+		return;
+	dither->width = width;
+	dither->band = calloc(6 * width, sizeof(*dither->band));
+	dither->err_this = calloc(width + 2, sizeof(*dither->err_this));
+	dither->err_next = calloc(width + 2, sizeof(*dither->err_next));
+	if (dither->band == nullptr || dither->err_this == nullptr ||
+	    dither->err_next == nullptr) {
+		free(dither->band);
+		free(dither->err_this);
+		free(dither->err_next);
+		free(dither);
+		return;
+	}
+	graphics->dither = dither;
+}
+
+static void
+dither_end(struct term *term)
+{
+	struct dither *dither = term->graphics.dither;
+
+	if (dither == nullptr)
+		return;
+	free(dither->band);
+	free(dither->err_this);
+	free(dither->err_next);
+	free(dither);
+	term->graphics.dither = nullptr;
+}
+
 static void
 sink_paint(void *ctx, unsigned x, unsigned y, uint8_t bits, unsigned count,
     unsigned reg)
 {
 	struct term *term = ctx;
 	struct graphics *graphics = &term->graphics;
-	struct grid *grid = term->screen;
-	const unsigned tile_width = graphics->tile_width;
-	const unsigned tile_height = graphics->tile_height;
-	uint8_t slot = (uint8_t)register_slot(graphics, reg);
+	struct dither *dither = graphics->dither;
 
-	for (unsigned bit = 0; bit < 6; bit++) {
-		if (!(bits & (1u << bit)))
-			continue;
-		unsigned py = y + bit;
-		int row = graphics->origin_row + (int)(py / tile_height);
-		unsigned sub = py % tile_height;
-
-		if (row >= (int)grid->rows) {
-			if (term_dec_mode(term, 80))	/* DECSDM: clip */
-				return;
-			scroll_screen(term, (unsigned)row - grid->rows + 1);
-			row = grid->rows - 1;
+	if (dither != nullptr) {
+		/* Record; dithered when the band is complete. */
+		if (y != dither->y) {
+			flush_band(term);
+			dither->y = y;
 		}
-		if (row < 0)
-			continue;	/* scrolled off the top */
-
-		/* Walk the run cell by cell. */
-		unsigned px = x, end = x + count;
-		while (px < end) {
-			unsigned col = graphics->origin_col + px / tile_width;
-			unsigned first = px % tile_width;
-			unsigned span = tile_width - first;
-			if (span > end - px)
-				span = end - px;
-			if (col >= grid->cols)
-				break;		/* clipped at the right */
-			uint8_t *tile = cell_tile(term, (unsigned)row, col);
-			if (tile == nullptr)
-				return;		/* pool exhausted */
-			uint8_t *line = tile + sub * graphics->tile_row_bytes;
-			if (graphics->bpp == 8) {
-				memset(line + first, slot, span);
-			} else {
-				unsigned bpp = graphics->bpp;
-				unsigned mask = (1u << bpp) - 1;
-				for (unsigned i = first; i < first + span; i++) {
-					unsigned bit = i * bpp;
-					uint8_t *byte = &line[bit >> 3];
-					*byte = (uint8_t)((*byte & ~(mask <<
-					    (bit & 7))) | (slot << (bit & 7)));
-				}
-			}
-			px += span;
+		for (unsigned bit = 0; bit < 6; bit++) {
+			if (!(bits & (1u << bit)))
+				continue;
+			uint16_t *row = dither->band + bit * dither->width;
+			for (unsigned px = x; px < x + count && px <
+			    dither->width; px++)
+				row[px] = (uint16_t)(reg + 1);
 		}
+		dither->dirty = true;
+		return;
 	}
+	unsigned slot = register_slot(graphics, reg);
+	for (unsigned bit = 0; bit < 6; bit++)
+		if ((bits & (1u << bit)) && !plot_row(term, x, y + bit, count,
+		    slot))
+			return;
 }
 
 static const struct sixel_sink sink = {
@@ -385,8 +594,11 @@ graphics_reset(struct term *term)
 	if (graphics->tiles > GRAPHICS_MAX_TILES)
 		graphics->tiles = GRAPHICS_MAX_TILES;
 	graphics->receiving = false;
+	dither_end(term);
 	reset_registers(graphics);
 	reset_palette(graphics);
+	if (graphics->bpp < 8)
+		fixed_palette(term);
 	sweep(term);	/* a DECCOLM regrid may have kept graphic cells */
 	if (render != nullptr) {
 		render->tiles = graphics->pool;
@@ -411,7 +623,9 @@ begin_image(struct term *term)
 	VTermState *state = term->state;
 
 	sweep(term);
-	if (graphics->in_use == 0)
+	if (graphics->bpp < 8)
+		fixed_palette(term);	/* (the 1-bit ink follows the scheme) */
+	else if (graphics->in_use == 0)
 		graphics->palette_used = 0;	/* nothing on screen uses it */
 	/* Private registers: start from the defaults. Shared: keep the
 	 * definitions, but re-resolve slots (the palette may be new). */
@@ -428,6 +642,8 @@ begin_image(struct term *term)
 		graphics->origin_row = state->pos.row;
 		graphics->origin_col = (unsigned)state->pos.col;
 	}
+	if (graphics->bpp < 8)
+		dither_begin(term);
 	sixel_begin(&graphics->decoder, &sink, term);
 	graphics->receiving = true;
 }
@@ -442,6 +658,10 @@ end_image(struct term *term)
 	struct grid *grid = term->screen;
 
 	sixel_end(decoder);
+	if (graphics->dither != nullptr) {
+		flush_band(term);
+		dither_end(term);
+	}
 	graphics->receiving = false;
 	if (term_dec_mode(term, 80) || decoder->height == 0)
 		return;

@@ -1834,6 +1834,12 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 }
 
 void
+term_set_keepalive(struct term *term, void (*keepalive)(void))
+{
+	term->graphics.keepalive = keepalive;
+}
+
+void
 term_set_graphics_budget(struct term *term, size_t budget,
     graphics_heap_fn heap_free)
 {
