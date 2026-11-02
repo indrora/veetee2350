@@ -13,3 +13,6 @@
 - Check the screen: `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2"
   -frames:v 1 capture.jpg` from the user's Terminal panel (needs camera
   permission the agent sandbox lacks).
+- Keep the devlog: every micro-milestone gets `docs/devlog/NNN-slug.md`
+  with a capture in `docs/devlog/img/` and a short blog-style write-up,
+  linked from `docs/devlog/README.md`.
