@@ -13,7 +13,6 @@
 #include "render.h"
 #include "term.h"
 
-static struct font font;
 static struct render render;
 static struct term term;
 static char reply[128];
@@ -45,7 +44,7 @@ cell_at(unsigned row, unsigned col)
 static uint16_t
 glyph(uint32_t codepoint)
 {
-	return font_glyph_for(&font, codepoint);
+	return font_glyph_for(&term.font, codepoint);
 }
 
 /* Foreground RGB565 of a cell (cells store bg and fg^bg). */
@@ -64,10 +63,8 @@ cell_bg(const struct cell *cell)
 void
 setUp(void)
 {
-	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtins[0].data,
-	    font_builtins[0].len));
-	TEST_ASSERT_TRUE(term_init(&term, &font, &render, capture_output,
-	    nullptr));
+	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render,
+	    capture_output, nullptr));
 	reply_len = 0;
 	reply[0] = '\0';
 }
@@ -76,7 +73,6 @@ void
 tearDown(void)
 {
 	term_free(&term);
-	font_free(&font);
 }
 
 static void
@@ -223,6 +219,46 @@ test_utf8_split_across_writes(void)
 	TEST_ASSERT_EQUAL(glyph(0xe9), cell_at(0, 0)->glyph);
 }
 
+static void
+test_osc50_switches_font_and_resets(void)
+{
+	feed("old text");
+	feed("\x1b]50;notjam-prophet-8\a");
+	TEST_ASSERT_EQUAL_STRING("notjam-prophet-8", term.font_source->name);
+	TEST_ASSERT_EQUAL(8, term.font.height);
+	TEST_ASSERT_EQUAL(80, term.screen->cols);
+	TEST_ASSERT_EQUAL(60, term.screen->rows);
+	TEST_ASSERT_EQUAL_PTR(&term.primary, render.grid);
+	TEST_ASSERT_EQUAL_PTR(&term.font, render.font);
+	/* Full reset: screen cleared, cursor home. */
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(0, term.screen->cursor_row);
+	/* libvterm knows the new size: resize(1)-style query. */
+	feed("\x1b[999;999H\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[60;80R", reply);
+	/* And the terminal still works at the new size. */
+	feed("\x1b[60;1HZ");
+	TEST_ASSERT_EQUAL(glyph('Z'), cell_at(59, 0)->glyph);
+}
+
+static void
+test_osc50_query_cycle_and_unknown(void)
+{
+	feed("\x1b]50;?\a");
+	TEST_ASSERT_EQUAL_STRING("\x1b]50;notjam-clean-16\a", reply);
+	feed("\x1b]50;#+\a");
+	TEST_ASSERT_EQUAL_PTR(&font_builtins[1], term.font_source);
+	feed("\x1b]50;#-\a");
+	TEST_ASSERT_EQUAL_PTR(&font_builtins[0], term.font_source);
+	feed("\x1b]50;no-such-font\a");
+	TEST_ASSERT_EQUAL_PTR(&font_builtins[0], term.font_source);
+	/* OSC split across writes (USB packet boundary). */
+	feed("\x1b]50;arbata-");
+	feed("compact\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("arbata-compact", term.font_source->name);
+	TEST_ASSERT_EQUAL(36, term.screen->rows);
+}
+
 int
 main(void)
 {
@@ -239,5 +275,7 @@ main(void)
 	RUN_TEST(test_modes_reach_grid);
 	RUN_TEST(test_device_replies);
 	RUN_TEST(test_utf8_split_across_writes);
+	RUN_TEST(test_osc50_switches_font_and_resets);
+	RUN_TEST(test_osc50_query_cycle_and_unknown);
 	return UNITY_END();
 }

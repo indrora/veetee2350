@@ -22,7 +22,6 @@
 
 static_assert(RENDER_WIDTH == VIDEO_WIDTH && RENDER_HEIGHT == VIDEO_HEIGHT);
 
-static struct font font;
 static struct render render;
 static struct term term;
 
@@ -36,13 +35,11 @@ send_to_host(const char *bytes, size_t len, void *ctx)
 void
 app_init(void)
 {
-	const struct font_builtin *builtin = &font_builtins[0];
-
-	if (font_load_psf2(&font, builtin->data, builtin->len) != FONT_OK)
-		panic("font: cannot load %s", builtin->name);
-	if (!term_init(&term, &font, &render, send_to_host, nullptr))
-		panic("term: out of memory");
+	if (!term_init(&term, &font_builtins[0], &render, send_to_host,
+	    nullptr))
+		panic("term: cannot start (font or memory)");
 	video_init(render_scanline, &render);
+	render.live = true;	/* from now on, render_pause must wait */
 
 	static const char banner[] =
 	    "\x1b[1;33mVeeTee 2350\x1b[0m ready (80x30, notjam-clean-16)\r\n";

@@ -120,10 +120,14 @@ render_pause(struct render *render)
 	uint32_t frame = render->frame;
 
 	render->active = false;
+	if (!render->live)
+		return;
 	/*
 	 * A scanline that read `active` before we cleared it may still be in
-	 * flight. Once the frame counter moves, core 1 has started a fresh
-	 * line after our store, so nothing references the old font/grid.
+	 * flight. Once the frame counter moves, the renderer has started a
+	 * fresh line after our store, so nothing references the old
+	 * font/grid. (The renderer runs in a core 0 IRQ, which preempts this
+	 * loop, so this must not be called with interrupts disabled.)
 	 */
 	while (render->frame == frame)
 		;

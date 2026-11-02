@@ -30,6 +30,24 @@ To see what a command *should* look like, run
 `uv run refscreen.py -- <command>`. It renders the command's output with
 pyte, an independent emulator, at the same size.
 
+## Switching fonts
+
+The terminal implements xterm's OSC 50 for its built-in fonts:
+
+| Sequence | Effect |
+|----------|--------|
+| `ESC ] 50 ; notjam-prophet-8 BEL` | switch to that font (names from `tools/fonts.toml`) |
+| `ESC ] 50 ; #+ BEL` / `#- BEL` | next / previous built-in font |
+| `ESC ] 50 ; ? BEL` | reply `ESC ] 50 ; <current name> BEL` |
+
+A switch changes the grid size (80×30, 80×36, 80×43, 80×48, 80×60...).
+Both screens are rebuilt and the terminal is fully reset; screen
+contents are not kept. Inside `hostshell.py`, `tools/setfont <name>`
+sends the OSC and then reads the new size back the way resize(1) does
+(cursor to 999;999, then DSR 6), and finally runs `stty rows/cols`, so
+programs get SIGWINCH. `tools/fontshow.sh` steps through several fonts
+with a sample page in each.
+
 ## Verified on hardware (2026-11-01)
 
 The checks were done with Genki captures in `captures/`.
@@ -44,6 +62,11 @@ The checks were done with Genki captures in `captures/`.
   (`tools/refscreen.py -- fastfetch`). That includes long info lines
   auto-wrapping onto the logo, which is fastfetch at 80 columns, not a
   bug.
+- `font-*.jpg`: runtime font switching through `fontshow.sh`:
+  clean-16 (80×30), prophet-8 (80×60), prophet-11 (80×43), casual-10
+  (80×48) and arbata-compact (80×36, Cyrillic included). casual-10's
+  remapped `@ ^ _` are correct on hardware. Fonts without Latin-1 or
+  Cyrillic show the missing-glyph box, as expected.
 - `g1-less.jpg`: `less -N /etc/services` shows the alternate screen,
   full-screen redraw, line wrapping (including less's own
   space-backspace trick at the right margin, which depends on xterm-style

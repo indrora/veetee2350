@@ -17,6 +17,14 @@
  * The primary and alternate screens are two grids; switching (DECSET
  * 47/1047/1049) just points the renderer at the other one.
  *
+ * Fonts: the terminal owns its font. xterm's OSC 50 changes it:
+ *   ESC ] 50 ; <name> BEL   switch to built-in font <name> (fonts.toml)
+ *   ESC ] 50 ; #+ BEL       next built-in font (#- previous)
+ *   ESC ] 50 ; ? BEL        reply ESC ] 50 ; <current name> BEL
+ * A switch changes the grid size, so it rebuilds both screens and does a
+ * full terminal reset (RIS-equivalent); the host is expected to re-read
+ * the size (tools/setfont does it the resize(1) way) and redraw.
+ *
  * Runs on core 0. Not reentrant; one struct term per screen.
  */
 #ifndef TERM_H
@@ -50,7 +58,9 @@ struct term_pen {
 struct term {
 	VTerm		*vt;
 	VTermState	*state;
-	const struct font *font;
+	struct font	 font;
+	const struct font_builtin *font_source;
+	const struct font_builtin *pending_font; /* OSC 50, applied after feed */
 	struct render	*render;
 	struct grid	 primary;
 	struct grid	 alternate;
@@ -63,6 +73,11 @@ struct term {
 	void		*output_ctx;
 	uint32_t	 bells;		/* BEL count, for a future visual bell */
 
+	/* OSC 50 argument, reassembled from libvterm's string fragments. */
+	char		 osc_buf[48];
+	size_t		 osc_len;
+	bool		 osc_overflow;
+
 	/* Presentation modes kept here so both grids can be updated
 	 * when the screen switches. */
 	bool		 cursor_visible;
@@ -72,12 +87,22 @@ struct term {
 };
 
 /*
- * Build a terminal sized for `font` (see render_grid_size), allocate both
- * screens, and point `render` at the primary one. Init-time allocation
- * only. Returns false if memory runs out.
+ * Build a terminal using built-in font `builtin`, sized to fit the screen
+ * (see render_grid_size), and point `render` at its primary screen.
+ * Returns false if the font is bad or memory runs out.
  */
-[[nodiscard]] bool term_init(struct term *term, const struct font *font,
-	    struct render *render, term_output_fn output, void *output_ctx);
+[[nodiscard]] bool term_init(struct term *term,
+	    const struct font_builtin *builtin, struct render *render,
+	    term_output_fn output, void *output_ctx);
+
+/*
+ * Switch font: rebuild both screens at the new grid size and reset the
+ * terminal. On a font load failure nothing changes and false is returned.
+ * Allocation failure after the old screens are freed also returns false,
+ * leaving the renderer paused (blank screen); callers treat that as fatal.
+ */
+[[nodiscard]] bool term_set_font(struct term *term,
+	    const struct font_builtin *builtin);
 void	term_free(struct term *term);
 
 /* Feed bytes received from the host. Any amount, any split. */

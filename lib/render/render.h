@@ -36,6 +36,7 @@ struct render {
 	uint8_t		 strike_row;
 	uint8_t		 overline_row;
 	volatile bool	 active;	/* false: draw border only (see pause) */
+	bool		 live;		/* scanout running: pause must wait */
 	volatile uint32_t frame;	/* bumped by core 1 at line 0 */
 	uint8_t		 line_row[RENDER_HEIGHT];	/* grid row or BORDER */
 	uint8_t		 line_sub[RENDER_HEIGHT];	/* glyph row */
@@ -55,9 +56,10 @@ void	render_init(struct render *render, const struct font *font,
 	    struct grid *grid);
 
 /*
- * Stop core 1 touching font/grid so they can be swapped (font change).
- * Blocks until the scanline that might still be using them has finished.
- * Resume with render_init() on the new pair.
+ * Stop the scanline callback touching font/grid so they can be swapped
+ * (font change). If scanout is live (render->live, set by the app after
+ * video_init), blocks until the line that might still be using them has
+ * finished. Resume with render_init() on the new pair.
  */
 void	render_pause(struct render *render);
 

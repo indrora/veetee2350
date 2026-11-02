@@ -1,0 +1,38 @@
+#!/bin/bash
+# setfont — switch the VeeTee 2350's font and tell the tty its new size.
+#
+# Usage (inside a shell whose terminal is the VeeTee, e.g. hostshell.py):
+#   setfont notjam-prophet-8     # a name from tools/fonts.toml
+#   setfont '#+'                 # next built-in font ('#-' previous)
+#   setfont '?'                  # print the current font name
+#
+# The font is changed with xterm's OSC 50. A switch changes the grid size
+# and fully resets the terminal, so afterwards we ask the terminal how big
+# it now is the way resize(1) does -- park the cursor at 999;999 and
+# request a cursor position report (DSR 6) -- then `stty rows/cols`, which
+# makes the kernel send SIGWINCH so full-screen programs redraw.
+
+set -u
+arg=${1:?usage: setfont <name>|#+|#-|?}
+saved=$(stty -g)
+trap 'stty "$saved"' EXIT
+stty raw -echo
+
+if [ "$arg" = "?" ]; then
+	printf '\033]50;?\007'
+	IFS= read -r -s -d $'\a' -t 2 reply || { echo "no reply" >&2; exit 1; }
+	stty "$saved"
+	echo "${reply#*;}"
+	exit 0
+fi
+
+printf '\033]50;%s\007' "$arg"
+sleep 0.3	# the switch happens once the device has processed this write
+printf '\033[999;999H\033[6n'
+IFS= read -r -s -d R -t 2 reply || { echo "no size reply" >&2; exit 1; }
+size=${reply##*[}		# "rows;cols"
+rows=${size%;*}
+cols=${size#*;}
+stty "$saved"
+stty rows "$rows" cols "$cols"
+printf '\033[H'

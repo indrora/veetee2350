@@ -84,6 +84,26 @@ sync_presentation(struct term *term)
 	grid->border2 = grid_dup565(term->default_bg);
 }
 
+/*
+ * Clip a libvterm rect to the grid. Normally a no-op, but during a font
+ * switch libvterm's resize logic can briefly issue rects for the old,
+ * larger grid.
+ */
+static bool
+clamp_rect(const struct grid *grid, VTermRect *rect)
+{
+	if (rect->start_row < 0)
+		rect->start_row = 0;
+	if (rect->start_col < 0)
+		rect->start_col = 0;
+	if (rect->end_row > grid->rows)
+		rect->end_row = grid->rows;
+	if (rect->end_col > grid->cols)
+		rect->end_col = grid->cols;
+	return rect->start_row < rect->end_row &&
+	    rect->start_col < rect->end_col;
+}
+
 /* --- libvterm state callbacks --------------------------------------- */
 
 static int
@@ -97,7 +117,7 @@ cb_putglyph(VTermGlyphInfo *info, VTermPos pos, void *user)
 		return 1;
 
 	/* Combining characters (chars[1..]) are dropped: one glyph/cell. */
-	uint16_t glyph = font_glyph_for(term->font, info->chars[0]);
+	uint16_t glyph = font_glyph_for(&term->font, info->chars[0]);
 	struct cell *cells = grid_row(grid, pos.row);
 
 	cells[pos.col] = pen_cell(term, glyph);
@@ -152,8 +172,15 @@ cb_moverect(VTermRect dest, VTermRect src, void *user)
 {
 	struct term *term = user;
 	struct grid *grid = term->screen;
+
+	if (!clamp_rect(grid, &dest) || !clamp_rect(grid, &src))
+		return 1;
 	int height = src.end_row - src.start_row;
 	int width = src.end_col - src.start_col;
+	if (dest.end_row - dest.start_row < height)
+		height = dest.end_row - dest.start_row;
+	if (dest.end_col - dest.start_col < width)
+		width = dest.end_col - dest.start_col;
 
 	/*
 	 * Copy rows in the order that never overwrites a source row before
@@ -179,6 +206,8 @@ cb_erase(VTermRect rect, int selective, void *user)
 	/* DECSCA protection isn't tracked, so selective erase (DECSED/
 	 * DECSEL) erases everything. Rarely used; see docs/terminal.md. */
 	(void)selective;
+	if (!clamp_rect(term->screen, &rect))
+		return 1;
 	for (int row = rect.start_row; row < rect.end_row; row++)
 		grid_clear_span(term->screen, (unsigned)row,
 		    (unsigned)rect.start_col, (unsigned)rect.end_col, blank);
@@ -313,6 +342,57 @@ static const VTermStateCallbacks state_callbacks = {
 	.resize = cb_resize,
 };
 
+/*
+ * OSC 50 (xterm "set font"), via libvterm's fallback for OSC numbers it
+ * doesn't handle. The string can arrive in several fragments.
+ */
+static int
+fb_osc(int command, VTermStringFragment frag, void *user)
+{
+	struct term *term = user;
+
+	if (command != 50)
+		return 0;
+	if (frag.initial) {
+		term->osc_len = 0;
+		term->osc_overflow = false;
+	}
+	if (term->osc_len + frag.len >= sizeof(term->osc_buf))
+		term->osc_overflow = true;
+	else {
+		memcpy(term->osc_buf + term->osc_len, frag.str, frag.len);
+		term->osc_len += frag.len;
+	}
+	if (!frag.final || term->osc_overflow)
+		return 1;
+	term->osc_buf[term->osc_len] = '\0';
+
+	const char *arg = term->osc_buf;
+	unsigned index = (unsigned)(term->font_source - font_builtins);
+	if (strcmp(arg, "?") == 0) {
+		term->output("\x1b]50;", 5, term->output_ctx);
+		term->output(term->font_source->name,
+		    strlen(term->font_source->name), term->output_ctx);
+		term->output("\a", 1, term->output_ctx);
+	} else if (strcmp(arg, "#+") == 0) {
+		term->pending_font = &font_builtins[(index + 1) %
+		    font_builtin_count];
+	} else if (strcmp(arg, "#-") == 0) {
+		term->pending_font = &font_builtins[(index + font_builtin_count -
+		    1) % font_builtin_count];
+	} else {
+		/* Unknown names are ignored, as xterm does. */
+		const struct font_builtin *found = font_builtin_find(arg);
+		if (found != nullptr)
+			term->pending_font = found;
+	}
+	return 1;
+}
+
+static const VTermStateFallbacks state_fallbacks = {
+	.osc = fb_osc,
+};
+
 static void
 vterm_output(const char *bytes, size_t len, void *user)
 {
@@ -323,30 +403,39 @@ vterm_output(const char *bytes, size_t len, void *user)
 
 /* --- public API ------------------------------------------------------ */
 
+/* (Re)allocate both screens for the current font. */
+static bool
+build_screens(struct term *term, unsigned *cols, unsigned *rows)
+{
+	render_grid_size(&term->font, cols, rows);
+	term->space_glyph = font_glyph_for(&term->font, ' ');
+	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
+	    term->default_bg, 0);
+	return grid_init(&term->primary, *cols, *rows, blank) &&
+	    grid_init(&term->alternate, *cols, *rows, blank);
+}
+
 bool
-term_init(struct term *term, const struct font *font, struct render *render,
-    term_output_fn output, void *output_ctx)
+term_init(struct term *term, const struct font_builtin *builtin,
+    struct render *render, term_output_fn output, void *output_ctx)
 {
 	unsigned cols, rows;
 	VTermColor fg, bg;
 
 	memset(term, 0, sizeof(*term));
-	term->font = font;
 	term->render = render;
 	term->output = output;
 	term->output_ctx = output_ctx;
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
-	term->space_glyph = font_glyph_for(font, ' ');
 	term->cursor_visible = true;
 	term->cursor_blink = true;
 	term->cursor_shape = CURSOR_BLOCK;
 
-	render_grid_size(font, &cols, &rows);
-	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
-	    term->default_bg, 0);
-	if (!grid_init(&term->primary, cols, rows, blank) ||
-	    !grid_init(&term->alternate, cols, rows, blank))
+	if (font_load_psf2(&term->font, builtin->data, builtin->len) != FONT_OK)
+		return false;
+	term->font_source = builtin;
+	if (!build_screens(term, &cols, &rows))
 		goto fail;
 
 	term->vt = vterm_new((int)rows, (int)cols);
@@ -360,7 +449,7 @@ term_init(struct term *term, const struct font *font, struct render *render,
 	 * hard reset below immediately calls initpen/erase/settermprop.
 	 */
 	term->screen = &term->primary;
-	render_init(render, font, term->screen);
+	render_init(render, &term->font, term->screen);
 
 	term->state = vterm_obtain_state(term->vt);
 	vterm_color_rgb(&fg, DEFAULT_FG_RGB);
@@ -368,6 +457,8 @@ term_init(struct term *term, const struct font *font, struct render *render,
 	vterm_state_set_default_colors(term->state, &fg, &bg);
 	vterm_state_set_bold_highbright(term->state, 1);
 	vterm_state_set_callbacks(term->state, &state_callbacks, term);
+	vterm_state_set_unrecognised_fallbacks(term->state, &state_fallbacks,
+	    term);
 	vterm_state_reset(term->state, 1);
 	sync_presentation(term);
 	return true;
@@ -377,6 +468,38 @@ fail:
 	return false;
 }
 
+bool
+term_set_font(struct term *term, const struct font_builtin *builtin)
+{
+	struct font next;
+	unsigned cols, rows;
+
+	/* Load first: if this fails, nothing has changed. */
+	if (font_load_psf2(&next, builtin->data, builtin->len) != FONT_OK)
+		return false;
+
+	render_pause(term->render);
+	grid_free(&term->primary);
+	grid_free(&term->alternate);
+	font_free(&term->font);
+	term->font = next;
+	term->font_source = builtin;
+	if (!build_screens(term, &cols, &rows))
+		return false;
+
+	term->screen = &term->primary;
+	render_init(term->render, &term->font, term->screen);
+	/*
+	 * Resize libvterm's state (margins, tab stops, line info) and then
+	 * hard-reset it, which homes the cursor, clears both screens through
+	 * our erase callback and restores default modes via settermprop.
+	 */
+	vterm_set_size(term->vt, (int)rows, (int)cols);
+	vterm_state_reset(term->state, 1);
+	sync_presentation(term);
+	return true;
+}
+
 void
 term_free(struct term *term)
 {
@@ -384,6 +507,7 @@ term_free(struct term *term)
 		vterm_free(term->vt);
 	grid_free(&term->primary);
 	grid_free(&term->alternate);
+	font_free(&term->font);
 	memset(term, 0, sizeof(*term));
 }
 
@@ -391,4 +515,17 @@ void
 term_feed(struct term *term, const uint8_t *bytes, size_t len)
 {
 	vterm_input_write(term->vt, (const char *)bytes, len);
+
+	/*
+	 * Font switches requested by OSC 50 are applied here, outside
+	 * libvterm's callbacks, since they resize and reset its state. Bytes
+	 * after the OSC in the same chunk were drawn with the old font and
+	 * are wiped by the reset; hosts should wait for the switch (as
+	 * tools/setfont does by querying the size).
+	 */
+	if (term->pending_font != nullptr) {
+		const struct font_builtin *next = term->pending_font;
+		term->pending_font = nullptr;
+		(void)term_set_font(term, next);
+	}
 }

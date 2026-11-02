@@ -243,6 +243,15 @@ font_free(struct font *font)
 	memset(font, 0, sizeof(*font));
 }
 
+const struct font_builtin *
+font_builtin_find(const char *name)
+{
+	for (unsigned i = 0; i < font_builtin_count; i++)
+		if (strcmp(font_builtins[i].name, name) == 0)
+			return &font_builtins[i];
+	return nullptr;
+}
+
 uint16_t
 font_glyph_for(const struct font *font, uint32_t codepoint)
 {

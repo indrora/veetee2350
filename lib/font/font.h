@@ -56,6 +56,9 @@ struct font_builtin {
 extern const struct font_builtin font_builtins[];
 extern const unsigned int font_builtin_count;
 
+/* Built-in font by name (as in tools/fonts.toml), or nullptr. */
+const struct font_builtin *font_builtin_find(const char *name);
+
 /*
  * Parse a PSF2 image into `font`, copying everything it needs (the image
  * may be freed afterwards). On failure `font` is left zeroed.
