@@ -25,6 +25,11 @@
  * full terminal reset (RIS-equivalent); the host is expected to re-read
  * the size (tools/setfont does it the resize(1) way) and redraw.
  *
+ * Size: the host can ask (xterm window ops CSI 14/16/18/19 t), or enable
+ * in-band resize notifications (DECSET 2048, as in contour/kitty/foot):
+ * the terminal then sends CSI 48 ; rows ; cols ; height ; width t at once
+ * and after every change (font, size setting, resolution).
+ *
  * Runs on core 0. Not reentrant; one struct term per screen.
  */
 #ifndef TERM_H
@@ -51,6 +56,7 @@ struct term_options {
 	uint8_t		fg_rgb[3];	/* default foreground */
 	uint8_t		bg_rgb[3];	/* default background */
 	unsigned	max_rows;	/* 0 = as many as the font fits */
+	unsigned	max_cols;	/* 0 = as many as the font fits */
 	uint8_t		cursor_shape;	/* enum cursor_shape */
 	bool		cursor_blink;
 	bool		autowrap;	/* DECAWM */
@@ -89,6 +95,9 @@ struct term {
 	term_output_fn	 output;
 	void		*output_ctx;
 	uint32_t	 bells;		/* BEL count, for a future visual bell */
+
+	/* DECSET 2048: report the size in-band whenever it changes. */
+	bool		 resize_reports;
 
 	/* OSC 50 argument, reassembled from libvterm's string fragments. */
 	char		 osc_buf[48];

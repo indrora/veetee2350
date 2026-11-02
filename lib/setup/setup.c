@@ -25,19 +25,28 @@
 
 static const char *const cursor_names[] = {"block", "underline", "bar"};
 
-unsigned
-setup_rows_for(const struct font_builtin *builtin, unsigned rows,
-    unsigned screen_height)
+bool
+setup_grid_for(const struct font_builtin *builtin, unsigned size,
+    unsigned width, unsigned height, unsigned *cols, unsigned *rows)
 {
-	unsigned width, height;
+	unsigned cell_w, cell_h;
+	const struct settings_size *want = &settings_sizes[size % SIZE_COUNT];
 
-	font_builtin_cell(builtin, &width, &height);
-	unsigned fit = screen_height / height;
-	if (fit > GRID_MAX_ROWS)
-		fit = GRID_MAX_ROWS;
-	if (rows == SETTINGS_ROWS_AUTO || rows > fit)
-		return fit;
-	return rows;
+	font_builtin_cell(builtin, &cell_w, &cell_h);
+	*cols = width / cell_w;
+	*rows = height / cell_h;
+	if (*cols > GRID_MAX_COLS)
+		*cols = GRID_MAX_COLS;
+	if (*rows > GRID_MAX_ROWS)
+		*rows = GRID_MAX_ROWS;
+	if (want->cols == 0)
+		return false;
+	bool clamped = want->cols > *cols || want->rows > *rows;
+	if (want->cols < *cols)
+		*cols = want->cols;
+	if (want->rows < *rows)
+		*rows = want->rows;
+	return clamped;
 }
 
 static const struct font_builtin *
@@ -89,23 +98,29 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		    "  (restarts on exit)" : "");
 		break;
 	case ITEM_FONT: {
+		unsigned cols, rows;
 		font_builtin_cell(builtin, &width, &height);
-		unsigned cols = mode->width / width;
-		if (cols > GRID_MAX_COLS)
-			cols = GRID_MAX_COLS;
-		snprintf(out, len, "%s  (%ux%u cell, %ux%u)", builtin->name,
-		    width, height, cols,
-		    setup_rows_for(builtin, work->rows, mode->height));
+		setup_grid_for(builtin, SIZE_FULL, mode->width, mode->height,
+		    &cols, &rows);
+		snprintf(out, len, "%s  (%ux%u cell, up to %ux%u)",
+		    builtin->name, width, height, cols, rows);
 		break;
 	}
-	case ITEM_ROWS:
-		if (work->rows == SETTINGS_ROWS_AUTO)
-			snprintf(out, len, "auto (%u)",
-			    setup_rows_for(builtin, SETTINGS_ROWS_AUTO,
-			    mode->height));
+	case ITEM_SIZE: {
+		unsigned cols, rows;
+		bool clamped = setup_grid_for(builtin, work->term_size, mode->width,
+		    mode->height, &cols, &rows);
+		const struct settings_size *want =
+		    &settings_sizes[work->term_size % SIZE_COUNT];
+		if (want->cols == 0)
+			snprintf(out, len, "full screen (%ux%u)", cols, rows);
+		else if (clamped)
+			snprintf(out, len, "%ux%u -> %ux%u (doesn't fit)",
+			    want->cols, want->rows, cols, rows);
 		else
-			snprintf(out, len, "%u", work->rows);
+			snprintf(out, len, "%ux%u", cols, rows);
 		break;
+	}
 	case ITEM_SCHEME:
 		snprintf(out, len, "%s", settings_scheme_name(work->scheme));
 		break;
@@ -139,7 +154,7 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_RESOLUTION] = "Resolution",
 	[ITEM_FONT] = "Font",
-	[ITEM_ROWS] = "Rows",
+	[ITEM_SIZE] = "Terminal size",
 	[ITEM_SCHEME] = "Colours",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
@@ -197,9 +212,10 @@ setup_draw(struct setup *setup)
 	    "Type the answerback; Enter or Esc to finish." :
 	    "Up/Down: select   Left/Right/Enter: change", DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL,
-	    "Font/rows/colours reset the terminal; resolution restarts it.",
+	    "Font/size/colours reset the terminal; resolution restarts it.",
 	    DIM_FG, MENU_BG);
-	put(setup, help_row + 3, LABEL_COL, setup->message, TITLE_BG,
+	/* Row 23 at most: SET-UP must fit an 80x24 terminal. */
+	put(setup, help_row + 2, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
 }
 
@@ -258,14 +274,9 @@ change_value(struct setup *setup, int step)
 		    font_builtins[index].name);
 		break;
 	}
-	case ITEM_ROWS: {
-		static const uint8_t choices[] = {SETTINGS_ROWS_AUTO, 24, 25};
-		unsigned index = 0;
-		while (index < 3 && choices[index] != work->rows)
-			index++;
-		work->rows = choices[cycle(index % 3, 3, step)];
+	case ITEM_SIZE:
+		work->term_size = (uint8_t)cycle(work->term_size, SIZE_COUNT, step);
 		break;
-	}
 	case ITEM_SCHEME:
 		work->scheme = (uint8_t)cycle(work->scheme, SCHEME_COUNT, step);
 		break;

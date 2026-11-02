@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	2	/* 2: added resolution */
+#define SETTINGS_VERSION	3	/* 2: resolution; 3: rows -> size */
 #define SETTINGS_FONT_MAX	24
 #define SETTINGS_ANSWERBACK_MAX	32
 
@@ -27,8 +27,27 @@ enum colour_scheme {
 	SCHEME_COUNT
 };
 
-/* Rows choices for SETTINGS rows: 0 means "as many as the font fits". */
-#define SETTINGS_ROWS_AUTO	0
+/*
+ * Terminal size choices. SIZE_FULL uses every cell the font and resolution
+ * give; the fixed sizes are letterboxed, and clamped if they don't fit.
+ */
+enum terminal_size {
+	SIZE_FULL,
+	SIZE_80x24,
+	SIZE_80x25,
+	SIZE_80x43,
+	SIZE_80x50,
+	SIZE_132x24,
+	SIZE_132x43,
+	SIZE_COUNT
+};
+
+struct settings_size {
+	uint16_t	cols;		/* 0 = as many as fit */
+	uint16_t	rows;
+};
+
+extern const struct settings_size settings_sizes[SIZE_COUNT];
 
 struct settings {
 	uint32_t	magic;
@@ -36,7 +55,7 @@ struct settings {
 	uint16_t	size;		/* sizeof(struct settings) when sealed */
 	uint8_t		resolution;	/* enum video_mode_id (video_modes.h) */
 	char		font[SETTINGS_FONT_MAX];	/* built-in font name */
-	uint8_t		rows;		/* SETTINGS_ROWS_AUTO, 24 or 25 */
+	uint8_t		term_size;	/* enum terminal_size */
 	uint8_t		scheme;		/* enum colour_scheme */
 	uint8_t		cursor_shape;	/* enum cursor_shape (grid.h) */
 	uint8_t		cursor_blink;

@@ -22,13 +22,23 @@ static const struct {
 	[SCHEME_PAPER] = {"paper", {16, 16, 16}, {240, 236, 224}},
 };
 
+const struct settings_size settings_sizes[SIZE_COUNT] = {
+	[SIZE_FULL] = {0, 0},
+	[SIZE_80x24] = {80, 24},
+	[SIZE_80x25] = {80, 25},
+	[SIZE_80x43] = {80, 43},
+	[SIZE_80x50] = {80, 50},
+	[SIZE_132x24] = {132, 24},
+	[SIZE_132x43] = {132, 43},
+};
+
 void
 settings_defaults(struct settings *settings)
 {
 	memset(settings, 0, sizeof(*settings));
 	settings->resolution = VIDEO_MODE_640x480;
 	strcpy(settings->font, "notjam-clean-16");
-	settings->rows = SETTINGS_ROWS_AUTO;
+	settings->term_size = SIZE_FULL;
 	settings->scheme = SCHEME_XTERM;
 	settings->cursor_shape = CURSOR_BLOCK;
 	settings->cursor_blink = 1;
@@ -78,6 +88,7 @@ settings_valid(const struct settings *settings)
 	    settings->size == sizeof(*settings) &&
 	    settings->scheme < SCHEME_COUNT &&
 	    settings->resolution < VIDEO_MODE_COUNT &&
+	    settings->term_size < SIZE_COUNT &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
 }
 

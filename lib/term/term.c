@@ -404,8 +404,84 @@ fb_control(unsigned char control, void *user)
 	return 1;
 }
 
+static void
+send_printf(struct term *term, const char *fmt, unsigned a, unsigned b,
+    unsigned c, unsigned d)
+{
+	char reply[48];
+	int len = snprintf(reply, sizeof(reply), fmt, a, b, c, d);
+
+	if (len > 0)
+		term->output(reply, (size_t)len, term->output_ctx);
+}
+
+/* In-band resize report (DECSET 2048): CSI 48 ; rows ; cols ; h ; w t. */
+static void
+send_size_report(struct term *term)
+{
+	const struct grid *grid = term->screen;
+
+	send_printf(term, "\x1b[48;%u;%u;%u;%ut", grid->rows, grid->cols,
+	    grid->rows * term->font.height, grid->cols * term->font.width);
+}
+
+/*
+ * CSI sequences libvterm doesn't handle (and, via our libvterm patch,
+ * unknown DEC private modes and their DECRQM queries).
+ */
+static int
+fb_csi(const char *leader, const long args[], int argcount,
+    const char *intermed, char command, void *user)
+{
+	struct term *term = user;
+	const struct grid *grid = term->screen;
+	bool private = leader != nullptr && leader[0] == '?';
+	bool no_leader = leader == nullptr || leader[0] == '\0';
+	long first = argcount > 0 ? CSI_ARG(args[0]) : CSI_ARG_MISSING;
+
+	/* xterm window ops: size queries only. */
+	if (no_leader && intermed == nullptr && command == 't') {
+		switch (first) {
+		case 14:	/* text area in pixels */
+			send_printf(term, "\x1b[4;%u;%ut", grid->rows *
+			    term->font.height, grid->cols * term->font.width, 0, 0);
+			return 1;
+		case 16:	/* character cell in pixels */
+			send_printf(term, "\x1b[6;%u;%ut", term->font.height,
+			    term->font.width, 0, 0);
+			return 1;
+		case 18:	/* text area in characters */
+			send_printf(term, "\x1b[8;%u;%ut", grid->rows,
+			    grid->cols, 0, 0);
+			return 1;
+		case 19:	/* screen in characters: same, no window */
+			send_printf(term, "\x1b[9;%u;%ut", grid->rows,
+			    grid->cols, 0, 0);
+			return 1;
+		default:
+			return 0;
+		}
+	}
+
+	if (private && first == 2048) {
+		if (intermed == nullptr && (command == 'h' || command == 'l')) {
+			term->resize_reports = command == 'h';
+			if (term->resize_reports)
+				send_size_report(term);
+			return 1;
+		}
+		if (intermed != nullptr && intermed[0] == '$' && command == 'p') {
+			send_printf(term, "\x1b[?2048;%u$y",
+			    term->resize_reports ? 1 : 2, 0, 0, 0);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static const VTermStateFallbacks state_fallbacks = {
 	.control = fb_control,
+	.csi = fb_csi,
 	.osc = fb_osc,
 };
 
@@ -448,6 +524,8 @@ build_screens(struct term *term, unsigned *cols, unsigned *rows)
 	    term->render->height, cols, rows);
 	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
 		*rows = term->options.max_rows;
+	if (term->options.max_cols != 0 && term->options.max_cols < *cols)
+		*cols = term->options.max_cols;
 	term->space_glyph = font_glyph_for(&term->font, ' ');
 	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
 	    term->default_bg, 0);
@@ -545,6 +623,9 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 	vterm_state_reset(term->state, 1);
 	apply_modes(term);
 	sync_presentation(term);
+	/* The size changed under the host: tell it, if it asked. */
+	if (term->resize_reports)
+		send_size_report(term);
 	return true;
 }
 
@@ -554,6 +635,7 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 {
 	bool rebuild = builtin != term->font_source ||
 	    options->max_rows != term->options.max_rows ||
+	    options->max_cols != term->options.max_cols ||
 	    memcmp(options->fg_rgb, term->options.fg_rgb, 3) != 0 ||
 	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0;
 

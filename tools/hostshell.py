@@ -4,8 +4,8 @@
     uv run hostshell.py LINE_PORT [--keyboard KBD_PORT] [--type 'ls -G' ...]
                         [--keys '\x1bOR'] [--exit-after 20]
 
-The shell runs in a pseudo-terminal sized to the VeeTee grid (80x30 by
-default) with TERM=xterm-256color. Bytes flow:
+The shell runs in a pseudo-terminal sized to the VeeTee's grid (see
+"Size" below) with TERM=xterm-256color. Bytes flow:
 
     shell (pty) --> serial --> VeeTee screen
     VeeTee replies (DA, DSR, ...) --> serial --> shell
@@ -19,6 +19,13 @@ VeeTee's keyboard port, through the device (which can claim them, e.g.
 for the SET-UP screen), and back out of the line port to the shell.
 Without it, keys go straight to the shell.
 
+Size: the bridge enables the VeeTee's in-band resize reports (DECSET
+2048) and starts the shell at the size the terminal reports. Later
+reports (font, size or resolution changed in SET-UP) are removed from the
+stream and applied to the pty with TIOCSWINSZ, so the kernel sends
+SIGWINCH and full-screen programs (htop, micro, vim) redraw at the real
+size. --rows/--cols only matter if the terminal never answers.
+
 --type TEXT (TEXT + Enter) and --keys ESCAPED (Python escapes, no Enter)
 inject keystrokes in order, 1 s apart, for scripted tests. Standard
 library only (termios/pty/select), so no pyserial dependency.
@@ -30,6 +37,7 @@ import argparse
 import fcntl
 import os
 import pty
+import re
 import select
 import struct
 import sys
@@ -49,6 +57,57 @@ def open_serial(path: str) -> int:
     return fd
 
 
+RESIZE_REPORT = re.compile(rb"\x1b\[48;(\d+);(\d+);(\d+);(\d+)t")
+REPORT_PREFIX = b"\x1b[48;"
+
+
+class SizeTracker:
+    """Pull CSI 48;rows;cols;h;w t reports out of the device's byte stream.
+
+    A report can be split across reads, so a trailing fragment that could
+    still become one is held back until the next chunk.
+    """
+
+    def __init__(self):
+        self.pending = b""
+        self.size = None  # (rows, cols)
+
+    def feed(self, data: bytes) -> bytes:
+        data = self.pending + data
+        self.pending = b""
+        out = bytearray()
+        position = 0
+        for match in RESIZE_REPORT.finditer(data):
+            out += data[position : match.start()]
+            self.size = (int(match.group(1)), int(match.group(2)))
+            position = match.end()
+        tail = data[position:]
+        start = tail.rfind(b"\x1b")
+        if start != -1 and tail[start:].startswith(REPORT_PREFIX[: len(tail) - start]) and not tail[start:].endswith(b"t"):
+            self.pending = tail[start:]
+            tail = tail[:start]
+        out += tail
+        return bytes(out)
+
+
+def set_winsize(fd: int, rows: int, cols: int) -> None:
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+
+def query_size(serial_fd: int, tracker: SizeTracker, timeout: float = 1.5):
+    """Enable resize reports; the terminal answers with its current size."""
+    write_all(serial_fd, b"\x1b[?2048h")
+    deadline = time.monotonic() + timeout
+    while tracker.size is None and time.monotonic() < deadline:
+        ready, _, _ = select.select([serial_fd], [], [], 0.1)
+        if ready:
+            try:
+                tracker.feed(os.read(serial_fd, 4096))
+            except BlockingIOError:
+                pass
+    return tracker.size
+
+
 def spawn_shell(rows: int, cols: int, shell: str) -> tuple[int, int]:
     pid, master = pty.fork()
     if pid == 0:
@@ -56,8 +115,7 @@ def spawn_shell(rows: int, cols: int, shell: str) -> tuple[int, int]:
         env.pop("COLUMNS", None)
         env.pop("LINES", None)
         os.execvpe(shell, [shell, "-i"], env)
-    winsize = struct.pack("HHHH", rows, cols, 0, 0)
-    fcntl.ioctl(master, termios.TIOCSWINSZ, winsize)
+    set_winsize(master, rows, cols)
     return pid, master
 
 
@@ -97,7 +155,10 @@ def main() -> int:
 
     serial_fd = open_serial(args.port)
     keyboard_fd = open_serial(args.keyboard) if args.keyboard else None
-    pid, master = spawn_shell(args.rows, args.cols, args.shell)
+    tracker = SizeTracker()
+    rows, cols = query_size(serial_fd, tracker) or (args.rows, args.cols)
+    applied = (rows, cols)
+    pid, master = spawn_shell(rows, cols, args.shell)
     key_sink = keyboard_fd if keyboard_fd is not None else master
     interactive = sys.stdin.isatty() and not args.actions
     saved = None
@@ -131,12 +192,18 @@ def main() -> int:
                 if fd == master:
                     write_all(serial_fd, data)
                 elif fd == serial_fd:
-                    write_all(master, data)
+                    data = tracker.feed(data)
+                    if tracker.size and tracker.size != applied:
+                        applied = tracker.size
+                        set_winsize(master, *applied)  # kernel sends SIGWINCH
+                    if data:
+                        write_all(master, data)
                 else:  # our stdin: the keyboard
                     write_all(key_sink, data)
     finally:
         if saved is not None:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
+        write_all(serial_fd, b"\x1b[?2048l")
         os.close(serial_fd)
         if keyboard_fd is not None:
             os.close(keyboard_fd)

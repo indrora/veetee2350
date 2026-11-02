@@ -79,8 +79,11 @@ settings_font(const struct settings *from)
 static void
 apply_settings(void)
 {
+	const struct settings_size *size =
+	    &settings_sizes[settings.term_size % SIZE_COUNT];
 	struct term_options options = {
-		.max_rows = settings.rows,
+		.max_rows = size->rows,
+		.max_cols = size->cols,
 		.cursor_shape = settings.cursor_shape,
 		.cursor_blink = settings.cursor_blink,
 		.autowrap = settings.autowrap,

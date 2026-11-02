@@ -835,6 +835,14 @@ static void set_dec_mode(VTermState *state, int num, int val)
     break;
 
   default:
+    /* VeeTee patch: offer unknown DEC modes to the CSI fallback as a
+     * single-parameter "CSI ? num h/l", so embedders can implement modes
+     * libvterm doesn't (e.g. 2048 in-band resize). See PATCHES.md. */
+    if(state->fallbacks && state->fallbacks->csi) {
+      long arg = num;
+      if((*state->fallbacks->csi)("?", &arg, 1, NULL, val ? 'h' : 'l', state->fbdata))
+        return;
+    }
     DEBUG_LOG("libvterm: Unknown DEC mode %d\n", num);
     return;
   }
@@ -910,6 +918,13 @@ static void request_dec_mode(VTermState *state, int num)
       break;
 
     default:
+      /* VeeTee patch: let the CSI fallback answer DECRQM ("CSI ? num $ p")
+       * for modes it implements; otherwise "not recognised". */
+      if(state->fallbacks && state->fallbacks->csi) {
+        long arg = num;
+        if((*state->fallbacks->csi)("?", &arg, 1, "$", 'p', state->fbdata))
+          return;
+      }
       vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, 0);
       return;
   }

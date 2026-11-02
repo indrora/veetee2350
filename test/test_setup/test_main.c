@@ -115,16 +115,33 @@ test_answerback_editing(void)
 }
 
 static void
-test_rows_resolution(void)
+test_size_resolution(void)
 {
+	const struct font_builtin *clean16 = font_builtin_find("notjam-clean-16");
 	const struct font_builtin *prophet8 =
 	    font_builtin_find("notjam-prophet-8");
-	TEST_ASSERT_EQUAL(60, setup_rows_for(prophet8, SETTINGS_ROWS_AUTO,
-	    480));
-	TEST_ASSERT_EQUAL(24, setup_rows_for(prophet8, 24, 480));
-	/* 720 lines / 8 = 90, capped at what the grid supports. */
-	TEST_ASSERT_EQUAL(GRID_MAX_ROWS, setup_rows_for(prophet8,
-	    SETTINGS_ROWS_AUTO, 720));
+	unsigned cols, rows;
+
+	TEST_ASSERT_FALSE(setup_grid_for(prophet8, SIZE_FULL, 640, 480, &cols,
+	    &rows));
+	TEST_ASSERT_EQUAL(80, cols);
+	TEST_ASSERT_EQUAL(60, rows);
+	TEST_ASSERT_FALSE(setup_grid_for(prophet8, SIZE_80x24, 640, 480, &cols,
+	    &rows));
+	TEST_ASSERT_EQUAL(24, rows);
+	/* 720 lines / 8 = 90 rows, capped at what the grid supports. */
+	setup_grid_for(prophet8, SIZE_FULL, 1280, 720, &cols, &rows);
+	TEST_ASSERT_EQUAL(GRID_MAX_ROWS, rows);
+	/* 132 columns don't fit 640 px of 8-px cells: clamped to 80. */
+	TEST_ASSERT_TRUE(setup_grid_for(clean16, SIZE_132x24, 640, 480, &cols,
+	    &rows));
+	TEST_ASSERT_EQUAL(80, cols);
+	TEST_ASSERT_EQUAL(24, rows);
+	/* ...but they do at 1280x720. */
+	TEST_ASSERT_FALSE(setup_grid_for(clean16, SIZE_132x43, 1280, 720, &cols,
+	    &rows));
+	TEST_ASSERT_EQUAL(132, cols);
+	TEST_ASSERT_EQUAL(43, rows);
 }
 
 /* --- applying options to the terminal -------------------------------- */
@@ -152,6 +169,7 @@ test_term_configure(void)
 		.fg_rgb = {255, 176, 0},
 		.bg_rgb = {20, 10, 0},
 		.max_rows = 24,
+		.max_cols = 64,
 		.cursor_shape = CURSOR_BAR,
 		.cursor_blink = false,
 		.autowrap = true,
@@ -163,6 +181,9 @@ test_term_configure(void)
 	    nullptr));
 	TEST_ASSERT_TRUE(term_configure(&term, &font_builtins[0], &options));
 	TEST_ASSERT_EQUAL(24, term.screen->rows);	/* row limit */
+	TEST_ASSERT_EQUAL(64, term.screen->cols);	/* column limit */
+	/* 64 columns of 8 px centred in 640: 64 px border each side. */
+	TEST_ASSERT_EQUAL(64, render.x_offset);
 	TEST_ASSERT_EQUAL(CURSOR_BAR, term.screen->cursor_shape);
 	TEST_ASSERT_FALSE(term.screen->cursor_blink);
 	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(20, 10, 0),
@@ -184,7 +205,7 @@ main(void)
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);
 	RUN_TEST(test_answerback_editing);
-	RUN_TEST(test_rows_resolution);
+	RUN_TEST(test_size_resolution);
 	RUN_TEST(test_term_configure);
 	return UNITY_END();
 }

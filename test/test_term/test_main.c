@@ -260,6 +260,44 @@ test_osc50_query_cycle_and_unknown(void)
 	TEST_ASSERT_EQUAL(36, term.screen->rows);
 }
 
+static void
+test_size_queries(void)
+{
+	feed("\x1b[18t");
+	TEST_ASSERT_EQUAL_STRING("\x1b[8;30;80t", reply);
+	reply_len = 0;
+	feed("\x1b[14t");
+	TEST_ASSERT_EQUAL_STRING("\x1b[4;480;640t", reply);
+	reply_len = 0;
+	feed("\x1b[16t");
+	TEST_ASSERT_EQUAL_STRING("\x1b[6;16;8t", reply);
+}
+
+static void
+test_inband_resize_reports(void)
+{
+	/* DECRQM before enabling: recognised, reset. */
+	feed("\x1b[?2048$p");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?2048;2$y", reply);
+	/* Enabling reports the current size straight away... */
+	reply_len = 0;
+	feed("\x1b[?2048h");
+	TEST_ASSERT_EQUAL_STRING("\x1b[48;30;80;480;640t", reply);
+	/* ...and again whenever the size changes (font switch). */
+	reply_len = 0;
+	feed("\x1b]50;notjam-prophet-8\a");
+	TEST_ASSERT_EQUAL_STRING("\x1b[48;60;80;480;640t", reply);
+	/* Disabled: no report on change. */
+	feed("\x1b[?2048l");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b]50;notjam-clean-16\a");
+	TEST_ASSERT_EQUAL_STRING("", reply);
+	/* Other unknown DEC modes still don't break anything. */
+	feed("\x1b[?9999h");
+	TEST_ASSERT_EQUAL_STRING("", reply);
+}
+
 int
 main(void)
 {
@@ -278,5 +316,7 @@ main(void)
 	RUN_TEST(test_utf8_split_across_writes);
 	RUN_TEST(test_osc50_switches_font_and_resets);
 	RUN_TEST(test_osc50_query_cycle_and_unknown);
+	RUN_TEST(test_size_queries);
+	RUN_TEST(test_inband_resize_reports);
 	return UNITY_END();
 }

@@ -30,6 +30,27 @@ To see what a command *should* look like, run
 `uv run refscreen.py -- <command>`. It renders the command's output with
 pyte, an independent emulator, at the same size.
 
+## Terminal size and telling the host
+
+The grid size comes from three settings: resolution, font, and
+**Terminal size** (full screen, or a fixed 80×24 / 80×25 / 80×43 /
+80×50 / 132×24 / 132×43, letterboxed, and clamped when it doesn't fit).
+Hosts can find out the size in several ways:
+
+| Sequence | Reply |
+|----------|-------|
+| `CSI 18 t` / `CSI 19 t` | `CSI 8 ; rows ; cols t` / `CSI 9 ; …` |
+| `CSI 14 t` | text area in pixels: `CSI 4 ; height ; width t` |
+| `CSI 16 t` | cell size: `CSI 6 ; height ; width t` |
+| `CSI ? 2048 h` | in-band resize reports: `CSI 48 ; rows ; cols ; height ; width t` now, and after every change |
+| `CSI ? 2048 $ p` | DECRQM: `CSI ? 2048 ; 1/2 $ y` |
+| cursor to 999;999, then `CSI 6 n` | the resize(1) method |
+
+`tools/hostshell.py` enables 2048 and starts the shell at the reported
+size. Later reports are stripped from the stream and applied to the pty,
+which sends SIGWINCH. That fixed full-screen programs (htop, micro)
+using only part of the screen after a font or size change.
+
 ## Keyboard port and SET-UP
 
 The device presents two CDC ports: **VeeTee line** (the terminal's line,

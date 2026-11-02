@@ -32,7 +32,7 @@ enum setup_action {
 enum setup_item {
 	ITEM_RESOLUTION,
 	ITEM_FONT,
-	ITEM_ROWS,
+	ITEM_SIZE,
 	ITEM_SCHEME,
 	ITEM_CURSOR,
 	ITEM_BLINK,
@@ -77,10 +77,11 @@ void	setup_message(struct setup *setup, const char *text);
 void	setup_draw(struct setup *setup);
 
 /*
- * Rows a font gives on a screen `height` pixels tall with this rows
- * setting (resolves SETTINGS_ROWS_AUTO, caps at what fits).
+ * The grid a font gives on a width x height screen with terminal size
+ * setting `size` (enum terminal_size): full, or the fixed size clamped to
+ * what fits. Returns true if the fixed size had to be clamped.
  */
-unsigned setup_rows_for(const struct font_builtin *builtin, unsigned rows,
-	    unsigned height);
+bool	setup_grid_for(const struct font_builtin *builtin, unsigned size,
+	    unsigned width, unsigned height, unsigned *cols, unsigned *rows);
 
 #endif /* SETUP_H */
