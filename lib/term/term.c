@@ -1136,7 +1136,8 @@ regrid_columns(struct term *term, unsigned cols, bool keep)
  * ignores it with 80/132 switching disallowed (mode 40 reset), and
  * DECRQM keeps reporting the old state.
  *
- * Per DEC STD 070 a switch clears the screen (unless DECNCSM, mode 95),
+ * Per DEC STD 070 a switch clears the screen (unless DECNCSM, mode 95,
+ * at level 5),
  * homes the cursor and resets the top/bottom and left/right margins,
  * even when the width doesn't actually change.
  *
@@ -1151,7 +1152,10 @@ set_columns(struct term *term, bool wide)
 {
 	VTermState *state = term->state;
 	unsigned cols, rows;
-	bool keep = term->stored_modes[stored_mode_index(95, true)] == 1;
+	/* DECNCSM is a VT510 feature: below conformance level 5 (DECSCL
+	 * 65) the switch clears whatever mode 95 says, as xterm does. */
+	bool keep = term->conformance >= 65 &&
+	    term->stored_modes[stored_mode_index(95, true)] == 1;
 
 	if (term->stored_modes[stored_mode_index(40, true)] != 1)
 		return;

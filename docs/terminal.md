@@ -140,8 +140,10 @@ right with a fixed 80×N size.) Rows don't change.
 it; elsewhere, like xterm when it can't resize its window, the mode is
 set and the DEC side effects happen (clear, home, margins) at the
 current width. Mode 40 (xterm's "allow 80⇄132") is set by default
-and can turn DECCOLM off; mode 95 (DECNCSM) keeps the screen contents
-across a switch. A switch clears the screen, homes the cursor, resets
+and can turn DECCOLM off. Mode 95 (DECNCSM, keep the screen across a
+switch) is a VT510 feature: like xterm, VeeTee honours it only at
+conformance level 5, which none of its emulations reach, so it is
+stored and reported but has no effect. A switch clears the screen, homes the cursor, resets
 the margins and, with DECSET 2048 on, sends the host a size report.
 
 ## Sixel graphics

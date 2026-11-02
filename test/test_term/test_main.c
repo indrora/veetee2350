@@ -655,14 +655,15 @@ test_deccolm(void)
 	TEST_ASSERT_EQUAL(160, term.screen->cols);
 	TEST_ASSERT_EQUAL(0, term.screen->cursor_row);
 
-	/* DECNCSM keeps the contents across the switch. */
+	/* DECNCSM (mode 95) is a VT510 feature: at this level (VT420,
+	 * like xterm's default) the switch clears anyway. */
 	feed("abc\x1b[?95h\x1b[?3h");
 	TEST_ASSERT_EQUAL(132, term.screen->cols);
-	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 1)->glyph);
 	feed("\x1b[?95l");
 
 	/* Mode 40 reset: DECCOLM ignored entirely. */
-	feed("\x1b[?40l\x1b[?3l");
+	feed("abc\x1b[?40l\x1b[?3l");
 	TEST_ASSERT_EQUAL(132, term.screen->cols);
 	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
 }
