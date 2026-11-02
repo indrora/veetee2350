@@ -53,6 +53,32 @@ enum key_code {
 	KEY_F11,
 	KEY_F12,
 	KEY_UNKNOWN,	/* well-formed but unrecognised sequence */
+	/*
+	 * Appended (saved hotkeys store these numbers): keys only a USB
+	 * keyboard reports as themselves (hidkbd.h). The keypad, for
+	 * application keypad mode (DECKPAM); Print Screen and Pause, which
+	 * send nothing to the host and so make good hotkeys.
+	 */
+	KEY_KP_0,
+	KEY_KP_1,
+	KEY_KP_2,
+	KEY_KP_3,
+	KEY_KP_4,
+	KEY_KP_5,
+	KEY_KP_6,
+	KEY_KP_7,
+	KEY_KP_8,
+	KEY_KP_9,
+	KEY_KP_DOT,
+	KEY_KP_ENTER,
+	KEY_KP_PLUS,
+	KEY_KP_MINUS,
+	KEY_KP_MULTIPLY,
+	KEY_KP_DIVIDE,
+	KEY_KP_EQUAL,
+	KEY_PRINT_SCREEN,
+	KEY_PAUSE,
+	KEY_CODES	/* count */
 };
 
 /*

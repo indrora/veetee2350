@@ -201,6 +201,14 @@ keys_name(enum key_code code, uint8_t byte, uint8_t mods, char *out,
 		[KEY_F7] = "F7", [KEY_F8] = "F8", [KEY_F9] = "F9",
 		[KEY_F10] = "F10", [KEY_F11] = "F11", [KEY_F12] = "F12",
 		[KEY_UNKNOWN] = "?",
+		[KEY_KP_0] = "KP0", [KEY_KP_1] = "KP1", [KEY_KP_2] = "KP2",
+		[KEY_KP_3] = "KP3", [KEY_KP_4] = "KP4", [KEY_KP_5] = "KP5",
+		[KEY_KP_6] = "KP6", [KEY_KP_7] = "KP7", [KEY_KP_8] = "KP8",
+		[KEY_KP_9] = "KP9", [KEY_KP_DOT] = "KP.",
+		[KEY_KP_ENTER] = "KPEnter", [KEY_KP_PLUS] = "KP+",
+		[KEY_KP_MINUS] = "KP-", [KEY_KP_MULTIPLY] = "KP*",
+		[KEY_KP_DIVIDE] = "KP/", [KEY_KP_EQUAL] = "KP=",
+		[KEY_PRINT_SCREEN] = "PrtSc", [KEY_PAUSE] = "Pause",
 	};
 	char key[8];
 	const char *name = key;

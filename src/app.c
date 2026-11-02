@@ -25,6 +25,7 @@
 #include "card.h"
 #include "flashcfg.h"
 #include "font.h"
+#include "hidkbd.h"
 #include "keys.h"
 #include "render.h"
 #include "menu.h"
@@ -36,11 +37,13 @@
 #include "storage.h"
 #include "setup.h"
 #include "term.h"
+#include "usbhost.h"
 #include "usbio.h"
 #include "video.h"
 
 #include "pico.h"
 #include "pico/time.h"
+#include "hardware/irq.h"
 #include "hardware/structs/watchdog.h"
 
 static_assert(sizeof(struct settings) <= FLASHCFG_MAX);
@@ -431,6 +434,18 @@ setup_handle(const struct key_event *key)
 static void
 forward_key(const struct key_event *key)
 {
+	/*
+	 * A USB keyboard's key (no raw bytes: hidkbd.h): the terminal is
+	 * the one that encodes it, by its modes, LNM included.
+	 */
+	if (key->raw_len == 0) {
+		uint8_t bytes[KEYS_RAW_MAX];
+		size_t len = term_key_bytes(&term, key, bytes, sizeof(bytes));
+		term_send(&term, (const char *)bytes, len);
+		if (settings.local_echo)
+			show_bytes(bytes, len);
+		return;
+	}
 	/* LNM: Enter sends CR LF. Only a bare CR is translated. */
 	if (settings.newline_mode && key->code == KEY_ENTER &&
 	    key->raw_len == 1 && key->raw[0] == '\r') {
@@ -766,6 +781,43 @@ poll_keyboard(void)
 		handle_key(&key);
 }
 
+/* --- the USB keyboard (lib/hal/usbhost.h, lib/input/hidkbd.h) -------- */
+
+static struct hidkbd usb_keyboard;
+
+/* A report (from usbhost_poll): its new keys, as from the CDC port. */
+static void
+usb_keyboard_report(const uint8_t *report, size_t len, void *ctx)
+{
+	struct key_event events[HIDKBD_KEYS];
+	uint8_t leds = hidkbd_leds(&usb_keyboard);
+
+	(void)ctx;
+	unsigned count = hidkbd_report(&usb_keyboard, report, len, now_ms(),
+	    events, HIDKBD_KEYS);
+	for (unsigned i = 0; i < count; i++)
+		handle_key(&events[i]);
+	if (hidkbd_leds(&usb_keyboard) != leds)
+		usbhost_set_leds(hidkbd_leds(&usb_keyboard));
+}
+
+static void
+usb_keyboard_event(const char *text, void *ctx)
+{
+	(void)ctx;
+	term_status_message(&term, text, now_ms());
+}
+
+static void
+poll_usb_keyboard(void)
+{
+	struct key_event key;
+
+	usbhost_poll();
+	if (hidkbd_poll(&usb_keyboard, now_ms(), &key))
+		handle_key(&key);
+}
+
 static void
 poll_bootsel(void)
 {
@@ -910,17 +962,26 @@ app_init(void)
 	/* After video_init: its TMDS buffers come off the heap first. */
 	term_set_graphics_budget(&term, GRAPHICS_BUDGET, board_free_heap);
 	term_set_keepalive(&term, board_watchdog_feed);
+	/*
+	 * After video_init, whose DMA channels and PIO 0 it must not take.
+	 * Once it runs, its frame timer is the one interrupt the renderer
+	 * yields to (usbhost.h).
+	 */
+	hidkbd_init(&usb_keyboard);
+	if (usbhost_init(usb_keyboard_report, usb_keyboard_event, nullptr))
+		video_set_priority(PICO_HIGHEST_IRQ_PRIORITY + 0x40);
 	apply_settings();	/* may read the card */
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
 	    "SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
-	char detail[144];
+	char detail[200];
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
-	    "sixel %u cells\r\nsettings: %s\r\n", mode->name,
-	    term.font_source->name, term.screen->cols, term.screen->rows,
-	    term.graphics.tiles, settings_origin);
+	    "sixel %u cells\r\nsettings: %s; USB keyboard port: %s\r\n",
+	    mode->name, term.font_source->name, term.screen->cols,
+	    term.screen->rows, term.graphics.tiles, settings_origin,
+	    usbhost_describe());
 	term_feed(&term, (const uint8_t *)detail, (size_t)len);
 	if (VEETEE_DEBUG_BUILD) {
 		static const char debug[] = "\x1b[1mdebug build:\x1b[22m"
@@ -1048,6 +1109,7 @@ app_poll(void)
 	capture_sd_poll(now_ms());
 	check_capture();
 	poll_keyboard();
+	poll_usb_keyboard();
 	poll_bootsel();
 	poll_bell();
 	printer_sd_poll();

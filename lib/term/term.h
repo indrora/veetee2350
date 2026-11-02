@@ -42,6 +42,7 @@
 #include "font.h"
 #include "graphics.h"
 #include "grid.h"
+#include "keys.h"
 #include "render.h"
 #include "status.h"
 #include "vterm.h"
@@ -225,6 +226,10 @@ struct term {
 	bool		 auto_print;		/* CSI ? 5 i */
 	uint8_t		 mc_held[4];	/* a possible CSI 4/5 i, held back */
 	uint8_t		 mc_held_len;
+	/* term_key_bytes: libvterm's keyboard output, caught. */
+	uint8_t		*key_capture;
+	size_t		 key_capture_len;
+	size_t		 key_capture_cap;
 	/* The status line and user lights (status.c). */
 	uint8_t		 status_lights;	/* DECLL: bit n is L(n+1) */
 	uint8_t		 status_type;	/* DECSSDT, enum term_status_type */
@@ -280,6 +285,16 @@ void	term_free(struct term *term);
 
 /* Feed bytes received from the host. Any amount, any split. */
 void	term_feed(struct term *term, const uint8_t *bytes, size_t len);
+
+/*
+ * What a key from the board's own keyboard (USB, hidkbd.h) sends to the
+ * host: the bytes this terminal's modes call for (cursor keys DECCKM,
+ * keypad DECKPAM, new line LNM), from libvterm's keyboard encoder. Puts
+ * them in `out` rather than sending them, so the caller can echo or
+ * record them too. 0 for keys that send nothing (Print Screen, Pause).
+ */
+size_t	term_key_bytes(struct term *term, const struct key_event *key,
+	    uint8_t *out, size_t cap);
 /* Media Copy print screen (CSI i), for the Tools menu; needs a printer. */
 void	printer_print_screen(struct term *term);
 

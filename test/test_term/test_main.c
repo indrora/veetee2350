@@ -1478,6 +1478,45 @@ test_utf8_split_feed(void)
 	TEST_ASSERT_EQUAL(glyph('D'), cell_at(1, 2)->glyph);
 }
 
+/* What USB keyboard keys send (term_key_bytes), against xterm. */
+static void
+expect_key(enum key_code code, uint8_t byte, uint8_t mods,
+    const char *expected)
+{
+	struct key_event key = {.code = code, .byte = byte, .mods = mods};
+	uint8_t out[16];
+	size_t len = term_key_bytes(&term, &key, out, sizeof(out));
+
+	TEST_ASSERT_EQUAL_MESSAGE(strlen(expected), len, expected);
+	if (len > 0)
+		TEST_ASSERT_EQUAL_MEMORY(expected, out, len);
+}
+
+static void
+test_usb_key_bytes(void)
+{
+	expect_key(KEY_CHAR, 'a', 0, "a");
+	expect_key(KEY_CHAR, 0x03, 0, "\x03");			/* Ctrl+C */
+	expect_key(KEY_CHAR, 'x', KEY_MOD_ALT, "\x1bx");
+	expect_key(KEY_CHAR, '1', KEY_MOD_CTRL, "1");		/* not CSI u */
+	expect_key(KEY_UP, 0, 0, "\x1b[A");
+	expect_key(KEY_ENTER, 0, 0, "\r");
+	expect_key(KEY_BACKSPACE, 0, 0, "\x7f");
+	expect_key(KEY_TAB, 0, KEY_MOD_SHIFT, "\x1b[Z");
+	expect_key(KEY_F3, 0, 0, "\x1bOR");
+	expect_key(KEY_F3, 0, KEY_MOD_CTRL, "\x1b[1;5R");
+	expect_key(KEY_DELETE, 0, 0, "\x1b[3~");
+	expect_key(KEY_KP_7, 0, 0, "7");
+	expect_key(KEY_PRINT_SCREEN, 0, 0, "");
+	/* The terminal's modes decide: DECCKM, DECKPAM, LNM. */
+	feed("\x1b[?1h\x1b=\x1b[20h");
+	expect_key(KEY_UP, 0, 0, "\x1bOA");
+	expect_key(KEY_KP_7, 0, 0, "\x1bOw");
+	expect_key(KEY_ENTER, 0, 0, "\r\n");
+	/* None of it went to the host. */
+	TEST_ASSERT_EQUAL(0, reply_len);
+}
+
 int
 main(void)
 {
@@ -1536,6 +1575,7 @@ main(void)
 	RUN_TEST(test_osc104_specials);
 	RUN_TEST(test_iso_protection);
 	RUN_TEST(test_utf8_split_feed);
+	RUN_TEST(test_usb_key_bytes);
 	RUN_TEST(test_decll);
 	RUN_TEST(test_decssdt);
 	RUN_TEST(test_status_row_layout);

@@ -1811,6 +1811,14 @@ vterm_output(const char *bytes, size_t len, void *user)
 {
 	struct term *term = user;
 
+	if (term->key_capture != nullptr) {	/* term_key_bytes */
+		size_t room = term->key_capture_cap - term->key_capture_len;
+		if (len > room)
+			len = room;
+		memcpy(term->key_capture + term->key_capture_len, bytes, len);
+		term->key_capture_len += len;
+		return;
+	}
 	term->output(bytes, len, term->output_ctx);
 }
 
@@ -2126,4 +2134,78 @@ term_feed(struct term *term, const uint8_t *bytes, size_t len)
 		term->pending_font = nullptr;
 		(void)term_set_font(term, next);
 	}
+}
+
+/* --- keys from a USB keyboard --------------------------------------------- */
+
+/* Our key codes as libvterm's; VTERM_KEY_NONE for the rest. */
+static VTermKey
+vterm_key(enum key_code code)
+{
+	static const VTermKey keys[KEY_CODES] = {
+		[KEY_ENTER] = VTERM_KEY_ENTER,
+		[KEY_TAB] = VTERM_KEY_TAB,
+		[KEY_BACKSPACE] = VTERM_KEY_BACKSPACE,
+		[KEY_ESCAPE] = VTERM_KEY_ESCAPE,
+		[KEY_UP] = VTERM_KEY_UP,
+		[KEY_DOWN] = VTERM_KEY_DOWN,
+		[KEY_RIGHT] = VTERM_KEY_RIGHT,
+		[KEY_LEFT] = VTERM_KEY_LEFT,
+		[KEY_HOME] = VTERM_KEY_HOME,
+		[KEY_END] = VTERM_KEY_END,
+		[KEY_INSERT] = VTERM_KEY_INS,
+		[KEY_DELETE] = VTERM_KEY_DEL,
+		[KEY_PAGE_UP] = VTERM_KEY_PAGEUP,
+		[KEY_PAGE_DOWN] = VTERM_KEY_PAGEDOWN,
+		[KEY_KP_0] = VTERM_KEY_KP_0,
+		[KEY_KP_1] = VTERM_KEY_KP_1,
+		[KEY_KP_2] = VTERM_KEY_KP_2,
+		[KEY_KP_3] = VTERM_KEY_KP_3,
+		[KEY_KP_4] = VTERM_KEY_KP_4,
+		[KEY_KP_5] = VTERM_KEY_KP_5,
+		[KEY_KP_6] = VTERM_KEY_KP_6,
+		[KEY_KP_7] = VTERM_KEY_KP_7,
+		[KEY_KP_8] = VTERM_KEY_KP_8,
+		[KEY_KP_9] = VTERM_KEY_KP_9,
+		[KEY_KP_DOT] = VTERM_KEY_KP_PERIOD,
+		[KEY_KP_ENTER] = VTERM_KEY_KP_ENTER,
+		[KEY_KP_PLUS] = VTERM_KEY_KP_PLUS,
+		[KEY_KP_MINUS] = VTERM_KEY_KP_MINUS,
+		[KEY_KP_MULTIPLY] = VTERM_KEY_KP_MULT,
+		[KEY_KP_DIVIDE] = VTERM_KEY_KP_DIVIDE,
+		[KEY_KP_EQUAL] = VTERM_KEY_KP_EQUAL,
+	};
+
+	if (code >= KEY_F1 && code <= KEY_F12)
+		return (VTermKey)VTERM_KEY_FUNCTION(code - KEY_F1 + 1);
+	return (unsigned)code < KEY_CODES ? keys[code] : VTERM_KEY_NONE;
+}
+
+size_t
+term_key_bytes(struct term *term, const struct key_event *key, uint8_t *out,
+    size_t cap)
+{
+	VTermModifier mod = (VTermModifier)(
+	    (key->mods & KEY_MOD_SHIFT ? VTERM_MOD_SHIFT : 0) |
+	    (key->mods & KEY_MOD_ALT ? VTERM_MOD_ALT : 0) |
+	    (key->mods & KEY_MOD_CTRL ? VTERM_MOD_CTRL : 0));
+
+	term->key_capture = out;
+	term->key_capture_cap = cap;
+	term->key_capture_len = 0;
+	if (key->code == KEY_CHAR) {
+		/*
+		 * Shift and Ctrl are already in the byte (hidkbd.c). Ctrl
+		 * that made no control byte (Ctrl+1) sends the character, as
+		 * xterm does, not libvterm's "CSI 49 ; 5 u". Alt is ESC first.
+		 */
+		vterm_keyboard_unichar(term->vt, key->byte,
+		    (VTermModifier)(mod & VTERM_MOD_ALT));
+	} else {
+		VTermKey vkey = vterm_key(key->code);
+		if (vkey != VTERM_KEY_NONE)
+			vterm_keyboard_key(term->vt, vkey, mod);
+	}
+	term->key_capture = nullptr;
+	return term->key_capture_len;
 }

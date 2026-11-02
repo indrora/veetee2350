@@ -274,6 +274,12 @@ static void __not_in_flash_func(doorbell_irq)(void)
 }
 
 void
+video_set_priority(uint8_t priority)
+{
+	irq_set_priority(bell_irq, priority);
+}
+
+void
 video_poll(void)
 {
 	if (yielded) {

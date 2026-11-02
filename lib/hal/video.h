@@ -65,4 +65,11 @@ bool	video_flash_safe(void);
 /* From the main loop, every pass: re-arms rendering after a yield. */
 void	video_poll(void);
 
+/*
+ * Lower the renderer's interrupt from the top priority on core 0, for
+ * something that must never be held off at all (the USB host's frame
+ * timer, usbhost.h): the 8-line ring rides out its waits.
+ */
+void	video_set_priority(uint8_t priority);
+
 #endif /* HAL_VIDEO_H */
