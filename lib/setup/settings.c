@@ -129,3 +129,48 @@ settings_scheme_rgb(unsigned scheme, uint8_t fg[3], uint8_t bg[3])
 	memcpy(fg, schemes[scheme].fg, 3);
 	memcpy(bg, schemes[scheme].bg, 3);
 }
+
+/*
+ * Where each old version's fields ended (its `crc` followed, after any
+ * padding). Copying only up to here, not up to the old crc, matters:
+ * the old padding bytes are new fields today.
+ */
+static size_t
+fields_end(unsigned version)
+{
+	switch (version) {
+	case 9:
+		return offsetof(struct settings, printer) + 1;
+	case 10:
+		return offsetof(struct settings, hotkeys) +
+		    sizeof(((struct settings *)0)->hotkeys);
+	default:
+		return 0;
+	}
+}
+
+bool
+settings_upgrade(struct settings *out, const void *raw)
+{
+	const struct settings *old = raw;
+	const uint8_t *bytes = raw;
+	uint32_t crc;
+
+	if (old->magic != SETTINGS_MAGIC ||
+	    old->version < SETTINGS_UPGRADE_FROM ||
+	    old->version >= SETTINGS_VERSION ||
+	    old->size < sizeof(uint32_t) || old->size > sizeof(*old) ||
+	    old->size % sizeof(uint32_t) != 0 ||
+	    fields_end(old->version) == 0 ||
+	    fields_end(old->version) > old->size - sizeof(crc))
+		return false;
+	/* The old record's crc is its last word, over everything before. */
+	memcpy(&crc, bytes + old->size - sizeof(crc), sizeof(crc));
+	if (crc != crc32(raw, old->size - sizeof(crc)))
+		return false;
+
+	settings_defaults(out);
+	memcpy(out, raw, fields_end(old->version));
+	settings_seal(out);		/* this version's magic, size, crc */
+	return settings_valid(out);
+}

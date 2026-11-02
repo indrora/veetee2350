@@ -508,6 +508,47 @@ compose_row(struct render *render, struct grid *grid,
 	return scratch;
 }
 
+/* One profiler bar (render.h) across a scanline. */
+HOT_INLINE void
+draw_meter_bar(const struct render *render, uint16_t *pixels,
+    const struct render_meter_bar *bar)
+{
+	const unsigned width = render->width;
+	/* budget at 80%: x = cycles * width * 4 / (budget * 5) */
+	const unsigned scale = render->meter.budget * 5u;
+	unsigned x = 0;
+
+	if (scale == 0)
+		return;
+	for (unsigned i = 0; i < bar->count && x < width; i++) {
+		unsigned end = x + bar->segment[i].cycles * width * 4u / scale;
+		if (end > width)
+			end = width;
+		for (; x < end; x++)
+			pixels[x] = bar->segment[i].colour;
+		if (x < width)
+			pixels[x++] = 0x0000;		/* tick after it */
+	}
+	for (; x < width; x++)
+		pixels[x] = 0x2104;			/* dark grey: unused */
+	unsigned worst = bar->max * width * 4u / scale;
+	if (worst < width)
+		pixels[worst] = 0xf800;			/* red: worst line */
+	unsigned budget = width * 4u / 5u;
+	pixels[budget] = 0xffff;			/* white: the budget */
+	pixels[budget + 1] = 0xffff;
+}
+
+HOT_INLINE void
+draw_meter(const struct render *render, uint16_t *pixels, unsigned line)
+{
+	if (line == 3 || line == 7) {
+		fill_words((uint32_t *)pixels, render->width / 2u, 0);
+		return;
+	}
+	draw_meter_bar(render, pixels, &render->meter.bar[line < 3 ? 0 : 1]);
+}
+
 void
 HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 {
@@ -516,6 +557,11 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 
 	if (line == 0)
 		render->frame = render->frame + 1;
+
+	if (line < RENDER_METER_LINES && render->meter.on) {
+		draw_meter(render, pixels, line);
+		return;
+	}
 
 	unsigned text_row = render->line_row[line];
 	if (!render->active || text_row == RENDER_LINE_BORDER) {

@@ -47,6 +47,7 @@ enum setup_item {
 	ITEM_BELL,
 	ITEM_SCREENSHOT,
 	ITEM_PRINTER,
+	ITEM_PROFILER,
 	ITEM_ANSWERBACK,
 	ITEM_HOTKEYS,		/* opens the Hotkeys page */
 	ITEM_SAVE,

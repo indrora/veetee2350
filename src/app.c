@@ -215,12 +215,33 @@ apply_settings(void)
 	printer_sd_enable(&term, settings.printer != 0);
 }
 
+/* Where this boot's settings came from, for the boot banner. */
+static char settings_origin[40];
+
 static void
 load_settings(void)
 {
-	flashcfg_read(&settings, sizeof(settings));
-	if (!settings_valid(&settings))
+	struct settings stored;
+
+	flashcfg_read(&stored, sizeof(stored));
+	if (settings_valid(&stored)) {
+		settings = stored;
+		snprintf(settings_origin, sizeof(settings_origin), "saved");
+	} else if (settings_upgrade(&settings, &stored)) {
+		snprintf(settings_origin, sizeof(settings_origin),
+		    "upgraded from v%u", stored.version);
+	} else {
 		settings_defaults(&settings);
+		/* Say what was there, to tell "never saved" from "lost". */
+		if (stored.magic == SETTINGS_MAGIC)
+			snprintf(settings_origin, sizeof(settings_origin),
+			    "defaults (v%u record unreadable)",
+			    stored.version);
+		else
+			snprintf(settings_origin, sizeof(settings_origin),
+			    "defaults (none saved)");
+	}
+	/* An upgraded record isn't written back: SET-UP's Save does that. */
 }
 
 /*
@@ -604,10 +625,12 @@ report_stats(void)
 	    video_line_budget());
 #ifdef VEETEE_RENDER_PROFILE
 	/* Overlay composition (Tools menu, user lights), per composed line. */
-	uint32_t lines = render.profile_compose_lines;
-	uint32_t cycles = render.profile_compose_cycles;
-	render.profile_compose_lines = 0;
-	render.profile_compose_cycles = 0;
+	/* Running totals (render.h): this second's share is the change. */
+	static uint32_t seen_lines, seen_cycles;
+	uint32_t lines = render.profile_compose_lines - seen_lines;
+	uint32_t cycles = render.profile_compose_cycles - seen_cycles;
+	seen_lines = render.profile_compose_lines;
+	seen_cycles = render.profile_compose_cycles;
 	usbio_printf("[profile] overlay lines=%lu compose avg=%lu cycles\r\n",
 	    (unsigned long)lines, (unsigned long)(lines ? cycles / lines : 0));
 #endif
@@ -655,10 +678,11 @@ app_init(void)
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
 	    "SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
-	char detail[96];
+	char detail[144];
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
-	    "sixel %u cells\r\n", mode->name, term.font_source->name,
-	    term.screen->cols, term.screen->rows, term.graphics.tiles);
+	    "sixel %u cells\r\nsettings: %s\r\n", mode->name,
+	    term.font_source->name, term.screen->cols, term.screen->rows,
+	    term.graphics.tiles, settings_origin);
 	term_feed(&term, (const uint8_t *)detail, (size_t)len);
 #ifdef VEETEE_FLASH_PROBE
 	extern struct board_flash_probe video_flash_probe_result;
@@ -683,6 +707,52 @@ app_init(void)
 	show_config_problems();
 }
 
+/*
+ * The profiler bar (SET-UP, render.h): once a frame, last frame's numbers
+ * from hal/video's stats into the renderer. Overlay composing is only
+ * timed in VEETEE_RENDER_PROFILE builds; elsewhere its share is 0 and
+ * the whole average shows as rendering.
+ */
+static void
+update_meter(void)
+{
+	static uint32_t last_frame, last_compose;
+	struct render_meter *meter = &render.meter;
+	struct video_stats stats;
+
+	meter->on = settings.profiler_bar;
+	if (!meter->on || render.frame == last_frame)
+		return;
+	last_frame = render.frame;
+	video_get_stats(&stats);
+
+	/* Compose cycles this frame, spread over the frame's lines. */
+	uint32_t compose_total = render.profile_compose_cycles;
+	uint32_t compose = (compose_total - last_compose) / render.height;
+	last_compose = compose_total;
+	if (compose > stats.avg_render_cycles)
+		compose = stats.avg_render_cycles;
+
+	meter->budget = (uint16_t)video_line_budget();
+	meter->bar[0] = (struct render_meter_bar){
+		.max = (uint16_t)stats.max_render_cycles,
+		.count = 2,
+		.segment = {
+			{(uint16_t)compose, grid_rgb565(240, 200, 0)},
+			{(uint16_t)(stats.avg_render_cycles - compose),
+			    grid_rgb565(40, 200, 80)},
+		},
+	};
+	meter->bar[1] = (struct render_meter_bar){
+		.max = (uint16_t)stats.max_encode_cycles,
+		.count = 1,
+		.segment = {
+			{(uint16_t)stats.avg_encode_cycles,
+			    grid_rgb565(60, 120, 255)},
+		},
+	};
+}
+
 void
 app_poll(void)
 {
@@ -691,6 +761,7 @@ app_poll(void)
 
 	board_watchdog_feed();
 	video_poll();
+	update_meter();
 #ifdef VEETEE_FLASH_PROBE
 	static absolute_time_t next_probe_report;
 	if (time_reached(next_probe_report)) {

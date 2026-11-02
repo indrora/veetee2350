@@ -220,6 +220,10 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "%s", work->printer ?
 		    "on: SD card  (/print/NNNN.txt)" : "off");
 		break;
+	case ITEM_PROFILER:
+		snprintf(out, len, "%s", work->profiler_bar ?
+		    "on  (cycles a line vs. budget, top of screen)" : "off");
+		break;
 	case ITEM_SCREENSHOT:
 		snprintf(out, len, "%s", work->screenshot_format == SHOT_QOI ?
 		    "QOI  (/screens/NNNN.qoi, small)" :
@@ -273,6 +277,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_SCREENSHOT] = "Screenshot format",
 	[ITEM_PRINTER] = "Printer",
+	[ITEM_PROFILER] = "Profiler bar",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
 	[ITEM_WRAP] = "Auto wrap",
@@ -553,6 +558,9 @@ change_value(struct setup *setup, int step)
 	}
 	case ITEM_PRINTER:
 		work->printer = !work->printer;
+		break;
+	case ITEM_PROFILER:
+		work->profiler_bar = !work->profiler_bar;
 		break;
 	case ITEM_SCREENSHOT:
 		work->screenshot_format = (uint8_t)cycle(

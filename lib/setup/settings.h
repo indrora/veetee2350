@@ -14,10 +14,16 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	10	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+#define SETTINGS_VERSION	11	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
 				   6 card fonts and schemes, 7 screenshots,
 				   8 printer, 9 sixel depth, 10 hotkeys,
-				   status line, capture */
+				   status line, capture, 11 profiler bar */
+/*
+ * Oldest record settings_upgrade() can read: from version 9 on, fields
+ * were only ever appended (just before `crc`), so an older record is a
+ * prefix of today's. Keep it that way, or extend settings_upgrade().
+ */
+#define SETTINGS_UPGRADE_FROM	9
 #define SETTINGS_FONT_MAX	32	/* built-in name, or "sd:" + card file */
 #define SETTINGS_SCHEME_MAX	32	/* card scheme file name, no ".yaml" */
 #define SETTINGS_CARD_PREFIX	"sd:"
@@ -135,6 +141,7 @@ struct settings {
 	uint8_t		peek_time;	/* index into settings_peek_seconds */
 	uint8_t		capture;	/* host output to /capture on the card */
 	struct hotkey	hotkeys[TOOL_COUNT];
+	uint8_t		profiler_bar;	/* per-line cycle bars, top of screen */
 	uint32_t	crc;
 };
 
@@ -143,6 +150,13 @@ void	settings_defaults(struct settings *settings);
 void	settings_seal(struct settings *settings);
 /* True if `settings` is a sealed record of this version. */
 bool	settings_valid(const struct settings *settings);
+/*
+ * Read `raw` (a record as flashcfg returned it, sizeof(struct settings)
+ * bytes) if it's a sealed record of an older version, from
+ * SETTINGS_UPGRADE_FROM on: its fields are kept and the newer ones take
+ * their defaults. False if it isn't one (then use the defaults).
+ */
+bool	settings_upgrade(struct settings *out, const void *raw);
 
 const char *settings_scheme_name(unsigned scheme);
 /* Default foreground/background of a scheme, as 8-bit RGB triples. */

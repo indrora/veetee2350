@@ -1,6 +1,7 @@
 /*
  * test_setup — settings record, SET-UP navigation, and applying options.
  */
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -422,6 +423,58 @@ test_short_screen_scrolls(void)
 	grid_free(&small);
 }
 
+/*
+ * A version 9 record as it sits in flash: today's fields up to
+ * `printer`, zero padding, then its CRC-32 (same polynomial as
+ * settings.c) over everything before it; stale bytes after.
+ */
+static void
+make_v9_record(uint8_t *raw, const struct settings *from)
+{
+	size_t end = offsetof(struct settings, printer) + 1;
+	uint16_t version = 9, size = (uint16_t)((end + 3) / 4 * 4 + 4);
+	uint32_t crc = 0xffffffffu;
+
+	memset(raw, 0xa5, sizeof(struct settings));
+	memset(raw, 0, size);
+	memcpy(raw, from, end);
+	memcpy(raw + offsetof(struct settings, version), &version, 2);
+	memcpy(raw + offsetof(struct settings, size), &size, 2);
+	for (size_t i = 0; i < size - 4u; i++) {
+		crc ^= raw[i];
+		for (int bit = 0; bit < 8; bit++)
+			crc = crc & 1 ? crc >> 1 ^ 0xedb88320u : crc >> 1;
+	}
+	crc = ~crc;
+	memcpy(raw + size - 4, &crc, 4);
+}
+
+static void
+test_settings_upgrade(void)
+{
+	uint8_t raw[sizeof(struct settings)];
+	struct settings old, upgraded;
+
+	settings_defaults(&old);
+	old.scheme = 3;
+	old.printer = 1;
+	strcpy(old.font, "sd:Rainbow");
+	make_v9_record(raw, &old);
+	TEST_ASSERT_FALSE(settings_valid((const struct settings *)raw));
+	TEST_ASSERT_TRUE(settings_upgrade(&upgraded, raw));
+	TEST_ASSERT_TRUE(settings_valid(&upgraded));
+	TEST_ASSERT_EQUAL(3, upgraded.scheme);
+	TEST_ASSERT_EQUAL(1, upgraded.printer);
+	TEST_ASSERT_EQUAL_STRING("sd:Rainbow", upgraded.font);
+	/* New fields are defaults, not the old padding or stale flash. */
+	TEST_ASSERT_EQUAL(KEY_F3, upgraded.hotkeys[TOOL_MENU].code);
+	TEST_ASSERT_EQUAL(1, upgraded.peek_time);
+	TEST_ASSERT_EQUAL(0, upgraded.profiler_bar);
+	/* A corrupted old record is refused. */
+	raw[offsetof(struct settings, scheme)] ^= 1;
+	TEST_ASSERT_FALSE(settings_upgrade(&upgraded, raw));
+}
+
 int
 main(void)
 {
@@ -430,6 +483,7 @@ main(void)
 	RUN_TEST(test_hotkey_matching);
 	RUN_TEST(test_hotkeys_page);
 	RUN_TEST(test_short_screen_scrolls);
+	RUN_TEST(test_settings_upgrade);
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);

@@ -56,6 +56,33 @@ struct render_overlay {
 	const struct cell *cells;	/* rows x cols, row-major */
 };
 
+/*
+ * The profiler bar (SET-UP "Profiler bar"): the top RENDER_METER_LINES
+ * scanlines become two bar graphs of the last frame's per-line cycle
+ * counts against the line budget -- core 0's render (lines 0-2) and core
+ * 1's TMDS encode (lines 4-6). Each bar stacks its segments left to
+ * right, a dark tick between them, a red tick at the frame's worst line
+ * and a white one at the budget, which sits at 80% of the width so an
+ * overrun still shows. Filled in once a frame by the main loop.
+ */
+#define RENDER_METER_LINES	8
+#define RENDER_METER_SEGMENTS	3
+
+struct render_meter_bar {
+	uint16_t	 max;		/* worst line this frame, cycles */
+	uint8_t		 count;		/* segments used */
+	struct {
+		uint16_t cycles;	/* this segment's share of a line */
+		uint16_t colour;	/* RGB565 */
+	} segment[RENDER_METER_SEGMENTS];
+};
+
+struct render_meter {
+	bool		 on;
+	uint16_t	 budget;	/* cycles per line */
+	struct render_meter_bar bar[2];	/* core 0 render, core 1 encode */
+};
+
 struct render {
 	const struct font *font;
 	struct grid * volatile grid;	/* swapped by render_set_grid */
@@ -90,11 +117,12 @@ struct render {
 	const struct render_overlay *volatile overlay[RENDER_OVERLAYS];
 	/*
 	 * VEETEE_RENDER_PROFILE (hot.h): cycles spent composing overlay rows
-	 * and how many lines needed it, summed until the stats report reads
-	 * and clears them. Always present, so the layout doesn't change.
+	 * and how many lines needed it: running totals (they wrap), which
+	 * readers difference. Always present, so the layout doesn't change.
 	 */
 	volatile uint32_t profile_compose_cycles;
 	volatile uint32_t profile_compose_lines;
+	struct render_meter meter;	/* the profiler bar */
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };
