@@ -18,7 +18,7 @@ replies (DA, DSR, ...) ◀── USB CDC ◀── term output callback
 `tools/hostshell.py` runs a shell on the Mac in an 80×30 pty
 (`TERM=xterm-256color`) and bridges it to the board's serial port. Keys
 you type in the terminal running it go to the shell, so it doubles as the
-keyboard until USB HID exists (Goal 3):
+keyboard (or plug a USB keyboard into the board itself, below):
 
     cd tools && python3 hostshell.py /dev/cu.usbmodem11401
     # inside it:  ./vtdemo.sh, less, vim, top, ...
@@ -64,6 +64,28 @@ the DA1/DA2 replies and loads defaults for Colour depth (off / 16 / 256
 Alternate screen (off works like xterm's titeInhibit). Each can be
 overridden. Set `TERM` on the host to match (SET-UP shows the hint).
 Changing level or depth resets the terminal.
+
+## USB keyboard
+
+A USB keyboard plugged into the board's **PIO-USB** port (the second
+USB-C, GPIO 28/29) types straight into the terminal: US layout, Caps /
+Num / Scroll Lock with their LEDs, auto-repeat (500 ms, then 30 a
+second), and the keypad. The terminal encodes each key by its modes,
+as a VT terminal does (cursor keys, keypad, new line), and the Tools
+menu, hotkeys, SET-UP and replay take it like the keyboard port's keys.
+Print Screen and Pause send nothing, so they make good hotkeys.
+
+**Plug the keyboard in before powering the board.** The port's 5 V
+comes straight off the supply with no switch, and a keyboard plugged into
+a running board can pull it down far enough to reset the chip; the boot
+banner then says "last reset: brown-out". A powered hub avoids it too.
+An unplug isn't noticed (the last report keeps arriving), which is
+harmless: only changes between reports are keys.
+
+The port needs the system clock to be a multiple of 12 MHz: it works at
+640x480 @ 60, 960x540 and the 720p30 mode, and is off (the banner says
+why) in the others. Debug builds print every report and where each key
+went (`[hid]`, `[key]`) on the line port. Devlog 027.
 
 ## Keyboard port and SET-UP
 

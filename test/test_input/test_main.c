@@ -225,6 +225,22 @@ test_hid_keypad(void)
 	TEST_ASSERT_EQUAL_HEX8(0, hidkbd_leds(&kbd));
 }
 
+/* A main loop: poll every ms from `from` to `to`; events, and the last. */
+static unsigned
+poll_span(uint32_t from, uint32_t to, struct key_event *last)
+{
+	unsigned count = 0;
+
+	for (uint32_t t = from; t <= to; t++) {
+		struct key_event event;
+		if (hidkbd_poll(&kbd, t, &event)) {
+			count++;
+			*last = event;
+		}
+	}
+	return count;
+}
+
 /* The last key held repeats after 500 ms, then every 33; let go stops. */
 static void
 test_hid_auto_repeat(void)
@@ -233,26 +249,50 @@ test_hid_auto_repeat(void)
 
 	hidkbd_init(&kbd);
 	hid(0, 0x04, 0, 1000);
-	TEST_ASSERT_FALSE(hidkbd_poll(&kbd, 1499, &event));
-	TEST_ASSERT_TRUE(hidkbd_poll(&kbd, 1500, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(1000, 1499, &event));
+	TEST_ASSERT_EQUAL(1, poll_span(1500, 1500, &event));
 	TEST_ASSERT_EQUAL('a', event.byte);
-	TEST_ASSERT_FALSE(hidkbd_poll(&kbd, 1532, &event));
-	TEST_ASSERT_TRUE(hidkbd_poll(&kbd, 1533, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(1501, 1532, &event));
+	TEST_ASSERT_EQUAL(1, poll_span(1533, 1533, &event));
 	/* Shift pressed mid-repeat: the repeat follows it. */
 	hid(0x02, 0x04, 0, 1540);
-	TEST_ASSERT_TRUE(hidkbd_poll(&kbd, 1566, &event));
+	TEST_ASSERT_EQUAL(1, poll_span(1534, 1566, &event));
 	TEST_ASSERT_EQUAL('A', event.byte);
 	/* A second key takes over; letting it go stops the repeat. */
 	hid(0, 0x04, 0x05, 1570);
-	TEST_ASSERT_FALSE(hidkbd_poll(&kbd, 1600, &event));
-	TEST_ASSERT_TRUE(hidkbd_poll(&kbd, 2070, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(1567, 2069, &event));
+	TEST_ASSERT_EQUAL(1, poll_span(2070, 2070, &event));
 	TEST_ASSERT_EQUAL('b', event.byte);
 	hid(0, 0x04, 0, 2080);
-	TEST_ASSERT_FALSE(hidkbd_poll(&kbd, 3000, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(2071, 3000, &event));
 	/* Lock keys never repeat. */
 	hid(0, 0, 0, 3010);
 	hid(0, 0x39, 0, 3020);
-	TEST_ASSERT_FALSE(hidkbd_poll(&kbd, 4000, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(3001, 4000, &event));
+}
+
+/*
+ * The main loop away for a second (a screenshot) with the key down: no
+ * repeat fires on its return; the delay starts again, so the key-up
+ * waiting to be read gets there first. (One F12, two screenshots.)
+ */
+static void
+test_hid_repeat_after_stall(void)
+{
+	struct key_event event;
+
+	hidkbd_init(&kbd);
+	hid(0, 0x45, 0, 1000);				/* F12 down */
+	TEST_ASSERT_EQUAL(0, poll_span(1000, 1001, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(2100, 2104, &event));	/* back */
+	hid(0, 0, 0, 2105);				/* F12 up */
+	TEST_ASSERT_EQUAL(0, poll_span(2105, 3000, &event));
+	/* Held right through a stall: it repeats, half a second later. */
+	hid(0, 0x04, 0, 3000);
+	TEST_ASSERT_EQUAL(0, poll_span(3000, 3001, &event));
+	TEST_ASSERT_EQUAL(0, poll_span(4200, 4699, &event));
+	TEST_ASSERT_EQUAL(1, poll_span(4700, 4700, &event));
+	TEST_ASSERT_EQUAL('a', event.byte);
 }
 
 int
@@ -270,5 +310,6 @@ main(void)
 	RUN_TEST(test_hid_repeats_and_rollover);
 	RUN_TEST(test_hid_keypad);
 	RUN_TEST(test_hid_auto_repeat);
+	RUN_TEST(test_hid_repeat_after_stall);
 	return UNITY_END();
 }

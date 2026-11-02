@@ -263,6 +263,14 @@ hidkbd_report(struct hidkbd *kbd, const uint8_t *report, size_t len,
 bool
 hidkbd_poll(struct hidkbd *kbd, uint32_t now_ms, struct key_event *out)
 {
+	bool stalled = kbd->polled && now_ms - kbd->polled_at > HIDKBD_STALL_MS;
+
+	kbd->polled = true;
+	kbd->polled_at = now_ms;
+	if (kbd->repeat_usage != 0 && stalled) {
+		kbd->repeat_at = now_ms + HIDKBD_REPEAT_DELAY_MS;
+		return false;
+	}
 	if (kbd->repeat_usage == 0 || (int32_t)(now_ms - kbd->repeat_at) < 0)
 		return false;
 	kbd->repeat_at += HIDKBD_REPEAT_MS;

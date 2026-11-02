@@ -67,9 +67,11 @@ usbhost_refresh(void)
 #include "hardware/irq.h"
 #include "hardware/timer.h"
 #include "pico/time.h"
+#include "build.h"
 #include "pio_usb.h"
 #include "pio_usb_ll.h"
 #include "tusb.h"
+#include "usbio.h"
 
 #define USBHOST_PIN_DP		28
 #define USBHOST_RHPORT		1	/* TinyUSB: PIO-USB is root port 1 */
@@ -105,6 +107,10 @@ keyboard_count(void)
 static void
 describe(void)
 {
+	if (running && devices == 0 && !VEETEE_DEBUG_BUILD) {
+		snprintf(state, sizeof(state), "on, no keyboard yet");
+		return;
+	}
 	if (running && devices == 0) {
 		/* Nothing enumerated: what the root port itself sees. */
 		root_port_t *root = PIO_USB_ROOT_PORT(0);
@@ -120,7 +126,10 @@ describe(void)
 		    (unsigned long)bus->naks, (unsigned long)bus->no_reply);
 		return;
 	}
-	if (running)
+	if (running && !VEETEE_DEBUG_BUILD)
+		snprintf(state, sizeof(state), "on, %u keyboard%s",
+		    keyboard_count(), keyboard_count() == 1 ? "" : "s");
+	else if (running)
 		snprintf(state, sizeof(state), "on, %u keyboard%s; %u device%s"
 		    " (last %04x:%04x), %u HID (last protocol %u)",
 		    keyboard_count(), keyboard_count() == 1 ? "" : "s", devices,
@@ -252,8 +261,13 @@ tuh_hid_mount_cb(uint8_t dev, uint8_t instance, uint8_t const *desc,
 	hid_interfaces++;
 	last_protocol = tuh_hid_interface_protocol(dev, instance);
 	describe();
-	if (last_protocol != HID_ITF_PROTOCOL_KEYBOARD)
-		return;		/* mice, media keys: not yet */
+	if (last_protocol != HID_ITF_PROTOCOL_KEYBOARD) {
+		/* Mice, media keys: not yet. Debug builds read them anyway
+		 * and print what they send (tuh_hid_report_received_cb). */
+		if (VEETEE_DEBUG_BUILD)
+			(void)tuh_hid_receive_report(dev, instance);
+		return;
+	}
 	for (unsigned i = 0; i < USBHOST_KEYBOARDS; i++) {
 		if (keyboards[i].used)
 			continue;
@@ -284,9 +298,31 @@ void
 tuh_hid_report_received_cb(uint8_t dev, uint8_t instance,
     uint8_t const *report, uint16_t len)
 {
-	if (report_fn != nullptr)
-		report_fn(report, len, callback_ctx);
+	/*
+	 * Ask for the next report before handling this one, so a handler
+	 * that takes a while (a screenshot: a second of SD writes) doesn't
+	 * leave the key-up unread meanwhile. The next transfer reuses the
+	 * buffer `report` points into, so this one is copied first.
+	 */
+	uint8_t copy[64];
+	if (len > sizeof(copy))
+		len = sizeof(copy);
+	memcpy(copy, report, len);
 	(void)tuh_hid_receive_report(dev, instance);
+
+	bool keyboard = false;
+	for (unsigned i = 0; i < USBHOST_KEYBOARDS; i++)
+		keyboard = keyboard || (keyboards[i].used &&
+		    keyboards[i].dev == dev && keyboards[i].instance == instance);
+	if (keyboard && report_fn != nullptr) {
+		report_fn(copy, len, callback_ctx);
+	} else if (VEETEE_DEBUG_BUILD) {
+		usbio_printf("[hid] interface %u protocol %u:", instance,
+		    tuh_hid_interface_protocol(dev, instance));
+		for (uint16_t i = 0; i < len; i++)
+			usbio_printf(" %02x", copy[i]);
+		usbio_printf("\r\n");
+	}
 }
 
 #endif /* Pico-PIO-USB */

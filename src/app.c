@@ -738,6 +738,16 @@ hotkey_tool(const struct key_event *key)
 static void
 handle_key(const struct key_event *key)
 {
+	if (VEETEE_DEBUG_BUILD) {
+		/* Where every key goes: the first thing to know when a key
+		 * "does nothing" (devlog 027). */
+		char name[24];
+		keys_name(key->code, key->byte, key->mods, name, sizeof(name));
+		usbio_printf("[key] %s -> %s\r\n", name, in_config_error ?
+		    "config error" : in_setup ? "set-up" : in_menu ? "menu" :
+		    in_picker ? "picker" : hotkey_tool(key) >= 0 ? "hotkey" :
+		    replay_sd_active() ? "replay" : "host");
+	}
 	if (in_config_error) {
 		dismiss_config_error();
 	} else if (in_setup) {
@@ -793,6 +803,12 @@ usb_keyboard_report(const uint8_t *report, size_t len, void *ctx)
 	uint8_t leds = hidkbd_leds(&usb_keyboard);
 
 	(void)ctx;
+	if (VEETEE_DEBUG_BUILD) {
+		usbio_printf("[hid] keyboard");
+		for (size_t i = 0; i < len; i++)
+			usbio_printf(" %02x", report[i]);
+		usbio_printf("\r\n");
+	}
 	unsigned count = hidkbd_report(&usb_keyboard, report, len, now_ms(),
 	    events, HIDKBD_KEYS);
 	for (unsigned i = 0; i < count; i++)

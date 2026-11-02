@@ -31,6 +31,13 @@
 
 #define HIDKBD_REPEAT_DELAY_MS	500
 #define HIDKBD_REPEAT_MS	33	/* 30 a second, as a VT220 */
+/*
+ * A gap this long between polls means the main loop was away (an SD
+ * write, a screenshot): the key-up may be waiting to be read, so the
+ * repeat delay starts again instead of a repeat firing. One F12 press
+ * took two screenshots before this (devlog 027).
+ */
+#define HIDKBD_STALL_MS		100
 #define HIDKBD_KEYS		6	/* usages in a boot report */
 
 /* HID keyboard LED bits (an output report's byte). */
@@ -46,6 +53,8 @@ struct hidkbd {
 	bool		 scroll_lock;
 	uint8_t		 repeat_usage;		/* 0: nothing repeating */
 	uint32_t	 repeat_at;		/* ms */
+	bool		 polled;		/* polled_at is valid */
+	uint32_t	 polled_at;		/* last hidkbd_poll, ms */
 };
 
 void	hidkbd_init(struct hidkbd *kbd);
