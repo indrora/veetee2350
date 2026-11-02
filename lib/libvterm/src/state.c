@@ -162,6 +162,44 @@ static int in_lr_margins(const VTermState *state)
          state->pos.col < SCROLLREGION_RIGHT(state);
 }
 
+/*
+ * VeeTee patches 6, 16, 21: one backspace, with xterm's reverse
+ * wraparound (see BS). Returns 0 if the cursor couldn't move. CUB with
+ * reverse wraparound on is this, repeated.
+ */
+static int back_space(VTermState *state)
+{
+    int reverse = state->mode.autowrap &&
+                  (state->mode.reverse_wrap || state->mode.reverse_wrap_ext);
+    int left = state->pos.col >= SCROLLREGION_LEFT(state) ?
+               SCROLLREGION_LEFT(state) : 0;
+
+    if(reverse && state->at_phantom) {
+      state->at_phantom = 0;              /* cancel the pending wrap */
+      return 1;
+    }
+    if(state->pos.col > left) {
+      state->pos.col--;
+      return 1;
+    }
+    if(reverse) {
+      int top = state->pos.row == state->scrollregion_top;
+      int wrapped = state->lineinfo[state->pos.row].continuation;
+      if(state->mode.reverse_wrap_ext && top) {
+        state->pos.row = SCROLLREGION_BOTTOM(state) - 1;
+        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
+        return 1;
+      }
+      if(state->pos.row > 0 &&
+         (state->mode.reverse_wrap_ext || wrapped)) {
+        state->pos.row--;
+        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
+        return 1;
+      }
+    }
+    return 0;
+}
+
 static void linefeed(VTermState *state)
 {
   if(state->pos.row == SCROLLREGION_BOTTOM(state) - 1) {
@@ -225,11 +263,21 @@ static int is_cursor_in_scrollregion(const VTermState *state)
   return 1;
 }
 
+/*
+ * VeeTee patch 23: inside the left/right margins, HT and CHT go no
+ * further than the right margin, as on xterm and the VT420. CBT ignores
+ * the left margin (esctest's CBT_IgnoresRegion; xterm agrees).
+ */
 static void tab(VTermState *state, int count, int direction)
 {
   while(count > 0) {
+    /* Only with DECLRMM: otherwise the "margins" are the screen edges,
+     * and a double-width row is narrower than those. */
+    int inside = state->mode.leftrightmargin && in_lr_margins(state);
     if(direction > 0) {
-      if(state->pos.col >= THISROWWIDTH(state)-1)
+      int last = inside ? SCROLLREGION_RIGHT(state) - 1
+                        : THISROWWIDTH(state) - 1;
+      if(state->pos.col >= last)
         return;
 
       state->pos.col++;
@@ -278,6 +326,68 @@ static void set_lineinfo(VTermState *state, int row, int force, int dwl, int dhl
       (*state->callbacks->setlineinfo)(row, &info, state->lineinfo + row, state->cbdata))
       || force)
     state->lineinfo[row] = info;
+}
+
+/*
+ * VeeTee patch 19: printing one glyph, split around the putglyph so that
+ * on_text() can keep its combining-character bookkeeping in between and
+ * REP can print through exactly the same wrap/margin/insert rules.
+ * print_glyph_begin() wraps if needed (patch 15's margins), makes room
+ * in insert mode, and returns where the glyph goes; print_glyph_end()
+ * advances or sets the pending-wrap flag.
+ */
+static int glyph_right_edge(VTermState *state)
+{
+  int right_edge = THISROWWIDTH(state);
+  if(in_lr_margins(state) && SCROLLREGION_RIGHT(state) < right_edge)
+    right_edge = SCROLLREGION_RIGHT(state);
+  return right_edge;
+}
+
+static VTermPos print_glyph_begin(VTermState *state, int width)
+{
+    /* VeeTee patch 15: between the left/right margins, the right margin
+     * is the edge: text wraps to the next line's left margin, sticks at
+     * the right margin without autowrap, and insert mode pushes text
+     * off at the right margin. */
+    int right_edge = glyph_right_edge(state);
+
+    if(state->at_phantom || state->pos.col + width > right_edge) {
+      int left = in_lr_margins(state) ? SCROLLREGION_LEFT(state) : 0;
+      linefeed(state);
+      state->pos.col = left;
+      state->at_phantom = 0;
+      state->lineinfo[state->pos.row].continuation = 1;
+      right_edge = glyph_right_edge(state);
+    }
+
+    if(state->mode.insert) {
+      /* TODO: This will be a little inefficient for large bodies of text, as
+       * it'll have to 'ICH' effectively before every glyph. We should scan
+       * ahead and ICH as many times as required
+       */
+      VTermRect rect = {
+        .start_row = state->pos.row,
+        .end_row   = state->pos.row + 1,
+        .start_col = state->pos.col,
+        .end_col   = right_edge,
+      };
+      scroll(state, rect, 0, -1);
+    }
+
+    return state->pos;
+}
+
+static void print_glyph_end(VTermState *state, int width)
+{
+    int right_edge = glyph_right_edge(state);
+    if(state->pos.col + width >= right_edge) {
+      if(state->mode.autowrap)
+        state->at_phantom = 1;
+    }
+    else {
+      state->pos.col += width;
+    }
 }
 
 static int on_text(const char bytes[], size_t len, void *user)
@@ -395,40 +505,10 @@ static int on_text(const char bytes[], size_t len, void *user)
     printf("}, onscreen width %d\n", width);
 #endif
 
-    /* VeeTee patch 15: between the left/right margins, the right margin
-     * is the edge: text wraps to the next line's left margin, sticks at
-     * the right margin without autowrap, and insert mode pushes text
-     * off at the right margin. */
-    int right_edge = THISROWWIDTH(state);
-    if(in_lr_margins(state) && SCROLLREGION_RIGHT(state) < right_edge)
-      right_edge = SCROLLREGION_RIGHT(state);
-
-    if(state->at_phantom || state->pos.col + width > right_edge) {
-      int left = in_lr_margins(state) ? SCROLLREGION_LEFT(state) : 0;
-      linefeed(state);
-      state->pos.col = left;
-      state->at_phantom = 0;
-      state->lineinfo[state->pos.row].continuation = 1;
-      right_edge = THISROWWIDTH(state);
-      if(in_lr_margins(state) && SCROLLREGION_RIGHT(state) < right_edge)
-        right_edge = SCROLLREGION_RIGHT(state);
-    }
-
-    if(state->mode.insert) {
-      /* TODO: This will be a little inefficient for large bodies of text, as
-       * it'll have to 'ICH' effectively before every glyph. We should scan
-       * ahead and ICH as many times as required
-       */
-      VTermRect rect = {
-        .start_row = state->pos.row,
-        .end_row   = state->pos.row + 1,
-        .start_col = state->pos.col,
-        .end_col   = right_edge,
-      };
-      scroll(state, rect, 0, -1);
-    }
-
-    putglyph(state, chars, width, state->pos);
+    /* VeeTee patch 19: the wrap / insert / put / advance steps are
+     * print_glyph(), shared with REP; the combining bookkeeping stays. */
+    VTermPos glyph_pos = print_glyph_begin(state, width);
+    putglyph(state, chars, width, glyph_pos);
 
     if(i == npoints - 1) {
       /* End of the buffer. Save the chars in case we have to combine with
@@ -443,16 +523,10 @@ static int on_text(const char bytes[], size_t len, void *user)
         grow_combine_buffer(state);
       state->combine_chars[save_i] = 0;
       state->combine_width = width;
-      state->combine_pos = state->pos;
+      state->combine_pos = glyph_pos;
     }
 
-    if(state->pos.col + width >= right_edge) {
-      if(state->mode.autowrap)
-        state->at_phantom = 1;
-    }
-    else {
-      state->pos.col += width;
-    }
+    print_glyph_end(state, width);
   }
 
   updatecursor(state, &oldpos, 0);
@@ -490,32 +564,22 @@ static int on_control(unsigned char control, void *user)
      * the stop is the left margin (if the cursor is at or inside it),
      * and the landing spot the previous line's right margin. From the
      * pending-wrap position BS just cancels the wrap. */
-    int reverse = state->mode.autowrap &&
-                  (state->mode.reverse_wrap || state->mode.reverse_wrap_ext);
-    int left = state->pos.col >= SCROLLREGION_LEFT(state) ?
-               SCROLLREGION_LEFT(state) : 0;
-
-    if(reverse && state->at_phantom)
-      state->at_phantom = 0;              /* cancel the pending wrap */
-    else if(state->pos.col > left)
-      state->pos.col--;
-    else if(reverse) {
-      int top = state->pos.row == state->scrollregion_top;
-      int wrapped = state->lineinfo[state->pos.row].continuation;
-      if(state->mode.reverse_wrap_ext && top) {
-        state->pos.row = SCROLLREGION_BOTTOM(state) - 1;
-        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
-      }
-      else if(state->pos.row > 0 &&
-              (state->mode.reverse_wrap_ext || wrapped)) {
-        state->pos.row--;
-        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
-      }
-    }
+    (void)back_space(state);
     break;
   }
 
   case 0x09: // HT - ECMA-48 8.3.60
+    /* VeeTee patch 24: xterm's "more(1) fix" (DECSET 41). Curses would
+     * fill a row and then send a tab expecting it to land on the next
+     * line; with the fix on, a pending wrap is taken first, as text
+     * would take it. */
+    if(state->mode.more_fix && state->mode.autowrap && state->at_phantom) {
+      int left = in_lr_margins(state) ? SCROLLREGION_LEFT(state) : 0;
+      linefeed(state);
+      state->pos.col = left;
+      state->at_phantom = 0;
+      state->lineinfo[state->pos.row].continuation = 1;
+    }
     tab(state, 1, +1);
     break;
 
@@ -550,8 +614,15 @@ static int on_control(unsigned char control, void *user)
     break;
 
   case 0x85: // NEL - ECMA-48 8.3.86
+    /* VeeTee patch 20: LF, then CR with the margin rule (patch 11). The
+     * line feed goes first: outside the left/right margins it must not
+     * scroll, and the CR would bring the cursor inside them. */
     linefeed(state);
-    state->pos.col = 0;
+    if(state->mode.leftrightmargin &&
+       (state->pos.col >= state->scrollregion_left || state->mode.origin))
+      state->pos.col = state->scrollregion_left;
+    else
+      state->pos.col = 0;
     break;
 
   case 0x88: // HTS - ECMA-48 8.3.62
@@ -866,6 +937,27 @@ static void set_mode(VTermState *state, int num, int val)
   }
 }
 
+/*
+ * VeeTee patch 25: clear the alternate screen, if it's the one showing.
+ * xterm clears it at different moments per mode: 47 never, 1047 when
+ * leaving it, 1049 when entering it. (Upstream cleared on every entry.)
+ * If the embedder refused the switch, the primary is still showing and
+ * this does nothing.
+ */
+static void erase_alt_screen(VTermState *state)
+{
+  if(!state->mode.alt_screen)
+    return;
+
+  VTermRect rect = {
+    .start_row = 0,
+    .start_col = 0,
+    .end_row = state->rows,
+    .end_col = state->cols,
+  };
+  erase(state, rect, 0);
+}
+
 static void set_dec_mode(VTermState *state, int num, int val)
 {
   switch(num) {
@@ -905,6 +997,10 @@ static void set_dec_mode(VTermState *state, int num, int val)
 
   case 1045: /* VeeTee patch 16: extended reverse-wraparound */
     state->mode.reverse_wrap_ext = val;
+    break;
+
+  case 41: /* VeeTee patch 24: xterm more(1) fix */
+    state->mode.more_fix = val;
     break;
 
   case 69: // DECVSSM - vertical split screen mode
@@ -948,7 +1044,13 @@ static void set_dec_mode(VTermState *state, int num, int val)
     break;
 
   case 47:   /* VeeTee patch 17: xterm's original alternate screen */
+    settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
+    break;
+
   case 1047:
+    /* VeeTee patch 25: 1047 clears the alternate screen on the way out. */
+    if(!val)
+      erase_alt_screen(state);
     settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
     break;
 
@@ -962,6 +1064,7 @@ static void set_dec_mode(VTermState *state, int num, int val)
     if(val) {
       savecursor(state, 1);
       settermprop_bool(state, VTERM_PROP_ALTSCREEN, 1);
+      erase_alt_screen(state);            /* VeeTee patch 25: on the way in */
     }
     else {
       settermprop_bool(state, VTERM_PROP_ALTSCREEN, 0);
@@ -987,7 +1090,12 @@ static void set_dec_mode(VTermState *state, int num, int val)
   }
 }
 
-static void request_dec_mode(VTermState *state, int num)
+/*
+ * VeeTee patch 22: the current value of a DEC private mode libvterm
+ * implements -- 1 set, 0 reset -- or -1 if it isn't one of ours. DECRQM
+ * reports it; XTSAVE/XTRESTORE save and put it back.
+ */
+static int get_dec_mode(VTermState *state, int num)
 {
   int reply;
 
@@ -1022,6 +1130,10 @@ static void request_dec_mode(VTermState *state, int num)
 
     case 1045:
       reply = state->mode.reverse_wrap_ext;
+      break;
+
+    case 41:
+      reply = state->mode.more_fix;
       break;
 
     case 69:
@@ -1066,18 +1178,86 @@ static void request_dec_mode(VTermState *state, int num)
       break;
 
     default:
-      /* VeeTee patch: let the CSI fallback answer DECRQM ("CSI ? num $ p")
-       * for modes it implements; otherwise "not recognised". */
-      if(state->fallbacks && state->fallbacks->csi) {
-        long arg = num;
-        if((*state->fallbacks->csi)("?", &arg, 1, "$", 'p', state->fbdata))
-          return;
-      }
-      vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, 0);
-      return;
+      return -1;
+  }
+
+  return reply ? 1 : 0;
+}
+
+static void request_dec_mode(VTermState *state, int num)
+{
+  int reply = get_dec_mode(state, num);
+
+  if(reply < 0) {
+    /* VeeTee patch: let the CSI fallback answer DECRQM ("CSI ? num $ p")
+     * for modes it implements; otherwise "not recognised". */
+    if(state->fallbacks && state->fallbacks->csi) {
+      long arg = num;
+      if((*state->fallbacks->csi)("?", &arg, 1, "$", 'p', state->fbdata))
+        return;
+    }
+    vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, 0);
+    return;
   }
 
   vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d$y", num, reply ? 1 : 2);
+}
+
+/*
+ * VeeTee patch 22: XTSAVE ("CSI ? Pm s") and XTRESTORE ("CSI ? Pm r"),
+ * xterm's save/restore of DEC private modes. One saved value per mode,
+ * a later save replacing an earlier one; restore puts back what was
+ * saved and leaves modes never saved alone. Modes libvterm doesn't know
+ * go to the CSI fallback one at a time ("CSI ? n s" / "CSI ? n r"), as
+ * set_dec_mode() does for set/reset, so the embedder can keep its own.
+ *
+ * Mouse modes 1000/1002/1003 share one setting, so saving and restoring
+ * them individually isn't exact -- xterm has the same wrinkle.
+ */
+static void xterm_save_fallback(VTermState *state, int num, char command)
+{
+  long arg = num;
+
+  if(state->fallbacks && state->fallbacks->csi)
+    (*state->fallbacks->csi)("?", &arg, 1, NULL, command, state->fbdata);
+}
+
+static void xterm_save_modes(VTermState *state, const long args[], int argcount)
+{
+  for(int i = 0; i < argcount; i++) {
+    int num = CSI_ARG(args[i]);
+    int val = get_dec_mode(state, num);
+    if(val < 0) {
+      xterm_save_fallback(state, num, 's');
+      continue;
+    }
+    int slot = 0;
+    while(slot < state->xt_saved_count && state->xt_saved[slot].num != num)
+      slot++;
+    if(slot == state->xt_saved_count) {
+      if(slot == XT_SAVED_MAX)
+        continue;                         /* full: forget this one */
+      state->xt_saved_count++;
+    }
+    state->xt_saved[slot].num = num;
+    state->xt_saved[slot].val = val;
+  }
+}
+
+static void xterm_restore_modes(VTermState *state, const long args[], int argcount)
+{
+  for(int i = 0; i < argcount; i++) {
+    int num = CSI_ARG(args[i]);
+    if(get_dec_mode(state, num) < 0) {
+      xterm_save_fallback(state, num, 'r');
+      continue;
+    }
+    for(int slot = 0; slot < state->xt_saved_count; slot++)
+      if(state->xt_saved[slot].num == num) {
+        set_dec_mode(state, num, state->xt_saved[slot].val);
+        break;
+      }
+  }
 }
 
 static void request_version_string(VTermState *state)
@@ -1213,6 +1393,13 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     int left = state->pos.col >= SCROLLREGION_LEFT(state) ?
                SCROLLREGION_LEFT(state) : 0;
     count = CSI_ARG_COUNT(args[0]);
+    /* VeeTee patch 21: with reverse wraparound, CUB is repeated BS. */
+    if(state->mode.autowrap &&
+       (state->mode.reverse_wrap || state->mode.reverse_wrap_ext)) {
+      while(count-- > 0 && back_space(state))
+        ;
+      break;
+    }
     state->pos.col -= count;
     LBOUND(state->pos.col, left);
     state->at_phantom = 0;
@@ -1222,6 +1409,10 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   case 0x47: // CHA - ECMA-48 8.3.9
     val = CSI_ARG_OR(args[0], 1);
     state->pos.col = val-1;
+    /* VeeTee patch 26: under DECOM, columns count from the left margin,
+     * as CUP's do and as VPA's rows do (xterm's CursorSet). */
+    if(state->mode.origin)
+      state->pos.col += SCROLLREGION_LEFT(state);
     state->at_phantom = 0;
     break;
 
@@ -1348,7 +1539,9 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   case 0x50: // DCH - ECMA-48 8.3.26
     count = CSI_ARG_COUNT(args[0]);
 
-    if(!is_cursor_in_scrollregion(state))
+    /* VeeTee patch 20: DCH works outside the top/bottom margins (xterm);
+     * only the left/right margins matter. */
+    if(!in_lr_margins(state))
       break;
 
     rect.start_row = state->pos.row;
@@ -1407,6 +1600,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   case 0x60: // HPA - ECMA-48 8.3.57
     col = CSI_ARG_OR(args[0], 1);
     state->pos.col = col-1;
+    if(state->mode.origin)                /* VeeTee patch 26, as CHA */
+      state->pos.col += SCROLLREGION_LEFT(state);
     state->at_phantom = 0;
     break;
 
@@ -1417,20 +1612,19 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     break;
 
   case 0x62: { // REP - ECMA-48 8.3.103
-    const int row_width = THISROWWIDTH(state);
+    /* VeeTee patch 19: as if the last character were printed `count`
+     * more times -- wrapping, margins and insert mode included. */
     count = CSI_ARG_COUNT(args[0]);
-    col = state->pos.col + count;
-    UBOUND(col, row_width);
-    while (state->pos.col < col) {
-      putglyph(state, state->combine_chars, state->combine_width, state->pos);
-      state->pos.col += state->combine_width;
+    if(count > 65535)
+      count = 65535;
+    if(!state->combine_chars[0])
+      break;
+    for(int i = 0; i < count; i++) {
+      VTermPos at = print_glyph_begin(state, state->combine_width);
+      putglyph(state, state->combine_chars, state->combine_width, at);
+      print_glyph_end(state, state->combine_width);
     }
-    if (state->pos.col + state->combine_width >= row_width) {
-      if (state->mode.autowrap) {
-        state->at_phantom = 1;
-        cancel_phantom = 0;
-      }
-    }
+    cancel_phantom = 0;
     break;
   }
 
@@ -1506,6 +1700,14 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   case 0x68: // SM - ECMA-48 8.3.125
     if(!CSI_ARG_IS_MISSING(args[0]))
       set_mode(state, CSI_ARG(args[0]), 1);
+    break;
+
+  case LEADER('?', 0x72): // XTRESTORE - xterm; VeeTee patch 22
+    xterm_restore_modes(state, args, argcount);
+    break;
+
+  case LEADER('?', 0x73): // XTSAVE - xterm; VeeTee patch 22
+    xterm_save_modes(state, args, argcount);
     break;
 
   case LEADER('?', 0x68): // DEC private mode set
@@ -1676,7 +1878,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     else
       UBOUND(state->scrollregion_bottom, state->rows);
 
-    if(SCROLLREGION_BOTTOM(state) <= state->scrollregion_top) {
+    /* VeeTee patch 20: a region needs at least two lines (xterm). */
+    if(SCROLLREGION_BOTTOM(state) <= state->scrollregion_top + 1) {
       // Invalid
       state->scrollregion_top    = 0;
       state->scrollregion_bottom = -1;
@@ -2328,6 +2531,7 @@ void vterm_state_reset(VTermState *state, int hard)
   state->mode.report_focus    = 0;
   state->mode.reverse_wrap    = 0;    /* VeeTee patch 6 */
   state->mode.reverse_wrap_ext = 0;   /* VeeTee patch 16 */
+  state->mode.more_fix         = 0;   /* VeeTee patch 24 */
 
   /* VeeTee patch 7: soft and hard reset also reset the DECSC save
    * (home, no origin mode, unprotected), so a later DECRC can't bring
@@ -2340,6 +2544,9 @@ void vterm_state_reset(VTermState *state, int hard)
   }
 
   state->mouse_flags = 0;
+
+  if(hard)
+    state->xt_saved_count = 0;        /* VeeTee patch 22: RIS forgets XTSAVE */
 
   state->vt->mode.ctrl8bit   = 0;
 
@@ -2462,15 +2669,8 @@ int vterm_state_set_termprop(VTermState *state, VTermProp prop, VTermValue *val)
   case VTERM_PROP_ALTSCREEN:
     state->mode.alt_screen = val->boolean;
     state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];
-    if(state->mode.alt_screen) {
-      VTermRect rect = {
-        .start_row = 0,
-        .start_col = 0,
-        .end_row = state->rows,
-        .end_col = state->cols,
-      };
-      erase(state, rect, 0);
-    }
+    /* VeeTee patch 25: clearing the alternate screen is up to the mode
+     * that switched (see erase_alt_screen()), not done on every entry. */
     return 1;
   case VTERM_PROP_MOUSE:
     state->mouse_flags = 0;

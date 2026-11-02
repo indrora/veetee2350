@@ -115,24 +115,7 @@ Run test: CHTTests.test_CHT_ExplicitParameter
 Passed.
 
 Run test: CHTTests.test_CHT_IgnoresScrollingRegion
-*** TEST CHTTests.test_CHT_IgnoresScrollingRegion FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cht.py", line 44, in test_CHT_IgnoresScrollingRegion
-    AssertEQ(position.x(), 30)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '30' but got '33'
-
+Passed.
 
 Run test: CHTTests.test_CHT_OneTabStopByDefault
 Passed.
@@ -183,50 +166,10 @@ Run test: CRTests.test_CR_StaysPutWhenAtLeftMargin
 Passed.
 
 Run test: CUBTests.test_CUB_AfterNoWrappedInlines
-*** TEST CUBTests.test_CUB_AfterNoWrappedInlines FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cub.py", line 96, in test_CUB_AfterNoWrappedInlines
-    AssertEQ(GetCursorPosition(), Point(1, 4))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=1, y=4)' but got 'Point(x=1, y=5)'
-
+Passed.
 
 Run test: CUBTests.test_CUB_AfterOneWrappedInline
-*** TEST CUBTests.test_CUB_AfterOneWrappedInline FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/cub.py", line 115, in test_CUB_AfterOneWrappedInline
-    AssertEQ(GetCursorPosition(), Point(1, 6))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=1, y=6)' but got 'Point(x=1, y=8)'
-
+Passed.
 
 Run test: CUBTests.test_CUB_DefaultParam
 Passed.
@@ -979,34 +922,7 @@ Run test: DCHTests.test_DCH_RespectsMargins
 Passed.
 
 Run test: DCHTests.test_DCH_WorksOutsideTopBottomMargin
-*** TEST DCHTests.test_DCH_WorksOutsideTopBottomMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/dch.py", line 77, in test_DCH_WorksOutsideTopBottomMargin
-    AssertScreenCharsInRectEqual(Rect(1, 1, 5, 1), [empty() * 5])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=1, y=1) expected ' ' (0x20) but got 'a' (0x61)
-At Point(x=2, y=1) expected ' ' (0x20) but got 'b' (0x62)
-At Point(x=3, y=1) expected ' ' (0x20) but got 'c' (0x63)
-At Point(x=4, y=1) expected ' ' (0x20) but got 'd' (0x64)
-At Point(x=5, y=1) expected ' ' (0x20) but got 'e' (0x65)
-Actual:
-abcde
-
-Expected:
-     
-
+Passed.
 
 Run test: DCSTests.test_DCS_Unrecognized
 Passed.
@@ -1599,30 +1515,7 @@ Run test: DECRQSSTests.test_DECRQSS_DECSCA
 Passed.
 
 Run test: DECRQSSTests.test_DECRQSS_DECSCL
-*** TEST DECRQSSTests.test_DECRQSS_DECSCL FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decrqss.py", line 73, in test_DECRQSS_DECSCL
-    AssertEQ(result, '1$r6' + str(escargs.args.max_vt_level) + ';1"p')
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '1$r64;1"p' but got '1$r65;1"p'
-
+Passed.
 
 Run test: DECRQSSTests.test_DECRQSS_DECSCUSR
 Passed.
@@ -1896,42 +1789,7 @@ Run test: DECSERATests.test_DECSERA_respectsOriginMode
 Passed.
 
 Run test: DECSETTests.test_DECSET_ALTBUF
-*** TEST DECSETTests.test_DECSET_ALTBUF FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decset.py", line 467, in test_DECSET_ALTBUF
-    self.doAltBuftest(esccmd.ALTBUF, False, False)
-    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decset.py", line 450, in doAltBuftest
-    AssertScreenCharsInRectEqual(Rect(1, 1, 3, 3), [empty() * 3, "def", "def"])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=1, y=2) expected 'd' (0x64) but got ' ' (0x20)
-At Point(x=2, y=2) expected 'e' (0x65) but got ' ' (0x20)
-At Point(x=3, y=2) expected 'f' (0x66) but got ' ' (0x20)
-At Point(x=1, y=3) expected 'd' (0x64) but got ' ' (0x20)
-At Point(x=2, y=3) expected 'e' (0x65) but got ' ' (0x20)
-At Point(x=3, y=3) expected 'f' (0x66) but got ' ' (0x20)
-Actual:
-   
-   
-   
-
-Expected:
-   
-def
-def
-
+Passed.
 
 Run test: DECSETTests.test_DECSET_Allow80To132
 *** TEST DECSETTests.test_DECSET_Allow80To132 FAILED:
@@ -1957,24 +1815,7 @@ Run test: DECSETTests.test_DECSET_DECAWM_CursorAtRightMargin
 Passed.
 
 Run test: DECSETTests.test_DECSET_DECAWM_NoLineWrapOnTabWithLeftRightMargin
-*** TEST DECSETTests.test_DECSET_DECAWM_NoLineWrapOnTabWithLeftRightMargin FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decset.py", line 313, in test_DECSET_DECAWM_NoLineWrapOnTabWithLeftRightMargin
-    AssertEQ(GetCursorPosition(), Point(20, 1))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=20, y=1)' but got 'Point(x=25, y=1)'
-
+Passed.
 
 Run test: DECSETTests.test_DECSET_DECAWM_OffRespectsLeftRightMargin
 Passed.
@@ -2030,24 +1871,7 @@ Run test: DECSETTests.test_DECSET_DECOM_SoftReset
 Passed.
 
 Run test: DECSETTests.test_DECSET_MoreFix
-*** TEST DECSETTests.test_DECSET_MoreFix FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decset.py", line 326, in test_DECSET_MoreFix
-    AssertEQ(GetCursorPosition().x(), 9)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '9' but got '80'
-
+Passed.
 
 Run test: DECSETTests.test_DECSET_OPT_ALTBUF
 Passed.
@@ -2065,21 +1889,7 @@ Run test: DECSETTests.test_DECSET_ReverseWraparound_BS
 Passed.
 
 Run test: DECSETTests.test_DECSET_ReverseWraparound_Multi
-*** TEST DECSETTests.test_DECSET_ReverseWraparound_Multi FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decset.py", line 372, in test_DECSET_ReverseWraparound_Multi
-    AssertEQ(GetCursorPosition().x(), size.width() - 1)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '79' but got '1'
-
+Passed.
 
 Run test: DECSETTests.test_DECSET_ReverseWraparound_RequiresDECAWM
 Passed.
@@ -2139,31 +1949,7 @@ Run test: DECSTBMTests.test_DECSTBM_ScrollsOnNewline
 Passed.
 
 Run test: DECSTBMTests.test_DECSTBM_TopBelowBottom
-*** TEST DECSTBMTests.test_DECSTBM_TopBelowBottom FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/decstbm.py", line 60, in test_DECSTBM_TopBelowBottom
-    AssertScreenCharsInRectEqual(Rect(1, y, 4, y), ["%04d" % i])
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=3, y=3) expected '0' (0x30) but got '2' (0x32)
-At Point(x=4, y=3) expected '2' (0x32) but got '9' (0x39)
-Actual:
-0029
-
-Expected:
-0002
-
+Passed.
 
 Run test: DECSTBMTests.test_DECSTBM_TopOfZeroIsTopOfScreen
 Passed.
@@ -2418,27 +2204,7 @@ Run test: HPATests.test_HPA_DoesNotChangeRow
 Passed.
 
 Run test: HPATests.test_HPA_IgnoresOriginMode
-*** TEST HPATests.test_HPA_IgnoresOriginMode FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/hpa.py", line 71, in test_HPA_IgnoresOriginMode
-    AssertEQ(position.x(), 2)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '2' but got '1'
-
+Passed.
 
 Run test: HPATests.test_HPA_StopsAtRightEdge
 Passed.
@@ -2649,24 +2415,7 @@ Run test: NELTests.test_NEL_Basic
 Passed.
 
 Run test: NELTests.test_NEL_MovesDoesNotScrollOutsideLeftRight
-*** TEST NELTests.test_NEL_MovesDoesNotScrollOutsideLeftRight FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/nel.py", line 92, in test_NEL_MovesDoesNotScrollOutsideLeftRight
-    AssertEQ(GetCursorPosition(), Point(2, 5))
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected 'Point(x=2, y=5)' but got 'Point(x=1, y=5)'
-
+Passed.
 
 Run test: NELTests.test_NEL_Scrolls
 Passed.
@@ -2724,75 +2473,10 @@ Run test: REPTests.test_REP_ExplicitParam
 Passed.
 
 Run test: REPTests.test_REP_RespectsLeftRightMargins
-*** TEST REPTests.test_REP_RespectsLeftRightMargins FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/rep.py", line 41, in test_REP_RespectsLeftRightMargins
-    AssertScreenCharsInRectEqual(Rect(1, 1, 5, 2),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-                                 [empty() + "aaa" + empty(),
-                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                  empty() + "a" + empty() * 3])
-                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=5, y=1) expected ' ' (0x20) but got 'a' (0x61)
-At Point(x=2, y=2) expected 'a' (0x61) but got ' ' (0x20)
-Actual:
- aaaa
-     
-
-Expected:
- aaa 
- a   
-
+Passed.
 
 Run test: REPTests.test_REP_RespectsTopBottomMargins
-*** TEST REPTests.test_REP_RespectsTopBottomMargins FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 339, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/rep.py", line 54, in test_REP_RespectsTopBottomMargins
-    AssertScreenCharsInRectEqual(Rect(1, 3, width, 4),
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
-                                 [empty() * (width - 3) + "aaa",
-                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                  "a" + empty() * (width - 1)])
-                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 307, in AssertScreenCharsInRectEqual
-    Raise(esctypes.ChecksumException(errorLocations, actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.ChecksumException: Checksum failed at the following locations:
-At Point(x=78, y=3) expected 'a' (0x61) but got ' ' (0x20)
-At Point(x=79, y=3) expected 'a' (0x61) but got ' ' (0x20)
-At Point(x=80, y=3) expected 'a' (0x61) but got ' ' (0x20)
-At Point(x=1, y=4) expected 'a' (0x61) but got ' ' (0x20)
-At Point(x=78, y=4) expected ' ' (0x20) but got 'a' (0x61)
-At Point(x=79, y=4) expected ' ' (0x20) but got 'a' (0x61)
-At Point(x=80, y=4) expected ' ' (0x20) but got 'a' (0x61)
-Actual:
-                                                                                
-                                                                             aaa
-
-Expected:
-                                                                             aaa
-a                                                                               
-
+Passed.
 
 Run test: RISTests.test_RIS_ClearsScreen
 Passed.
@@ -3240,50 +2924,10 @@ Run test: VTTests.test_VT_StopsAtBottomLineWhenBegunBelowScrollRegion
 Passed.
 
 Run test: XtermSaveTests.test_XtermSave_SaveResetState
-*** TEST XtermSaveTests.test_XtermSave_SaveResetState FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_save.py", line 50, in test_XtermSave_SaveResetState
-    AssertEQ(GetCursorPosition().x(), size.width())
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '80' but got '2'
-
+Passed.
 
 Run test: XtermSaveTests.test_XtermSave_SaveSetState
-*** TEST XtermSaveTests.test_XtermSave_SaveSetState FAILED:
-Traceback (most recent call last):
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/esctest.py", line 109, in RunTest
-    method()
-    ~~~~~~^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 450, in func_wrapper
-    func(self, *args, **kwargs)
-    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/tests/xterm_save.py", line 28, in test_XtermSave_SaveSetState
-    AssertEQ(GetCursorPosition().x(), 2)
-    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 39, in AssertEQ
-    Raise(esctypes.TestFailure(actual, expected))
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/private/tmp/claude-501/-Users-indrora-src-veetee2350/921bbae4-9766-4340-a8c8-13ba9fce00d0/scratchpad/dl/esctest2/esctest/escutil.py", line 27, in Raise
-    raise e
-esctypes.TestFailure: Test failed: expected '2' but got '80'
-
+Passed.
 
 Run test: XtermWinopsTests.test_XtermWinops_DECSLPP
 *** TEST XtermWinopsTests.test_XtermWinops_DECSLPP FAILED:
@@ -3386,11 +3030,8 @@ Passed.
 Run test: XtermWinopsTests.test_XtermWinops_ResizePixels_ZeroWidth
 Passed.
 
-*** 473 tests passed, 41 known bugs, 53 TESTS FAILED ***
+*** 489 tests passed, 41 known bugs, 37 TESTS FAILED ***
 Failing tests:
-CHTTests.test_CHT_IgnoresScrollingRegion
-CUBTests.test_CUB_AfterNoWrappedInlines
-CUBTests.test_CUB_AfterOneWrappedInline
 ChangeColorTests.test_ChangeColor_CIELab
 ChangeColorTests.test_ChangeColor_CIELuv
 ChangeColorTests.test_ChangeColor_CIEXYZ
@@ -3414,30 +3055,17 @@ ChangeSpecialColorTests.test_ChangeSpecialColor_RGBI
 ChangeSpecialColorTests.test_ChangeSpecialColor_TekHVC
 DATests.test_DA_0
 DATests.test_DA_NoParameter
-DCHTests.test_DCH_WorksOutsideTopBottomMargin
-DECRQSSTests.test_DECRQSS_DECSCL
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECRQSSTests.test_DECRQSS_DECSNLS
 DECSCLTests.test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM
 DECSEDTests.test_DECSED_doesNotRespectISOProtect
 DECSELTests.test_DECSEL_doesNotRespectISOProtect
-DECSETTests.test_DECSET_ALTBUF
 DECSETTests.test_DECSET_Allow80To132
-DECSETTests.test_DECSET_DECAWM_NoLineWrapOnTabWithLeftRightMargin
 DECSETTests.test_DECSET_DECCOLM
-DECSETTests.test_DECSET_MoreFix
-DECSETTests.test_DECSET_ReverseWraparound_Multi
-DECSTBMTests.test_DECSTBM_TopBelowBottom
 ECHTests.test_ECH_respectsISOProtection
 EDTests.test_ED_respectsISOProtection
 ELTests.test_EL_respectsISOProtection
-HPATests.test_HPA_IgnoresOriginMode
-NELTests.test_NEL_MovesDoesNotScrollOutsideLeftRight
-REPTests.test_REP_RespectsLeftRightMargins
-REPTests.test_REP_RespectsTopBottomMargins
 RISTests.test_RIS_ResetDECCOLM
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
 ResetSpecialColorTests.test_ResetSpecialColor_Multiple
-XtermSaveTests.test_XtermSave_SaveResetState
-XtermSaveTests.test_XtermSave_SaveSetState
 XtermWinopsTests.test_XtermWinops_DECSLPP

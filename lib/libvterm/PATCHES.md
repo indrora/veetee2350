@@ -156,3 +156,60 @@ xterm's original alternate-screen switch, DECSET 47, is handled like
 `state->vt_level` (1-5, set by the embedder from DECSCL; 0 = no limit):
 below level 4 DECSET 69 (DECLRMM) is ignored, below level 3 DEC-private
 DECRQM is not answered -- as a VT220 or VT320 would behave.
+
+## 19. REP prints like text (`src/state.c`)
+
+libvterm's REP repeated the last character up to the end of the row and
+stopped. xterm treats REP as printing it `count` more times, so it
+wraps, honours the left/right margins and scrolls. The per-glyph part
+of `on_text()` became `print_glyph_begin()` / `print_glyph_end()`, and
+REP prints through them.
+
+## 20. NEL, DCH, one-line DECSTBM (`src/state.c`)
+
+- NEL is LF then CR with patch 11's margin rule (LF first, so outside
+  the left/right margins it doesn't scroll).
+- DCH works outside the top/bottom margins; only the left/right
+  margins limit it (xterm).
+- DECSTBM with top >= bottom (a one-line region) is invalid and resets
+  to the full screen, as xterm requires at least two lines.
+
+## 21. CUB with reverse wraparound (`src/state.c`)
+
+With DECAWM and reverse wraparound (45 or 1045) on, CUB moves like that
+many backspaces, crossing line boundaries by the same rules (xterm).
+BS's logic became `back_space()` for this.
+
+## 22. XTSAVE / XTRESTORE (`src/state.c`, `src/vterm_internal.h`)
+
+xterm's `CSI ? Pm s` saves DEC private modes and `CSI ? Pm r` puts them
+back. libvterm keeps up to 16 of its own modes (`xt_saved`, cleared by
+hard reset); modes it doesn't implement go to the CSI fallback one at a
+time, so VeeTee's term.c saves its stored modes too. DECRQM's mode lookup
+became `get_dec_mode()` to share with it.
+
+## 23. Tabs stop at the left/right margins (`src/state.c`)
+
+With DECLRMM on and the cursor between the margins, HT/CHT stop at the
+right margin, as on xterm and the VT420. CBT still runs to column 1.
+
+## 24. DECSET 41, xterm's more(1) fix (`src/state.c`, `src/vterm_internal.h`)
+
+With mode 41 and DECAWM on, HT while a wrap is pending takes the wrap
+first (to the next line, left margin) and then tabs, so curses' "fill
+the row, then tab" lands where it meant. Off by default, as in xterm.
+
+## 25. Alternate-screen clearing per mode (`src/state.c`)
+
+Upstream erased the alternate screen on every entry. xterm clears it at
+different moments: DECSET 47 never, 1047 on leaving, 1049 on entering.
+`erase_alt_screen()` does that from `set_dec_mode()`, only while the
+alternate screen is the one showing (an embedder that refuses the switch
+keeps its primary intact). term.c no longer clears on entry itself.
+
+## 26. CHA and HPA honour origin mode (`src/state.c`)
+
+Under DECOM, CHA and HPA columns count from the left margin, as CUP's
+do and as libvterm's VPA already did for rows (xterm's `CursorSet`).
+esctest names the test "HPA_IgnoresOriginMode", but what it checks
+(HPA 2 reads back as column 2 through an origin-relative CPR) needs this.

@@ -189,7 +189,6 @@ cb_putglyph(VTermGlyphInfo *info, VTermPos pos, void *user)
 		return 1;
 
 	/* Combining characters (chars[1..]) are dropped: one glyph/cell. */
-	term->last_char = info->chars[0];
 	uint16_t glyph = font_glyph_for(&term->font, info->chars[0]);
 	struct cell *cells = grid_row(grid, pos.row);
 
@@ -399,13 +398,9 @@ cb_settermprop(VTermProp prop, VTermValue *val, void *user)
 		    &term->primary;
 		if (next == term->screen)
 			break;
-		/* Entering the alternate screen starts it blank (xterm
-		 * 1049 behaviour; libvterm leaves clearing to the screen
-		 * layer, which we don't use). */
-		if (next == &term->alternate)
-			for (unsigned row = 0; row < next->rows; row++)
-				grid_clear_span(next, row, 0, next->cols,
-				    erase_cell(term));
+		/* No clearing here: libvterm erases the alternate screen
+		 * when the mode calls for it (patch 25: 1049 on entry, 1047
+		 * on exit, 47 never), through the erase callback. */
 		next->cursor_row = term->screen->cursor_row;
 		next->cursor_col = term->screen->cursor_col;
 		term->screen = next;
@@ -1491,49 +1486,30 @@ fb_csi(const char *leader, const long args[], int argcount,
 		return 1;
 	}
 
-	/*
-	 * REP, "CSI Ps b": repeat the last graphic character Ps times
-	 * (default 1). libvterm lacks it; feeding the character back through
-	 * libvterm gives exactly the wrapping/margin/insert behaviour of
-	 * printing it again. Capped so a huge count can't stall the system.
-	 */
-	if (no_leader && intermed == nullptr && command == 'b') {
-		long count = first == CSI_ARG_MISSING || first < 1 ? 1 : first;
-		uint32_t cp = term->last_char;
-		char utf8[4];
-		size_t len;
-
-		if (cp == 0)
-			return 1;
-		if (count > 65535)
-			count = 65535;
-		if (cp < 0x80) {
-			utf8[0] = (char)cp;
-			len = 1;
-		} else if (cp < 0x800) {
-			utf8[0] = (char)(0xc0 | cp >> 6);
-			utf8[1] = (char)(0x80 | (cp & 0x3f));
-			len = 2;
-		} else if (cp < 0x10000) {
-			utf8[0] = (char)(0xe0 | cp >> 12);
-			utf8[1] = (char)(0x80 | ((cp >> 6) & 0x3f));
-			utf8[2] = (char)(0x80 | (cp & 0x3f));
-			len = 3;
-		} else {
-			utf8[0] = (char)(0xf0 | cp >> 18);
-			utf8[1] = (char)(0x80 | ((cp >> 12) & 0x3f));
-			utf8[2] = (char)(0x80 | ((cp >> 6) & 0x3f));
-			utf8[3] = (char)(0x80 | (cp & 0x3f));
-			len = 4;
-		}
-		for (long i = 0; i < count; i++)
-			vterm_input_write(term->vt, utf8, len);
-		return 1;
-	}
-
 	if (private && intermed == nullptr && first == 3 &&
 	    (command == 'h' || command == 'l')) {
 		set_columns(term, command == 'h');
+		return 1;
+	}
+
+	/*
+	 * XTSAVE / XTRESTORE ("CSI ? Pm s" / "CSI ? Pm r") of the stored
+	 * modes. libvterm saves and restores its own (patch 22) and hands
+	 * us the rest one mode at a time.
+	 */
+	if (private && intermed == nullptr &&
+	    (command == 's' || command == 'r')) {
+		for (int i = 0; i < argcount; i++) {
+			int index = stored_mode_index(CSI_ARG(args[i]), true);
+			if (index < 0)
+				continue;
+			if (command == 's')
+				term->saved_stored_modes[index] =
+				    term->stored_modes[index];
+			else if (term->saved_stored_modes[index] != 0)
+				term->stored_modes[index] =
+				    term->saved_stored_modes[index];
+		}
 		return 1;
 	}
 

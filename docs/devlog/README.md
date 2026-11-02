@@ -23,6 +23,7 @@ was learned.
 17. [Screenshots, by the terminal itself](017-screenshots.md)
 18. [Turning on the printer](018-printer.md)
 19. [Fewer bytes, fewer bits, and Floyd–Steinberg](019-colour-depth.md)
+20. [A night with esctest](020-conformance-night.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

@@ -165,7 +165,6 @@ struct term {
 	term_output_fn	 output;
 	void		*output_ctx;
 	uint32_t	 bells;		/* BEL count, for a future visual bell */
-	uint32_t	 last_char;	/* last graphic character, for REP */
 
 	/* DECSET 2048: report the size in-band whenever it changes. */
 	bool		 resize_reports;
@@ -173,6 +172,8 @@ struct term {
 	/* Modes accepted and reported (DECRQM) but with no visible effect
 	 * here, e.g. DECARM, DECNKM, KAM. Index into term.c's table. */
 	uint8_t		 stored_modes[40];
+	/* XTSAVE of stored modes: 0 = never saved, else 1 set / 2 reset. */
+	uint8_t		 saved_stored_modes[40];
 	uint8_t		 decsace;	/* DECSACE, reported by DECRQSS only */
 	uint8_t		 conformance;	/* DECSCL level: 61 (VT100) .. 65 */
 

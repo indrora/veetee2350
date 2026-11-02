@@ -1100,6 +1100,108 @@ test_decscl_levels(void)
 	TEST_ASSERT_EQUAL_STRING("\x1bP1$r64;1\"p\x1b\\", reply);
 }
 
+static void
+test_rep_margins(void)
+{
+	/* REP prints like text: wraps at the right margin (2..4) to the left
+	 * margin of the next line. */
+	feed("\x1b[?69h\x1b[2;4s\x1b[1;2Ha\x1b[3b");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 3)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 4)->glyph);
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(1, 1)->glyph);
+}
+
+static void
+test_xtsave(void)
+{
+	/* libvterm's own mode (DECAWM) and one of term.c's (DECPEX, 19). */
+	feed("\x1b[?7h\x1b[?19h\x1b[?7;19s\x1b[?7l\x1b[?19l\x1b[?7;19r");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[?7$p\x1b[?19$p");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?7;1$y\x1b[?19;1$y", reply);
+	/* A mode never saved is left as it is. */
+	feed("\x1b[?6h\x1b[?6r");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[?6$p");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?6;1$y", reply);
+	feed("\x1b[?6l");
+}
+
+static void
+test_tab_margins(void)
+{
+	/* Margins 10..20: tabs from column 1 go 9, 17, then stop at 20. */
+	feed("\x1b[?69h\x1b[10;20s\x1b[1;1H\t\t\t\t");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[1;20R", reply);
+	/* CBT ignores the left margin. */
+	feed("\x1b[3Z");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[1;1R", reply);
+	feed("\x1b[s\x1b[?69l");
+}
+
+static void
+test_more_fix(void)
+{
+	/* Fill row 1, then tab: with mode 41 the tab lands on row 2. */
+	char line[GRID_MAX_COLS + 1];
+	unsigned cols = term.screen->cols;
+
+	memset(line, 'x', cols);
+	line[cols] = '\0';
+	feed("\x1b[?7h\x1b[?41h\x1b[1;1H");
+	feed(line);
+	feed("\t");
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[2;9R", reply);
+	feed("\x1b[?41l");
+}
+
+static void
+test_altbuf_47(void)
+{
+	/* DECSET 47 switches screens; writing there shows there. */
+	feed("\x1b[64;1\"p\x1b[!p\x1b[8;25;80t\x1b[?1047l\x1b[?1049l"
+	    "\x1b[?47l\x1b[?69l\x1b[?7h\x1b[?41l\x1b[2J");
+	feed("abc\r\nabc\x1b[?47h\x1b[2J\x1b[2;1Hdef\r\ndef");
+	TEST_ASSERT_TRUE(term.screen == &term.alternate);
+	TEST_ASSERT_EQUAL(glyph('d'), cell_at(1, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);
+	feed("\x1b[?47l");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+	/* 47 never clears: the alternate keeps "def" for next time. */
+	feed("\x1b[?47h");
+	TEST_ASSERT_EQUAL(glyph('d'), cell_at(1, 0)->glyph);
+	/* 1047 clears on the way out... */
+	feed("\x1b[?1047l\x1b[?47h");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(1, 0)->glyph);
+	/* ...and 1049 on the way in. */
+	feed("\x1b[2;1Hy\x1b[?47l\x1b[?1049h");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(1, 0)->glyph);
+	feed("\x1b[?1049l");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+}
+
+static void
+test_hpa_origin(void)
+{
+	/* Margins rows 6..11, columns 5..10, DECOM: HPA 2 is column 6. */
+	feed("\x1b[6;11r\x1b[?69h\x1b[5;10s\x1b[?6h\x1b[2`");
+	TEST_ASSERT_EQUAL(5, term.screen->cursor_col);
+	feed("\x1b[3G");
+	TEST_ASSERT_EQUAL(6, term.screen->cursor_col);
+	feed("\x1b[?6l\x1b[s\x1b[?69l\x1b[r");
+}
+
 int
 main(void)
 {
@@ -1149,6 +1251,12 @@ main(void)
 	RUN_TEST(test_index_outside_lr_margins);
 	RUN_TEST(test_text_lr_margins);
 	RUN_TEST(test_decscl_levels);
+	RUN_TEST(test_rep_margins);
+	RUN_TEST(test_xtsave);
+	RUN_TEST(test_tab_margins);
+	RUN_TEST(test_more_fix);
+	RUN_TEST(test_altbuf_47);
+	RUN_TEST(test_hpa_origin);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

@@ -123,6 +123,7 @@ struct VTermState
     unsigned int leftrightmargin:1;
     unsigned int reverse_wrap:1; /* VeeTee patch 6: DECSET 45 */
     unsigned int reverse_wrap_ext:1; /* VeeTee patch 16: DECSET 1045 */
+    unsigned int more_fix:1;         /* VeeTee patch 24: DECSET 41 */
     unsigned int bracketpaste:1;
     unsigned int report_focus:1;
   } mode;
@@ -144,6 +145,14 @@ struct VTermState
    * set by the embedder; 0 means no limits. Below 4 DECLRMM is refused,
    * below 3 DECRQM goes unanswered. */
   int vt_level;
+
+  /* VeeTee patch 22: DEC private modes saved by XTSAVE ("CSI ? Pm s"). */
+#define XT_SAVED_MAX 16
+  struct {
+    int num;
+    unsigned char val;
+  } xt_saved[XT_SAVED_MAX];
+  int xt_saved_count;
 
   /* Saved state under DEC mode 1048/1049. VeeTee patch 13: one per
    * screen (main, alternate), as xterm keeps them; see SAVED(). */
