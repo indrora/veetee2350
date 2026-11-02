@@ -132,6 +132,10 @@ The rule is **"show your work"**:
   on the same screens and compare the numbers; keep the instrumentation
   in the code behind its `#define`, off by default. Estimates have been
   off by 3x (devlog 021, 024).
+- **Loops are aligned** (`-falign-loops=16`, platformio.ini): without
+  it the render loops' speed swung 10-15% with unrelated edits. When a
+  hot-path number moves and the loop didn't change, suspect placement
+  before code (devlog 022, 025).
 - **Per-frame decisions belong in the frame plan** (`render_plan`, main
   loop), not in the scanline: what each row is made of, which loop
   draws it, what to preload. Keep rare cases out of the hot loops --

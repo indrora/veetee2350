@@ -35,6 +35,11 @@ pyte, an independent emulator, at the same size.
 The grid size comes from three settings: resolution, font, and
 **Terminal size** (full screen, or a fixed 80×24 / 80×25 / 80×43 /
 80×50 / 132×24 / 132×43, letterboxed, and clamped when it doesn't fit).
+The default font is ATI Small Wonder, 6×8, so a full screen at 640×480
+is **106×60** (devlog 025); `notjam-clean-16` gives the old 80×30.
+**640×480 @ 72 Hz** runs the CPU at 315 MHz instead of 252 (text 24%
+faster) for displays that take VESA timings; the Genki ShadowCast
+doesn't, so 60 Hz stays the default.
 Hosts can find out the size in several ways:
 
 | Sequence | Reply |
