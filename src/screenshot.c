@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "card.h"
 #include "qoi_stream.h"
 #include "settings.h"
 #include "storage.h"
@@ -153,54 +154,17 @@ write_qoi(struct render *render, int handle)
 	return qoi_end(&qoi);
 }
 
-/* Highest NNNN in "NNNN.bmp" names, so the next one can follow it. */
-static bool
-note_number(const char *name, uint32_t size, bool is_dir,
-    const uint8_t *head, size_t head_len, void *ctx)
-{
-	unsigned *highest = ctx;
-	unsigned number = 0;
-
-	(void)size;
-	(void)head;
-	(void)head_len;
-	board_watchdog_feed();
-	if (is_dir || strlen(name) != 8 || (strcmp(name + 4, ".bmp") != 0 &&
-	    strcmp(name + 4, ".qoi") != 0))
-		return true;
-	for (int i = 0; i < 4; i++) {
-		if (name[i] < '0' || name[i] > '9')
-			return true;
-		number = number * 10 + (unsigned)(name[i] - '0');
-	}
-	if (number > *highest)
-		*highest = number;
-	return true;
-}
-
 bool
 screenshot_save(struct render *render, unsigned format, char *path,
     size_t path_len, char *error, size_t error_len)
 {
-	unsigned highest = 0;
+	static const char *const exts[] = {"bmp", "qoi", nullptr};
 	int handle;
 	bool ok;
 
-	if (!storage_mount()) {
-		snprintf(error, error_len, "%s", storage_error());
+	if (!card_next_name(SCREENSHOT_DIR, exts, format == SHOT_QOI ? "qoi" :
+	    "bmp", path, path_len, error, error_len))
 		return false;
-	}
-	if (!storage_mkdir(SCREENSHOT_DIR)) {
-		snprintf(error, error_len, "can't create " SCREENSHOT_DIR);
-		return false;
-	}
-	(void)storage_list(SCREENSHOT_DIR, 0, note_number, &highest);
-	if (highest >= 9999) {
-		snprintf(error, error_len, SCREENSHOT_DIR " is full (9999)");
-		return false;
-	}
-	snprintf(path, path_len, SCREENSHOT_DIR "/%04u.%s", highest + 1,
-	    format == SHOT_QOI ? "qoi" : "bmp");
 	handle = storage_open(path, STORAGE_CREATE);
 	if (handle < 0) {
 		snprintf(error, error_len, "%s", storage_error());

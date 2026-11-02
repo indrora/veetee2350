@@ -220,6 +220,20 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "%s", work->printer ?
 		    "on: SD card  (/print/NNNN.txt)" : "off");
 		break;
+	case ITEM_CAPTURE:
+		snprintf(out, len, "%s", work->capture ?
+		    "on: SD card  (/capture/NNNN.rec, ttyrec)" : "off");
+		break;
+	case ITEM_NEWLINES: {
+		static const char *const choices[NEWLINES_COUNT] = {
+			[NEWLINES_AS_IS] = "as in the file",
+			[NEWLINES_RAW] = "LF -> CR LF in raw files",
+			[NEWLINES_ALL] = "LF -> CR LF in all files",
+		};
+		snprintf(out, len, "%s",
+		    choices[work->replay_newlines % NEWLINES_COUNT]);
+		break;
+	}
 	case ITEM_STATUS: {
 		static const char *const modes[STATUS_MODE_COUNT] = {
 			[STATUS_HIDDEN] = "hidden  (lights in the corner)",
@@ -294,6 +308,8 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_SCREENSHOT] = "Screenshot format",
 	[ITEM_PRINTER] = "Printer",
+	[ITEM_CAPTURE] = "Capture",
+	[ITEM_NEWLINES] = "Replay newlines",
 	[ITEM_STATUS] = "Status line",
 	[ITEM_PEEK] = "Peek time",
 	[ITEM_PROFILER] = "Profiler bar",
@@ -577,6 +593,13 @@ change_value(struct setup *setup, int step)
 	}
 	case ITEM_PRINTER:
 		work->printer = !work->printer;
+		break;
+	case ITEM_CAPTURE:
+		work->capture = !work->capture;
+		break;
+	case ITEM_NEWLINES:
+		work->replay_newlines = (uint8_t)cycle(work->replay_newlines,
+		    NEWLINES_COUNT, step);
 		break;
 	case ITEM_STATUS:
 		work->status_line = (uint8_t)cycle(work->status_line,

@@ -12,6 +12,7 @@
 #include "grid.h"
 #include "keys.h"
 #include "menu.h"
+#include "picker.h"
 #include "render.h"
 #include "settings.h"
 #include "setup.h"
@@ -429,10 +430,10 @@ test_short_screen_scrolls(void)
  * settings.c) over everything before it; stale bytes after.
  */
 static void
-make_v9_record(uint8_t *raw, const struct settings *from)
+make_record(uint8_t *raw, const struct settings *from, uint16_t version,
+    size_t end)
 {
-	size_t end = offsetof(struct settings, printer) + 1;
-	uint16_t version = 9, size = (uint16_t)((end + 3) / 4 * 4 + 4);
+	uint16_t size = (uint16_t)((end + 3) / 4 * 4 + 4);
 	uint32_t crc = 0xffffffffu;
 
 	memset(raw, 0xa5, sizeof(struct settings));
@@ -459,7 +460,7 @@ test_settings_upgrade(void)
 	old.scheme = 3;
 	old.printer = 1;
 	strcpy(old.font, "sd:Rainbow");
-	make_v9_record(raw, &old);
+	make_record(raw, &old, 9, offsetof(struct settings, printer) + 1);
 	TEST_ASSERT_FALSE(settings_valid((const struct settings *)raw));
 	TEST_ASSERT_TRUE(settings_upgrade(&upgraded, raw));
 	TEST_ASSERT_TRUE(settings_valid(&upgraded));
@@ -475,15 +476,111 @@ test_settings_upgrade(void)
 	TEST_ASSERT_FALSE(settings_upgrade(&upgraded, raw));
 }
 
+static struct picker picker;
+
+static int
+picker_press(enum key_code code)
+{
+	struct key_event key = {.code = code};
+
+	return picker_key(&picker, &key);
+}
+
+/* The picker: sorted, sized to fit, paths in and out of directories. */
+static void
+test_picker(void)
+{
+	char path[PICKER_NAME * 2];
+
+	picker_begin(&picker, "/capture", "Enter: play");
+	TEST_ASSERT_TRUE(picker_add(&picker, "0002.rec", 310, false));
+	TEST_ASSERT_TRUE(picker_add(&picker, "old", 0, true));
+	TEST_ASSERT_TRUE(picker_add(&picker, "0001.REC", 12345, false));
+	picker_show(&picker, &font, 0xffff, 0x0000, 80, 30);
+	TEST_ASSERT_EQUAL(4, picker.count);
+	TEST_ASSERT_EQUAL_STRING("..", picker.entries[0].name);
+	TEST_ASSERT_EQUAL_STRING("old", picker.entries[1].name);
+	TEST_ASSERT_EQUAL_STRING("0001.REC", picker.entries[2].name);
+	TEST_ASSERT_EQUAL_STRING("0002.rec", picker.entries[3].name);
+	TEST_ASSERT_EQUAL(4 + 3, picker.overlay.rows);	/* sized to fit */
+	TEST_ASSERT_EQUAL(PICKER_COLS, picker.overlay.cols);
+	TEST_ASSERT_EQUAL((80 - PICKER_COLS) / 2, picker.overlay.col);
+
+	/* Down twice and Enter: the third entry, by index. */
+	TEST_ASSERT_EQUAL(PICKER_STAY, picker_press(KEY_DOWN));
+	TEST_ASSERT_EQUAL(PICKER_STAY, picker_press(KEY_DOWN));
+	TEST_ASSERT_EQUAL(2, picker_press(KEY_ENTER));
+	picker_path(&picker, 2, path, sizeof(path));
+	TEST_ASSERT_EQUAL_STRING("/capture/0001.REC", path);
+	picker_path(&picker, 1, path, sizeof(path));
+	TEST_ASSERT_EQUAL_STRING("/capture/old", path);
+	picker_path(&picker, 0, path, sizeof(path));
+	TEST_ASSERT_EQUAL_STRING("/", path);
+	TEST_ASSERT_EQUAL(PICKER_CLOSE, picker_press(KEY_ESCAPE));
+
+	/* At the root there's no "..", and paths don't double the slash. */
+	picker_begin(&picker, "/", "");
+	TEST_ASSERT_TRUE(picker_add(&picker, "capture", 0, true));
+	picker_show(&picker, &font, 0xffff, 0x0000, 80, 30);
+	TEST_ASSERT_EQUAL(1, picker.count);
+	picker_path(&picker, 0, path, sizeof(path));
+	TEST_ASSERT_EQUAL_STRING("/capture", path);
+}
+
+/* More entries than fit: the list scrolls, and past 64 they're dropped. */
+static void
+test_picker_long(void)
+{
+	char name[16];
+
+	picker_begin(&picker, "/capture", "");
+	for (unsigned i = 0; i < 70; i++) {
+		snprintf(name, sizeof(name), "%04u.rec", i);
+		(void)picker_add(&picker, name, i, false);
+	}
+	TEST_ASSERT_TRUE(picker.more);
+	TEST_ASSERT_EQUAL(PICKER_MAX, picker.count);	/* ".." + 63 */
+	picker_show(&picker, &font, 0xffff, 0x0000, 80, 24);
+	TEST_ASSERT_EQUAL(PICKER_ROWS, picker.overlay.rows);
+	TEST_ASSERT_EQUAL(0, picker.top);
+	(void)picker_press(KEY_END);
+	TEST_ASSERT_EQUAL(PICKER_MAX - 1, picker.selected);
+	TEST_ASSERT_EQUAL(PICKER_MAX - PICKER_LIST, picker.top);
+	(void)picker_press(KEY_PAGE_UP);
+	TEST_ASSERT_EQUAL(PICKER_MAX - 1 - PICKER_LIST, picker.selected);
+	TEST_ASSERT_EQUAL(picker.selected, picker.top);
+}
+
+/* Version 11 (before "Replay newlines"): kept, the new field defaulted. */
+static void
+test_settings_upgrade_v11(void)
+{
+	uint8_t raw[sizeof(struct settings)];
+	struct settings old, upgraded;
+
+	settings_defaults(&old);
+	old.status_line = STATUS_PEEK_TOP;
+	old.profiler_bar = 1;
+	make_record(raw, &old, 11, offsetof(struct settings, profiler_bar) + 1);
+	TEST_ASSERT_TRUE(settings_upgrade(&upgraded, raw));
+	TEST_ASSERT_TRUE(settings_valid(&upgraded));
+	TEST_ASSERT_EQUAL(STATUS_PEEK_TOP, upgraded.status_line);
+	TEST_ASSERT_EQUAL(1, upgraded.profiler_bar);
+	TEST_ASSERT_EQUAL(NEWLINES_AS_IS, upgraded.replay_newlines);
+}
+
 int
 main(void)
 {
 	UNITY_BEGIN();
 	RUN_TEST(test_tools_menu);
+	RUN_TEST(test_picker);
+	RUN_TEST(test_picker_long);
 	RUN_TEST(test_hotkey_matching);
 	RUN_TEST(test_hotkeys_page);
 	RUN_TEST(test_short_screen_scrolls);
 	RUN_TEST(test_settings_upgrade);
+	RUN_TEST(test_settings_upgrade_v11);
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);

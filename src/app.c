@@ -20,13 +20,16 @@
 #include <string.h>
 
 #include "board.h"
+#include "capture_sd.h"
 #include "card.h"
 #include "flashcfg.h"
 #include "font.h"
 #include "keys.h"
 #include "render.h"
 #include "menu.h"
+#include "picker.h"
 #include "printer_sd.h"
+#include "replay_sd.h"
 #include "screenshot.h"
 #include "settings.h"
 #include "storage.h"
@@ -69,6 +72,10 @@ static void
 send_to_host(const char *bytes, size_t len, void *ctx)
 {
 	(void)ctx;
+	/* A replayed file's queries (DA, DSR) get answers the host never
+	 * asked for: drop them. */
+	if (replay_sd_active())
+		return;
 	usbio_write(USBIO_LINE, bytes, len);
 }
 
@@ -195,11 +202,38 @@ static_assert((int)STATUS_HIDDEN == (int)TERM_STATUS_HIDDEN &&
     (int)STATUS_MODE_COUNT == (int)TERM_STATUS_MODES,
     "status line modes differ");
 
-/* The status line's standing text: what's switched on. */
+/* The status line's standing text: what's switched on or running. */
 static void
-show_printer_state(void)
+show_state(void)
 {
-	term_status_text(&term, settings.printer ? "Printer" : "");
+	char text[STATUS_TEXT_MAX] = "", part[STATUS_TEXT_MAX];
+	size_t len = 0;
+
+	if (replay_sd_active()) {
+		replay_sd_describe(part, sizeof(part));
+		len += (size_t)snprintf(text + len, sizeof(text) - len, "%s  ",
+		    part);
+	}
+	if (settings.capture && len < sizeof(text))
+		len += (size_t)snprintf(text + len, sizeof(text) - len,
+		    "Rec %s  ", capture_sd_name()[0] != '\0' ?
+		    capture_sd_name() : "on");
+	if (settings.printer && len < sizeof(text))
+		len += (size_t)snprintf(text + len, sizeof(text) - len,
+		    "Printer  ");
+	if (len > sizeof(text) - 1)
+		len = sizeof(text) - 1;
+	while (len > 0 && text[len - 1] == ' ')
+		text[--len] = '\0';
+	term_status_text(&term, text);
+}
+
+/* Host bytes (and their local echo) to the screen, and to a capture. */
+static void
+show_bytes(const uint8_t *bytes, size_t len)
+{
+	term_feed(&term, bytes, len);
+	capture_sd_feed(bytes, len, now_ms());
 }
 
 /* Make the terminal match `settings` (resets it if geometry changed). */
@@ -232,7 +266,8 @@ apply_settings(void)
 	if (!term_configure(&term, settings_font(), &options))
 		panic("term: cannot apply settings (memory)");
 	printer_sd_enable(&term, settings.printer != 0);
-	show_printer_state();
+	capture_sd_enable(settings.capture != 0);
+	show_state();
 }
 
 /* Where this boot's settings came from, for the boot banner. */
@@ -400,12 +435,12 @@ forward_key(const struct key_event *key)
 	    key->raw_len == 1 && key->raw[0] == '\r') {
 		term_send(&term, "\r\n", 2);
 		if (settings.local_echo)
-			term_feed(&term, (const uint8_t *)"\r\n", 2);
+			show_bytes((const uint8_t *)"\r\n", 2);
 		return;
 	}
 	term_send(&term, (const char *)key->raw, key->raw_len);
 	if (settings.local_echo)
-		term_feed(&term, key->raw, key->raw_len);
+		show_bytes(key->raw, key->raw_len);
 }
 
 /*
@@ -452,14 +487,141 @@ take_screenshot(void)
 
 /* --- the Tools menu and hotkeys (lib/setup/menu.h) -------------------- */
 
-static struct menu menu;
-static bool in_menu;
+/* The Tools menu and the file picker are never open together. */
+static union {
+	struct menu	 menu;
+	struct picker	 picker;
+} ui;
+static bool in_menu, in_picker;
+static char picker_dir[PICKER_NAME] = "/capture";
 
 static void
 close_menu(void)
 {
 	render.overlay[RENDER_OVERLAY_MENU] = nullptr;
 	in_menu = false;
+	in_picker = false;
+}
+
+static uint16_t
+theme_rgb565(const uint8_t rgb[3])
+{
+	return grid_rgb565(rgb[0], rgb[1], rgb[2]);
+}
+
+/* --- capture and replay (capture_sd.h, replay_sd.h) ------------------- */
+
+static void
+toggle_capture(void)
+{
+	char text[48];
+
+	if (settings.capture && capture_sd_name()[0] != '\0') {
+		snprintf(text, sizeof(text), "Saved /capture/%s",
+		    capture_sd_name());
+		term_status_message(&term, text, now_ms());
+	}
+	settings.capture = !settings.capture;
+	capture_sd_enable(settings.capture);
+	show_state();
+}
+
+/* Capturing stopped by itself (card pulled or full): say why. */
+static void
+check_capture(void)
+{
+	char text[64];
+
+	if (!settings.capture || capture_sd_enabled())
+		return;
+	settings.capture = false;
+	snprintf(text, sizeof(text), "Capture stopped: %s",
+	    capture_sd_error());
+	term_status_message(&term, text, now_ms());
+	show_state();
+}
+
+static bool
+list_entry(const char *name, uint32_t size, bool is_dir,
+    const uint8_t *head, size_t head_len, void *ctx)
+{
+	(void)head;
+	(void)head_len;
+	board_watchdog_feed();
+	/* Dot names are hidden, as in ls: on a card that's been in a Mac,
+	 * .Trashes, .Spotlight-V100 and a "._" twin of every file. */
+	if (name[0] == '.')
+		return true;
+	return picker_add(ctx, name, size, is_dir);
+}
+
+/* Show `dir` in the picker (the root if it isn't there). */
+static void
+open_picker(const char *dir)
+{
+	char text[64];
+
+	if (!storage_mount()) {
+		snprintf(text, sizeof(text), "Replay: %s", storage_error());
+		term_status_message(&term, text, now_ms());
+		return;
+	}
+	if (!storage_exists(dir))
+		dir = "/";
+	snprintf(picker_dir, sizeof(picker_dir), "%s", dir);
+	picker_begin(&ui.picker, picker_dir,
+	    "Enter: play / open   Esc: close");
+	(void)storage_list(picker_dir, 0, list_entry, &ui.picker);
+	picker_show(&ui.picker, &term.font, theme_rgb565(term.options.fg_rgb),
+	    theme_rgb565(term.options.bg_rgb), term.screen->cols,
+	    term.screen->rows);
+	render.overlay[RENDER_OVERLAY_MENU] = &ui.picker.overlay;
+	in_picker = true;
+}
+
+static void
+start_replay(const char *path)
+{
+	static const char clean[] = "\x1b[!p\x1b[H\x1b[2J";
+	char error[48], text[96];
+
+	if (!replay_sd_start(path, now_ms(), settings.replay_newlines,
+	    error, sizeof(error))) {
+		snprintf(text, sizeof(text), "Replay: %s", error);
+		term_status_message(&term, text, now_ms());
+		return;
+	}
+	/* A clean slate to play onto: soft reset, home, clear. */
+	term_feed(&term, (const uint8_t *)clean, sizeof(clean) - 1);
+	show_state();
+}
+
+static void
+picker_key_pressed(const struct key_event *key)
+{
+	char path[PICKER_NAME * 2];
+	int picked = picker_key(&ui.picker, key);
+
+	if (picked == PICKER_STAY)
+		return;
+	if (picked == PICKER_CLOSE) {
+		close_menu();
+		return;
+	}
+	picker_path(&ui.picker, picked, path, sizeof(path));
+	if (picker_entry(&ui.picker, picked)->dir) {
+		open_picker(path);	/* into it, or up */
+		return;
+	}
+	close_menu();
+	start_replay(path);
+}
+
+static void
+replay_sink(const uint8_t *bytes, size_t len, void *ctx)
+{
+	(void)ctx;
+	term_feed(&term, bytes, len);
 }
 
 static void
@@ -467,21 +629,24 @@ open_menu(void)
 {
 	bool available[TOOL_COUNT] = {false};
 	const char *state[TOOL_COUNT] = {nullptr};
-	const uint8_t *fg = term.options.fg_rgb, *bg = term.options.bg_rgb;
 
 	available[TOOL_SETUP] = true;
 	available[TOOL_SCREENSHOT] = true;
 	available[TOOL_PRINT_SCREEN] = settings.printer;
 	available[TOOL_PRINTER] = true;
+	available[TOOL_CAPTURE] = true;
+	available[TOOL_REPLAY] = true;
 	available[TOOL_CLEAR] = true;
 	available[TOOL_SOFT_RESET] = true;
 	available[TOOL_HARD_RESET] = true;
-	/* Capture, replay and transfers join as they're built. */
+	/* File transfers join when they're built. */
 	state[TOOL_PRINTER] = settings.printer ? "on" : "off";
-	menu_open(&menu, &term.font, grid_rgb565(fg[0], fg[1], fg[2]),
-	    grid_rgb565(bg[0], bg[1], bg[2]), term.screen->cols,
+	state[TOOL_CAPTURE] = settings.capture ? "on" : "off";
+	state[TOOL_REPLAY] = replay_sd_active() ? "playing" : nullptr;
+	menu_open(&ui.menu, &term.font, theme_rgb565(term.options.fg_rgb),
+	    theme_rgb565(term.options.bg_rgb), term.screen->cols,
 	    term.screen->rows, available, state, settings.hotkeys);
-	render.overlay[RENDER_OVERLAY_MENU] = &menu.overlay;
+	render.overlay[RENDER_OVERLAY_MENU] = &ui.menu.overlay;
 	in_menu = true;
 }
 
@@ -512,7 +677,19 @@ run_tool(enum tool tool)
 	case TOOL_PRINTER:
 		settings.printer = !settings.printer;
 		printer_sd_enable(&term, settings.printer);
-		show_printer_state();
+		show_state();
+		break;
+	case TOOL_CAPTURE:
+		toggle_capture();
+		break;
+	case TOOL_REPLAY:
+		if (replay_sd_active()) {
+			replay_sd_stop();
+			term_status_message(&term, "Replay stopped", now_ms());
+			show_state();
+		} else {
+			open_picker(picker_dir);
+		}
 		break;
 	case TOOL_CLEAR:
 		term_feed(&term, (const uint8_t *)clear, sizeof(clear) - 1);
@@ -547,18 +724,27 @@ handle_key(const struct key_event *key)
 	} else if (in_setup) {
 		setup_handle(key);
 	} else if (in_menu) {
-		int picked = menu_key(&menu, key);
+		int picked = menu_key(&ui.menu, key);
 		if (picked == MENU_STAY)
 			return;
 		close_menu();		/* before the tool: not in screenshots */
 		if (picked != MENU_CLOSE)
 			run_tool((enum tool)picked);
+	} else if (in_picker) {
+		picker_key_pressed(key);
 	} else {
 		int tool = hotkey_tool(key);
-		if (tool >= 0)
+		if (tool >= 0) {
 			run_tool((enum tool)tool);
-		else
+		} else if (replay_sd_active()) {
+			/* Keys are the replay's while it runs. */
+			if (!replay_sd_key(key))
+				term_status_message(&term, "Replay stopped",
+				    now_ms());
+			show_state();
+		} else {
 			forward_key(key);
+		}
 	}
 }
 
@@ -792,6 +978,7 @@ app_poll(void)
 	static uint32_t status_frame;
 	if (render.frame != status_frame) {
 		status_frame = render.frame;
+		show_state();	/* the capture's file name appears late */
 		term_status_poll(&term, now_ms(), !in_setup);
 	}
 #ifdef VEETEE_FLASH_PROBE
@@ -812,12 +999,20 @@ app_poll(void)
 		board_boot_ok();
 		boot_marked_ok = true;
 	}
-	/* Host output waits while the Configuration Error is showing. */
-	size_t count = in_config_error ? 0 :
+	/* Host output waits while the Configuration Error is showing, and
+	 * while a replay has the screen (it stays in the USB buffers). */
+	size_t count = in_config_error || replay_sd_active() ? 0 :
 	    usbio_read(USBIO_LINE, buffer, sizeof(buffer));
 
 	if (count > 0)
-		term_feed(&term, (const uint8_t *)buffer, count);
+		show_bytes((const uint8_t *)buffer, count);
+	if (replay_sd_active() && !in_config_error &&
+	    !replay_sd_poll(now_ms(), replay_sink, nullptr)) {
+		term_status_message(&term, "Replay finished", now_ms());
+		show_state();
+	}
+	capture_sd_poll(now_ms());
+	check_capture();
 	poll_keyboard();
 	poll_bootsel();
 	poll_bell();

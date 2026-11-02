@@ -144,6 +144,8 @@ fields_end(unsigned version)
 	case 10:
 		return offsetof(struct settings, hotkeys) +
 		    sizeof(((struct settings *)0)->hotkeys);
+	case 11:
+		return offsetof(struct settings, profiler_bar) + 1;
 	default:
 		return 0;
 	}

@@ -62,7 +62,7 @@ int	menu_key(struct menu *menu, const struct key_event *key);
 bool	hotkey_matches(const struct hotkey *hotkey,
 	    const struct key_event *key);
 
-/* Is the tool built yet? (Capture, replay and transfers come later.) */
+/* Is the tool built yet? (File transfers come later.) */
 bool	tool_ready(enum tool tool);
 
 /* The name of a tool, as the menu and SET-UP's Hotkeys page show it. */

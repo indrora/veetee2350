@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "card.h"
 #include "pico/time.h"
 #include "storage.h"
 
@@ -36,29 +37,6 @@ now_ms(void)
 }
 
 static bool
-note_number(const char *name, uint32_t size, bool is_dir,
-    const uint8_t *head, size_t head_len, void *ctx)
-{
-	unsigned *highest = ctx;
-	unsigned number = 0;
-
-	(void)size;
-	(void)head;
-	(void)head_len;
-	board_watchdog_feed();
-	if (is_dir || strlen(name) != 8 || strcmp(name + 4, ".txt") != 0)
-		return true;
-	for (int i = 0; i < 4; i++) {
-		if (name[i] < '0' || name[i] > '9')
-			return true;
-		number = number * 10 + (unsigned)(name[i] - '0');
-	}
-	if (number > *highest)
-		*highest = number;
-	return true;
-}
-
-static bool
 open_paper(void)
 {
 	if (handle >= 0)
@@ -66,14 +44,13 @@ open_paper(void)
 	if (!storage_mount())
 		return false;
 	if (path[0] == '\0') {
-		unsigned highest = 0;
-		if (!storage_mkdir(PRINT_DIR))
+		static const char *const exts[] = {"txt", nullptr};
+		char error[48];
+		if (!card_next_name(PRINT_DIR, exts, "txt", path, sizeof(path),
+		    error, sizeof(error))) {
+			path[0] = '\0';
 			return false;
-		(void)storage_list(PRINT_DIR, 0, note_number, &highest);
-		if (highest >= 9999)
-			return false;
-		snprintf(path, sizeof(path), PRINT_DIR "/%04u.txt",
-		    highest + 1);
+		}
 	}
 	handle = storage_open(path, STORAGE_APPEND);
 	return handle >= 0;

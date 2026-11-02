@@ -58,7 +58,7 @@ enum term_status_type {
 
 #define STATUS_LIGHTS		4	/* L1-L4, as on the VT100 keyboard */
 #define STATUS_LIGHTS_COLS	(1 + 3 * STATUS_LIGHTS)	/* " L1 L2 L3 L4" */
-#define STATUS_TEXT_MAX		24
+#define STATUS_TEXT_MAX		40
 #define STATUS_MESSAGE_MAX	48
 
 /* What the status row was last drawn from: redrawn when this changes. */

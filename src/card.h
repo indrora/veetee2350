@@ -54,4 +54,16 @@ const struct font_builtin *card_font(const char *name,
 bool	card_scheme(const char *name, struct base16_terminal *colours,
 	    char *error, size_t len);
 
+/*
+ * The next free numbered file, "DIR/NNNN.EXT" (/screens/0004.bmp,
+ * /print/0002.txt, /capture/0001.rec): one past the highest NNNN among
+ * the files in `dir` ending in any of `exts` (a nullptr-terminated list,
+ * so screenshots count .bmp and .qoi together); `ext` is the new one's.
+ * Mounts the card and creates `dir`. False, with a reason in `error`, if
+ * that fails or 9999 is taken.
+ */
+bool	card_next_name(const char *dir, const char *const exts[],
+	    const char *ext, char *path, size_t path_len, char *error,
+	    size_t error_len);
+
 #endif /* CARD_H */

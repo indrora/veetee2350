@@ -425,3 +425,62 @@ card_scheme(const char *name, struct base16_terminal *colours, char *error,
 	base16_to_terminal(&scheme, colours);
 	return true;
 }
+
+/* --- numbered files ------------------------------------------------------ */
+
+struct numbering {
+	const char *const *exts;
+	unsigned	 highest;
+};
+
+static bool
+note_number(const char *name, uint32_t size, bool is_dir,
+    const uint8_t *head, size_t head_len, void *ctx)
+{
+	struct numbering *numbering = ctx;
+	unsigned number = 0;
+	bool ours = false;
+
+	(void)size;
+	(void)head;
+	(void)head_len;
+	board_watchdog_feed();
+	if (is_dir || strlen(name) != 8 || name[4] != '.')
+		return true;
+	for (const char *const *ext = numbering->exts; *ext != nullptr; ext++)
+		ours = ours || strcmp(name + 5, *ext) == 0;
+	if (!ours)
+		return true;
+	for (int i = 0; i < 4; i++) {
+		if (name[i] < '0' || name[i] > '9')
+			return true;
+		number = number * 10 + (unsigned)(name[i] - '0');
+	}
+	if (number > numbering->highest)
+		numbering->highest = number;
+	return true;
+}
+
+bool
+card_next_name(const char *dir, const char *const exts[], const char *ext,
+    char *path, size_t path_len, char *error, size_t error_len)
+{
+	struct numbering numbering = {exts, 0};
+
+	if (!storage_mount()) {
+		snprintf(error, error_len, "%s", storage_error());
+		return false;
+	}
+	if (!storage_mkdir(dir)) {
+		snprintf(error, error_len, "can't create %s", dir);
+		return false;
+	}
+	(void)storage_list(dir, 0, note_number, &numbering);
+	if (numbering.highest >= 9999) {
+		snprintf(error, error_len, "%s is full (9999)", dir);
+		return false;
+	}
+	snprintf(path, path_len, "%s/%04u.%s", dir, numbering.highest + 1,
+	    ext);
+	return true;
+}

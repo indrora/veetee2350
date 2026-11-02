@@ -11,12 +11,13 @@
  *   +------------------------------------+
  *
  * The name on the left, a state ("on"/"off") in the middle, the hotkey
- * on the right. Box drawing uses U+250x when the font has it, else
- * +, - and |.
+ * on the right. The box itself is box.c's.
  */
 #include "menu.h"
 
 #include <string.h>
+
+#include "box.h"
 
 static const char *const tool_names[TOOL_COUNT] = {
 	[TOOL_MENU] = "Tools menu",
@@ -37,8 +38,6 @@ bool
 tool_ready(enum tool tool)
 {
 	switch (tool) {
-	case TOOL_CAPTURE:
-	case TOOL_REPLAY:
 	case TOOL_SEND:
 	case TOOL_RECEIVE:
 		return false;	/* phase H steps still to come */
@@ -62,86 +61,38 @@ hotkey_matches(const struct hotkey *hotkey, const struct key_event *key)
 	return key->code != KEY_CHAR || hotkey->byte == key->byte;
 }
 
-/* A glyph, or `fallback` where the font lacks the codepoint. */
-static uint16_t
-glyph(const struct menu *menu, uint32_t codepoint, char fallback)
-{
-	uint16_t index = font_glyph_for(menu->font, codepoint);
-
-	return index != FONT_GLYPH_MISSING ? index :
-	    font_glyph_for(menu->font, (uint8_t)fallback);
-}
-
-static void
-put_cell(struct menu *menu, unsigned row, unsigned col, uint16_t index,
-    uint16_t fg, uint16_t bg)
-{
-	if (row < MENU_ROWS && col < MENU_COLS)
-		menu->cells[row * MENU_COLS + col] =
-		    grid_make_cell(index, fg, bg, 0);
-}
-
-static void
-put_text(struct menu *menu, unsigned row, unsigned col, const char *text,
-    uint16_t fg, uint16_t bg)
-{
-	for (; *text != '\0' && col < MENU_COLS - 1; text++, col++)
-		put_cell(menu, row, col, glyph(menu, (uint8_t)*text, '?'), fg,
-		    bg);
-}
-
 static void
 draw(struct menu *menu)
 {
-	/* Swapped theme colours for the box, the theme's own for the bar. */
-	const uint16_t box_fg = menu->bg, box_bg = menu->fg;
-	const unsigned rows = menu->count + 3;
-	const uint16_t space = glyph(menu, ' ', ' ');
-	const uint16_t horizontal = glyph(menu, 0x2500, '-');
-	const uint16_t vertical = glyph(menu, 0x2502, '|');
+	const struct box box = {
+		.font = menu->font,
+		.cells = menu->cells,
+		.stride = MENU_COLS,
+		.cols = MENU_COLS,
+		.rows = menu->count + 3,
+		.fg = menu->fg,
+		.bg = menu->bg,
+	};
 
-	for (unsigned row = 0; row < rows; row++)
-		for (unsigned col = 0; col < MENU_COLS; col++)
-			put_cell(menu, row, col, space, box_fg, box_bg);
-	for (unsigned col = 1; col < MENU_COLS - 1; col++) {
-		put_cell(menu, 0, col, horizontal, box_fg, box_bg);
-		put_cell(menu, rows - 1, col, horizontal, box_fg, box_bg);
-	}
-	for (unsigned row = 1; row < rows - 1; row++) {
-		put_cell(menu, row, 0, vertical, box_fg, box_bg);
-		put_cell(menu, row, MENU_COLS - 1, vertical, box_fg, box_bg);
-	}
-	put_cell(menu, 0, 0, glyph(menu, 0x250c, '+'), box_fg, box_bg);
-	put_cell(menu, 0, MENU_COLS - 1, glyph(menu, 0x2510, '+'), box_fg,
-	    box_bg);
-	put_cell(menu, rows - 1, 0, glyph(menu, 0x2514, '+'), box_fg, box_bg);
-	put_cell(menu, rows - 1, MENU_COLS - 1, glyph(menu, 0x2518, '+'),
-	    box_fg, box_bg);
-	put_text(menu, 0, (MENU_COLS - 7) / 2, " Tools ", box_fg, box_bg);
-	put_text(menu, 1, 2, "Up/Down, Enter; Esc closes", box_fg, box_bg);
-
+	box_frame(&box, "Tools");
+	(void)box_text(&box, 1, 2, MENU_COLS, "Up/Down, Enter; Esc closes",
+	    false);
 	for (unsigned i = 0; i < menu->count; i++) {
 		unsigned row = i + 2;
 		enum tool tool = menu->items[i];
 		bool chosen = i == menu->selected;
-		uint16_t fg = chosen ? menu->fg : box_fg;
-		uint16_t bg = chosen ? menu->bg : box_bg;
 		char key[24];
 
-		for (unsigned col = 1; col < MENU_COLS - 1; col++)
-			put_cell(menu, row, col, space, fg, bg);
-		put_text(menu, row, 2, tool_name(tool), fg, bg);
-		put_text(menu, row, 20, menu->state[tool], fg, bg);
+		box_row(&box, row, chosen);
+		(void)box_text(&box, row, 2, MENU_COLS, tool_name(tool),
+		    chosen);
+		(void)box_text(&box, row, 20, MENU_COLS, menu->state[tool],
+		    chosen);
 		if (menu->hotkeys[tool].code != KEY_NONE) {
 			keys_name(menu->hotkeys[tool].code,
 			    menu->hotkeys[tool].byte,
 			    menu->hotkeys[tool].mods, key, sizeof(key));
-			size_t len = strlen(key);
-			if (len > 14)
-				len = 14;
-			key[len] = '\0';
-			put_text(menu, row, MENU_COLS - 2 - (unsigned)len, key,
-			    fg, bg);
+			box_text_right(&box, row, key, 14, chosen);
 		}
 	}
 }

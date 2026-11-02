@@ -14,10 +14,11 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	11	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+#define SETTINGS_VERSION	12	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
 				   6 card fonts and schemes, 7 screenshots,
 				   8 printer, 9 sixel depth, 10 hotkeys,
-				   status line, capture, 11 profiler bar */
+				   status line, capture, 11 profiler bar,
+				   12 replay newlines */
 /*
  * Oldest record settings_upgrade() can read: from version 9 on, fields
  * were only ever appended (just before `crc`), so an older record is a
@@ -68,6 +69,19 @@ enum status_line_mode {
 	STATUS_PEEK_BOTTOM,
 	STATUS_PEEK_TOP,
 	STATUS_MODE_COUNT
+};
+
+/*
+ * Replay: a bare LF as CR LF, as a Unix tty's onlcr does for `cat`.
+ * Text files and some ANSI art end lines with LF alone and staircase
+ * without it; but LF alone can be meant (cursor down, in art and in
+ * curses output), so it's a choice, and off by default.
+ */
+enum replay_newlines {
+	NEWLINES_AS_IS,
+	NEWLINES_RAW,		/* raw files only, not ttyrec recordings */
+	NEWLINES_ALL,
+	NEWLINES_COUNT
 };
 
 /* How long a peeking status line stays up: 3, 5, 7 or 10 seconds. */
@@ -142,6 +156,7 @@ struct settings {
 	uint8_t		capture;	/* host output to /capture on the card */
 	struct hotkey	hotkeys[TOOL_COUNT];
 	uint8_t		profiler_bar;	/* per-line cycle bars, top of screen */
+	uint8_t		replay_newlines;	/* enum replay_newlines */
 	uint32_t	crc;
 };
 
