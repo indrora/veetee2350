@@ -194,8 +194,14 @@ test_overlay_covers_cells_and_cursor(void)
 	grid.cursor_row = 0;
 	grid.cursor_col = 2;
 	render.overlay[RENDER_OVERLAY_MENU] = &over;
+	render_plan(&render);		/* overlays show through the plan */
+	TEST_ASSERT_EQUAL(3, render.plan->row[0].spans);
+	TEST_ASSERT_TRUE(render.plan->row[0].covered);
+	TEST_ASSERT_EQUAL(RENDER_SPAN_MIXED == render.plan->row[0].span[1].kind,
+	    false);
 	render_scanline(pixels, 3, &render);
 	render.overlay[RENDER_OVERLAY_MENU] = nullptr;
+	render_plan(&render);
 	for (unsigned x = 0; x < 8; x++) {
 		/* The grid shows through beside it... */
 		TEST_ASSERT_EQUAL_HEX16(expected('a', 3, x, WHITE, BLACK),
@@ -211,6 +217,59 @@ test_overlay_covers_cells_and_cursor(void)
 	    grid_row(&grid, 0)[2].glyph);
 }
 
+/*
+ * A plan a frame behind the grid: the row was planned PLAIN, then the
+ * host underlined a cell. The lean loop still draws it underlined.
+ */
+static void
+test_stale_plain_plan(void)
+{
+	grid_row(&grid, 1)[0] = grid_make_cell(font_glyph_for(&font, 'a'),
+	    WHITE, BLACK, 0);
+	render_plan(&render);
+	render_plan(&render);	/* the second has last frame's pair */
+	TEST_ASSERT_EQUAL(RENDER_SPAN_PAIR, render.plan->row[1].span[0].kind);
+	grid_row(&grid, 1)[0].attr = CELL_UNDERLINE;
+	unsigned line = 16 + font.underline_row;
+	render_scanline(pixels, line, &render);
+	for (unsigned x = 0; x < 8; x++)
+		TEST_ASSERT_EQUAL_HEX16(WHITE, pixels[x]);
+	render_plan(&render);
+	TEST_ASSERT_EQUAL(RENDER_SPAN_MIXED, render.plan->row[1].span[0].kind);
+	grid_row(&grid, 1)[0].attr = 0;
+}
+
+/* A PAIR span draws exactly what the full loop would, inverted too. */
+static void
+test_pair_table(void)
+{
+	for (unsigned row = 0; row < grid.rows; row++)
+		for (unsigned col = 0; col < grid.cols; col++)
+			grid_row(&grid, row)[col] = grid_make_cell(
+			    font_glyph_for(&font, (col & 1) ? 'Q' : 'g'),
+			    WHITE, BLUE, 0);
+	grid.cursor_visible = false;
+	render_plan(&render);
+	render_plan(&render);	/* now with this screen's pair */
+	TEST_ASSERT_EQUAL(RENDER_SPAN_PAIR, render.plan->row[2].span[0].kind);
+	for (unsigned sub = 0; sub < font.height; sub++) {
+		render_scanline(pixels, 2 * font.height + sub, &render);
+		for (unsigned x = 0; x < 16; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected(x < 8 ? 'g' : 'Q',
+			    sub, x % 8, WHITE, BLUE), pixels[x]);
+	}
+	/* Reverse video: until a plan rebuilds the table, the plain loop. */
+	grid.reverse_video = true;
+	for (int pass = 0; pass < 2; pass++) {
+		render_scanline(pixels, 2 * font.height + 5, &render);
+		for (unsigned x = 0; x < 16; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected(x < 8 ? 'g' : 'Q', 5,
+			    x % 8, BLUE, WHITE), pixels[x]);
+		render_plan(&render);
+	}
+	grid.reverse_video = false;
+}
+
 int
 main(void)
 {
@@ -220,6 +279,8 @@ main(void)
 	RUN_TEST(test_reverse_video_and_underline);
 	RUN_TEST(test_block_cursor);
 	RUN_TEST(test_overlay_covers_cells_and_cursor);
+	RUN_TEST(test_stale_plain_plan);
+	RUN_TEST(test_pair_table);
 	RUN_TEST(test_scroll_up_reuses_rows);
 	RUN_TEST(test_border_for_uneven_font);
 	RUN_TEST(test_720p_geometry);

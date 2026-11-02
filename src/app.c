@@ -501,6 +501,7 @@ close_menu(void)
 	render.overlay[RENDER_OVERLAY_MENU] = nullptr;
 	in_menu = false;
 	in_picker = false;
+	render_plan(&render);	/* gone now, not next frame: screenshots */
 }
 
 static uint16_t
@@ -577,6 +578,7 @@ open_picker(const char *dir)
 	    term.screen->rows);
 	render.overlay[RENDER_OVERLAY_MENU] = &ui.picker.overlay;
 	in_picker = true;
+	render_plan(&render);
 }
 
 static void
@@ -648,6 +650,7 @@ open_menu(void)
 	    term.screen->rows, available, state, settings.hotkeys);
 	render.overlay[RENDER_OVERLAY_MENU] = &ui.menu.overlay;
 	in_menu = true;
+	render_plan(&render);
 }
 
 /*
@@ -838,13 +841,35 @@ report_stats(void)
 #ifdef VEETEE_RENDER_PROFILE
 	/* Overlay composition (Tools menu, user lights), per composed line. */
 	/* Running totals (render.h): this second's share is the change. */
-	static uint32_t seen_lines, seen_cycles;
+	static uint32_t seen_lines, seen_cycles, seen_loop_lines,
+	    seen_loop_cycles;
 	uint32_t lines = render.profile_compose_lines - seen_lines;
 	uint32_t cycles = render.profile_compose_cycles - seen_cycles;
+	uint32_t loop_lines = render.profile_loop_lines - seen_loop_lines;
+	uint32_t loop_cycles = render.profile_loop_cycles - seen_loop_cycles;
 	seen_lines = render.profile_compose_lines;
 	seen_cycles = render.profile_compose_cycles;
-	usbio_printf("[profile] overlay lines=%lu compose avg=%lu cycles\r\n",
-	    (unsigned long)lines, (unsigned long)(lines ? cycles / lines : 0));
+	seen_loop_lines = render.profile_loop_lines;
+	seen_loop_cycles = render.profile_loop_cycles;
+	usbio_printf("[profile] overlay lines=%lu compose avg=%lu cycles; "
+	    "column loop avg=%lu cycles over %lu lines\r\n",
+	    (unsigned long)lines, (unsigned long)(lines ? cycles / lines : 0),
+	    (unsigned long)(loop_lines ? loop_cycles / loop_lines : 0),
+	    (unsigned long)loop_lines);
+#endif
+#ifdef VEETEE_RENDER_EXPERIMENTS
+	/* render.c's loop variants, average cycles a run. */
+	static uint32_t seen_runs, seen_exp[8];
+	uint32_t runs = render.experiment_runs - seen_runs;
+	seen_runs = render.experiment_runs;
+	usbio_printf("[experiments] runs=%lu", (unsigned long)runs);
+	for (unsigned i = 0; i < 6; i++) {
+		uint32_t total = render.experiment_cycles[i] - seen_exp[i];
+		seen_exp[i] = render.experiment_cycles[i];
+		usbio_printf(" %u:%lu", i,
+		    (unsigned long)(runs ? total / runs : 0));
+	}
+	usbio_printf("\r\n");
 #endif
 }
 #endif
@@ -980,6 +1005,8 @@ app_poll(void)
 		status_frame = render.frame;
 		show_state();	/* the capture's file name appears late */
 		term_status_poll(&term, now_ms(), !in_setup);
+		/* The frame plan (render.h): after the lights overlay above. */
+		render_plan(&render);
 	}
 #ifdef VEETEE_FLASH_PROBE
 	static absolute_time_t next_probe_report;

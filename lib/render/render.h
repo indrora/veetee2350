@@ -72,6 +72,53 @@ struct render_overlay {
 };
 
 /*
+ * The frame plan (render_plan): what each text row is made of, worked
+ * out once a frame by the main loop so the scanline only carries it out.
+ *
+ * A row is a few spans of cells, each from the grid's row (`cells`
+ * nullptr: looked up at scanline time, so scrolling is never a frame
+ * behind) or from an overlay; the Tools menu and the corner lights are
+ * just spans, with nothing copied or composed. Each span is one of:
+ *
+ *   PAIR   text without attributes, all in the frame's commonest fg/bg
+ *          pair: drawn from a table, built by the planner, of each
+ *          glyph byte's eight pixels already in that pair's colours
+ *   PLAIN  text without attributes, other colours: a lean loop
+ *   MIXED  attributes or Sixel cells: the full loop
+ *
+ * A plan may be a frame old -- a span the host has just underlined may
+ * still say PAIR -- so the lean loops still draw any cell right, only
+ * more slowly (a PAIR span whose colours just changed shows the old
+ * ones for that frame); and a removed overlay may show for one frame
+ * more, so overlay cells must stay valid memory. Measured costs and the
+ * reasoning: devlog 024.
+ */
+#define RENDER_PLAN_SPANS	5	/* grid, overlay, grid, overlay, grid */
+
+enum render_span_kind {
+	RENDER_SPAN_PAIR,
+	RENDER_SPAN_PLAIN,
+	RENDER_SPAN_MIXED,
+};
+
+struct render_span {
+	const struct cell *cells;	/* nullptr: the grid row, from col */
+	uint16_t	 col;
+	uint8_t		 count;		/* GRID_MAX_COLS fits */
+	uint8_t		 kind;		/* enum render_span_kind */
+};
+
+struct render_row_plan {
+	uint8_t		 spans;
+	bool		 covered;	/* an overlay covers part of it */
+	struct render_span span[RENDER_PLAN_SPANS];
+};
+
+struct render_plan {
+	struct render_row_plan row[GRID_MAX_ROWS];
+};
+
+/*
  * The profiler bar (SET-UP "Profiler bar"): the top RENDER_METER_LINES
  * scanlines become two bar graphs of the last frame's per-line cycle
  * counts against the line budget -- core 0's render (lines 0-2) and core
@@ -149,7 +196,29 @@ struct render {
 	 */
 	volatile uint32_t profile_compose_cycles;
 	volatile uint32_t profile_compose_lines;
+	/* ... and the column loop of text lines (the rest of a line's cost
+	 * is set-up, borders and the cursor). */
+	volatile uint32_t profile_loop_cycles;
+	volatile uint32_t profile_loop_lines;
+	/* VEETEE_RENDER_EXPERIMENTS: cycles of each variant (render.c),
+	 * running totals, and how many times they ran. */
+	volatile uint32_t experiment_cycles[8];
+	volatile uint32_t experiment_runs;
 	struct render_meter meter;	/* the profiler bar */
+	/*
+	 * The frame plan (render_plan): two, one being read by the scanline
+	 * (`plan`, nullptr until the first) and one free for the next.
+	 */
+	struct render_plan plans[2];
+	const struct render_plan *volatile plan;
+	/*
+	 * The PAIR table's colours (a cell's fg | bg << 16) and reverse
+	 * video, and the commonest pair seen while planning, for the next.
+	 */
+	uint32_t	 pair;
+	bool		 pair_invert;
+	bool		 pair_ready;
+	uint32_t	 pair_next;
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };
@@ -199,6 +268,14 @@ render_set_grid(struct render *render, struct grid *grid)
  * see one line half-updated for a frame. Main loop only.
  */
 void	render_status_peek(struct render *render, bool top, unsigned lines);
+
+/*
+ * Plan the next frame from the grid and the overlays (see struct
+ * render_plan): main loop, once a frame, and after changing an overlay
+ * when the change must show at once (a screenshot after closing the
+ * menu). A few thousand cycles: one look at each cell's attributes.
+ */
+void	render_plan(struct render *render);
 
 /* video_scanline_fn-compatible: ctx is the struct render. */
 void	render_scanline(uint16_t *pixels, unsigned line, void *ctx);

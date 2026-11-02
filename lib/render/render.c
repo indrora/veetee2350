@@ -170,6 +170,7 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 
 	for (unsigned line = 0; line < render->height; line++)
 		base_line(render, line);
+	render->plan = nullptr;		/* new geometry: plan afresh */
 	render->active = true;
 }
 
@@ -216,9 +217,18 @@ render_pause(struct render *render)
 		;
 }
 
+/*
+ * GCC turns a loop storing 0 into a call to memset, which lives in
+ * flash: from the render IRQ that's an XIP stall, or worse. It did, for
+ * the profiler bar's blank lines (found in devlog 024). The empty asm
+ * hides the value from the optimiser, so the loop stays a loop. (An
+ * optimize("no-tree-loop-distribute-patterns") attribute did too, but
+ * stopped fill_words inlining and cost PLAIN rows 7%.)
+ */
 static void
 HOT_FUNC(fill_words)(uint32_t *out, unsigned words, uint32_t value)
 {
+	__asm__ ("" : "+r" (value));
 	for (unsigned i = 0; i < words; i++)
 		out[i] = value;
 }
@@ -460,6 +470,159 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 		out[x] = (uint16_t)grid->border2;
 }
 
+/* --- the frame plan (render.h) ------------------------------------------ */
+
+/*
+ * The PAIR table: for each glyph byte, its eight pixels as emit8 would
+ * write them in the pair's colours. 4 KB, rebuilt only when the pair or
+ * reverse video changes.
+ */
+static uint32_t pair_words[256][4] __attribute__((aligned(16)));
+
+/* A cell's colours as one word, fg | bg << 16 (struct cell's layout). */
+static uint32_t
+cell_colours(const struct cell *cell)
+{
+	uint32_t colours;
+
+	memcpy(&colours, &cell->fg, sizeof(colours));
+	return colours;
+}
+
+static void
+build_pair_table(struct render *render, uint32_t pair, bool invert)
+{
+	struct cell sample = {0};
+	uint32_t bg2, diff2;
+
+	memcpy(&sample.fg, &pair, sizeof(pair));
+	bg2 = CELL_BG2(&sample);
+	diff2 = CELL_DIFF2(&sample);
+	/* The scanline mustn't use it half-built (tearing is fine, a
+	 * table of two colours mixed is a frame of wrong colours too). */
+	render->pair_ready = false;
+	for (unsigned byte = 0; byte < 256; byte++)
+		emit8(pair_words[byte], byte, bg2, diff2, byte_masks[invert]);
+	render->pair = pair;
+	render->pair_invert = invert;
+	render->pair_ready = true;
+}
+
+/*
+ * What kind of span `count` cells make (render.h), and a vote towards
+ * the next frame's pair: Boyer-Moore majority, one candidate and a
+ * count, so a pair on more than half the cells always wins.
+ */
+struct vote {
+	uint32_t	 candidate;
+	uint32_t	 count;
+};
+
+static uint8_t
+span_kind(const struct render *render, const struct cell *cells,
+    unsigned count, struct vote *vote)
+{
+	bool pair = render->pair_ready;
+
+	for (unsigned col = 0; col < count; col++) {
+		if (cells[col].attr & (CELL_ATTR_ALL | CELL_GRAPHIC))
+			return RENDER_SPAN_MIXED;
+		uint32_t colours = cell_colours(&cells[col]);
+		if (vote->count == 0)
+			vote->candidate = colours;
+		vote->count += colours == vote->candidate ? 1 : -1;
+		pair = pair && colours == render->pair;
+	}
+	return pair ? RENDER_SPAN_PAIR : RENDER_SPAN_PLAIN;
+}
+
+/*
+ * One row: which slot owns each column (0 the grid, slot + 1 an
+ * overlay, later slots on top), then runs of owners become spans.
+ */
+static void
+plan_row(const struct render *render, const struct grid *grid,
+    unsigned text_row, struct render_row_plan *plan, struct vote *vote)
+{
+	const unsigned cols = grid->cols;
+	const struct render_overlay *over[RENDER_OVERLAYS];
+	uint8_t owner[GRID_MAX_COLS];
+	bool covered = false;
+
+	for (unsigned slot = 0; slot < RENDER_OVERLAYS; slot++) {
+		over[slot] = render->overlay[slot];
+		if (over[slot] != nullptr &&
+		    text_row - over[slot]->row < (unsigned)over[slot]->rows &&
+		    over[slot]->col < cols)
+			covered = true;
+		else
+			over[slot] = nullptr;
+	}
+	plan->covered = covered;
+	if (!covered) {
+		plan->spans = 1;
+		plan->span[0] = (struct render_span){nullptr, 0, (uint8_t)cols,
+		    span_kind(render, grid_row(grid, text_row), cols, vote)};
+		return;
+	}
+
+	memset(owner, 0, cols);
+	for (unsigned slot = 0; slot < RENDER_OVERLAYS; slot++) {
+		if (over[slot] == nullptr)
+			continue;
+		unsigned end = over[slot]->col + over[slot]->cols;
+		for (unsigned col = over[slot]->col; col < end && col < cols;
+		    col++)
+			owner[col] = (uint8_t)(slot + 1);
+	}
+	plan->spans = 0;
+	for (unsigned col = 0; col < cols;) {
+		unsigned start = col;
+		uint8_t who = owner[col];
+		while (col < cols && owner[col] == who)
+			col++;
+		const struct cell *cells = nullptr;
+		if (who != 0) {
+			const struct render_overlay *o = over[who - 1];
+			cells = o->cells + (text_row - o->row) * o->cols +
+			    (start - o->col);
+		}
+		/* Five is the most two overlays can make; more can't happen,
+		 * but stop rather than overrun. */
+		if (plan->spans == RENDER_PLAN_SPANS)
+			break;
+		plan->span[plan->spans++] = (struct render_span){
+			cells, (uint16_t)start, (uint8_t)(col - start),
+			span_kind(render, cells != nullptr ? cells :
+			    grid_row(grid, text_row) + start, col - start,
+			    vote),
+		};
+	}
+}
+
+void
+render_plan(struct render *render)
+{
+	const struct grid *grid = render->grid;
+	struct render_plan *next = render->plan == &render->plans[0] ?
+	    &render->plans[1] : &render->plans[0];
+	struct vote vote = {0, 0};
+
+#ifdef VEETEE_NO_FRAME_PLAN
+	return;		/* A/B measurement: no plan, the whole-row path */
+#endif
+	/* Last frame's commonest pair, in this frame's reverse video. */
+	if (!render->pair_ready || render->pair != render->pair_next ||
+	    render->pair_invert != grid->reverse_video)
+		build_pair_table(render, render->pair_next,
+		    grid->reverse_video);
+	for (unsigned row = 0; row < grid->rows; row++)
+		plan_row(render, grid, row, &next->row[row], &vote);
+	render->pair_next = vote.candidate;
+	/* One pointer store: the next scanline reads the new plan. */
+	render->plan = next;
+}
+
 /*
  * Overlays (render.h): two scratch rows, one for the render IRQ and one
  * for the main loop -- screenshots call render_scanline too, and the IRQ
@@ -645,6 +808,281 @@ HOT_FUNC(draw_status_line)(const struct render *render, uint16_t *pixels,
 	}
 }
 
+/*
+ * The column loops (render_scanline, for 8-px fonts), one span of a row
+ * at a time; `words` is where the span starts in the line.
+ */
+struct span_context {
+	const struct render *render;
+	const uint8_t	*glyph_rows;	/* this glyph row of glyph 0 */
+	const uint32_t	(*masks)[4];
+	unsigned	 glyph_bytes;
+	unsigned	 sub;
+	unsigned	 attr_mask;
+};
+
+/*
+ * PLAIN spans: text without attributes, so the loop holds only what
+ * text needs. It stops at the first cell that isn't (the plan being a
+ * frame behind the grid) and returns how far it got; the caller draws
+ * the rest with the full loop, so a stale plan costs speed, never
+ * pixels. (A call per such cell instead starved core 1 while a Sixel
+ * picture arrived and filled rows planned as text: devlog 024.)
+ */
+HOT_INLINE unsigned
+draw_plain_span(const struct span_context *span, uint32_t *words,
+    const struct cell *cells, unsigned count)
+{
+	const uint8_t *glyph_rows = span->glyph_rows;
+	const unsigned glyph_bytes = span->glyph_bytes;
+	const uint32_t (*masks)[4] = span->masks;
+
+	for (unsigned col = 0; col < count; col++, words += 4) {
+		const struct cell *cell = &cells[col];
+		uint32_t glyph_attr, colours;
+
+		memcpy(&glyph_attr, cell, sizeof(glyph_attr));
+		if (__builtin_expect(glyph_attr & ((CELL_ATTR_ALL |
+		    CELL_GRAPHIC) << 16), 0))
+			return col;
+		uint32_t bits = glyph_rows[(glyph_attr & 0xffff) * glyph_bytes];
+		memcpy(&colours, &cell->fg, sizeof(colours));
+		uint32_t bg = colours >> 16;
+		uint32_t diff = (colours ^ bg) & 0xffff;
+		emit8(words, bits, bg | bg << 16, diff | diff << 16, masks);
+	}
+	return count;
+}
+
+/*
+ * PAIR spans: plain text in the table's colours, so each cell is a glyph
+ * byte and 16 bytes copied from pair_words. Like the PLAIN loop, it
+ * stops at a cell that isn't plain text and says where.
+ */
+HOT_INLINE unsigned
+draw_pair_span(const struct span_context *span, uint32_t *words,
+    const struct cell *cells, unsigned count)
+{
+	const uint8_t *glyph_rows = span->glyph_rows;
+	const unsigned glyph_bytes = span->glyph_bytes;
+
+	for (unsigned col = 0; col < count; col++, words += 4) {
+		uint32_t glyph_attr;
+
+		memcpy(&glyph_attr, &cells[col], sizeof(glyph_attr));
+		if (__builtin_expect(glyph_attr & ((CELL_ATTR_ALL |
+		    CELL_GRAPHIC) << 16), 0))
+			return col;
+		const uint32_t *from = pair_words[glyph_rows[(glyph_attr &
+		    0xffff) * glyph_bytes]];
+		uint32_t w0 = from[0], w1 = from[1], w2 = from[2], w3 = from[3];
+		words[0] = w0;
+		words[1] = w1;
+		words[2] = w2;
+		words[3] = w3;
+	}
+	return count;
+}
+
+/* MIXED spans: attributes and pictures handled in line, as before. */
+HOT_INLINE void
+draw_mixed_span(const struct span_context *span, uint32_t *words,
+    const struct cell *cells, unsigned count)
+{
+	const struct render *render = span->render;
+	const uint8_t *glyph_rows = span->glyph_rows;
+	const unsigned glyph_bytes = span->glyph_bytes;
+	const uint32_t (*masks)[4] = span->masks;
+	const unsigned sub = span->sub;
+	const unsigned attr_mask = span->attr_mask;
+	/* Picture cells: per-line state, so the loop only indexes. */
+	const uint8_t *tile_rows = render->tiles + sub * render->tile_row_bytes;
+	const unsigned tile_bytes = render->tile_bytes;
+	const unsigned tile_bpp = render->tile_bpp;
+	uint16_t *tile_colour = render->palette;
+
+	for (unsigned col = 0; col < count; col++, words += 4) {
+		const struct cell *cell = &cells[col];
+		uint32_t glyph_attr;
+
+		/* glyph (low half) and attr (high half) in one load. */
+		memcpy(&glyph_attr, cell, sizeof(glyph_attr));
+		uint32_t bits;
+		/*
+		 * Only text cells may index the font: a picture cell's
+		 * "glyph" is a tile number, up to 16383, and reading
+		 * glyph_rows that far out ran off the end of RAM (a bus
+		 * fault, first seen at 1 bit per pixel).
+		 */
+		if (glyph_attr & ((CELL_ATTR_ALL | CELL_GRAPHIC) << 16)) {
+			if (glyph_attr & (CELL_GRAPHIC << 16)) {
+				tile_colour[(1u << tile_bpp) - 1] =
+				    cell->bg;	/* see-through */
+				draw_tile8(words, tile_rows + (glyph_attr &
+				    0xffff) * tile_bytes, tile_colour,
+				    tile_bpp);
+				continue;
+			}
+			bits = attr_bits(render, glyph_rows[(glyph_attr &
+			    0xffff) * glyph_bytes], glyph_attr >> 16, sub,
+			    attr_mask);
+		} else {
+			bits = glyph_rows[(glyph_attr & 0xffff) * glyph_bytes];
+		}
+		/* fg (low half) and bg (high half) in one load too. */
+		uint32_t colours;
+		memcpy(&colours, &cell->fg, sizeof(colours));
+		uint32_t bg = colours >> 16;
+		uint32_t diff = (colours ^ bg) & 0xffff;
+		emit8(words, bits, bg | bg << 16, diff | diff << 16, masks);
+	}
+}
+
+/*
+ * Preload (devlog 024): a PAIR row's cells are copied, at the
+ * row's first scanline, into SCRATCH_X -- a bank the DVI DMA and core
+ * 1's TMDS encoding leave alone, unlike main SRAM -- and its other
+ * scanlines read them from there. IRQ only: a screenshot drawing from
+ * the main loop reads the grid (the IRQ may refill this meanwhile).
+ */
+#if defined(__arm__)
+#define IN_SCRATCH_X(name)	__attribute__((section(".scratch_x." name)))
+#else
+#define IN_SCRATCH_X(name)
+#endif
+static struct cell preload_row[GRID_MAX_COLS] IN_SCRATCH_X("preload")
+    __attribute__((aligned(8)));
+static const struct cell *preload_from;
+static uint32_t preload_frame;
+
+/* Two words a cell, moved as one 64-bit load and store. */
+HOT_INLINE void
+copy_cells_wide(struct cell *to, const struct cell *from, unsigned count)
+{
+	uint64_t *dst = (uint64_t *)to;
+	const uint64_t *src = (const uint64_t *)from;
+
+	for (unsigned i = 0; i < count; i++)
+		dst[i] = src[i];
+}
+
+/* The cells to read for an unshared row: the preloaded copy if we can. */
+HOT_INLINE const struct cell *
+preloaded(const struct render *render, const struct cell *row_cells,
+    unsigned cols)
+{
+	if (!in_interrupt())
+		return row_cells;
+	if (preload_from != row_cells || preload_frame != render->frame) {
+		copy_cells_wide(preload_row, row_cells, cols);
+		preload_from = row_cells;
+		preload_frame = render->frame;
+	}
+	return preload_row;
+}
+
+
+#ifdef VEETEE_RENDER_EXPERIMENTS
+/*
+ * Experiments (devlog 024): where does the column loop's time go? Once a
+ * frame, after drawing EXPERIMENT_LINE as usual, its cells are drawn
+ * again by variants of the plain-text loop into spare lines nobody sees,
+ * each timed with the cycle counter:
+ *
+ *   0  the loop as it is, into a line in main SRAM (the ring's kind)
+ *   1  the same, into a line in SCRATCH_X (a bank core 1's TMDS work
+ *      and the DVI DMA don't use)
+ *   2  loads and arithmetic only: no stores (results xor'ed together)
+ *   3  stores only: the same emit8 with fixed bits and colours
+ *   4  the row's cells copied into SCRATCH_Y (cost alone)
+ *   5  the loop reading those scratch cells, into the scratch line
+ *
+ * Plain text only (no attributes or pictures), so run it on plain text.
+ */
+#define EXPERIMENT_LINE	240
+static uint32_t experiment_main[RENDER_MAX_WIDTH / 2]
+    __attribute__((aligned(16)));
+#define EXPERIMENT_COLS	80
+/* SCRATCH_X has ~1.9 KB to spare, and the preload row has it: borrow it
+ * (80 columns of pixels is its 1280 bytes) and invalidate it after. */
+static_assert(EXPERIMENT_COLS * 16 <= sizeof(preload_row));
+#define experiment_scratch	((uint32_t *)preload_row)
+static struct cell experiment_cells[EXPERIMENT_COLS]
+    __attribute__((section(".scratch_y.experiment"), aligned(8)));
+
+enum experiment_mode { EXP_FULL, EXP_LOADS, EXP_STORES };
+
+HOT_INLINE uint32_t
+experiment_loop(const struct cell *cells, const uint8_t *glyph_rows,
+    unsigned glyph_bytes, unsigned cols, uint32_t *words,
+    enum experiment_mode mode)
+{
+	const uint32_t (*masks)[4] = byte_masks[0];
+	uint32_t sink = 0;
+
+	for (unsigned col = 0; col < cols; col++, words += 4) {
+		uint32_t bits = 0x5a, bg = 0x1234, diff = 0x4321;
+		if (mode != EXP_STORES) {
+			uint32_t glyph_attr, colours;
+			memcpy(&glyph_attr, &cells[col], sizeof(glyph_attr));
+			bits = glyph_rows[(glyph_attr & 0xffff) * glyph_bytes];
+			memcpy(&colours, &cells[col].fg, sizeof(colours));
+			bg = colours >> 16;
+			diff = (colours ^ bg) & 0xffff;
+		}
+		if (mode == EXP_LOADS) {
+			const uint32_t *mask = masks[bits];
+			sink ^= (bg ^ (diff & mask[0])) + (bg ^ (diff & mask[1])) +
+			    (bg ^ (diff & mask[2])) + (bg ^ (diff & mask[3]));
+			continue;
+		}
+		emit8(words, bits, bg | bg << 16, diff | diff << 16, masks);
+	}
+	return sink;
+}
+
+static void __attribute__((noinline))
+HOT_FUNC(run_experiments)(struct render *render, const struct cell *cells,
+    const uint8_t *glyph_rows)
+{
+	const unsigned glyph_bytes = render->font->glyph_bytes;
+	const unsigned cols = render->grid->cols < EXPERIMENT_COLS ?
+	    render->grid->cols : EXPERIMENT_COLS;
+	volatile uint32_t sink;
+	uint32_t t;
+
+#define TIME(slot, expr) do {						\
+		t = HOT_CYCLES();					\
+		expr;							\
+		render->experiment_cycles[slot] += HOT_CYCLES() - t;	\
+	} while (0)
+	TIME(0, (void)experiment_loop(cells, glyph_rows, glyph_bytes, cols,
+	    experiment_main, EXP_FULL));
+	TIME(1, (void)experiment_loop(cells, glyph_rows, glyph_bytes, cols,
+	    experiment_scratch, EXP_FULL));
+	TIME(2, sink = experiment_loop(cells, glyph_rows, glyph_bytes, cols,
+	    experiment_main, EXP_LOADS));
+	TIME(3, (void)experiment_loop(cells, glyph_rows, glyph_bytes, cols,
+	    experiment_main, EXP_STORES));
+	TIME(4, copy_cells(experiment_cells, cells, cols));
+	TIME(5, (void)experiment_loop(experiment_cells, glyph_rows,
+	    glyph_bytes, cols, experiment_scratch, EXP_FULL));
+#undef TIME
+	(void)sink;
+	preload_from = nullptr;		/* we wrote over it */
+	render->experiment_runs++;
+}
+#endif /* VEETEE_RENDER_EXPERIMENTS */
+
+/* Without a plan yet: the whole grid row, the full loop. */
+static const struct render_row_plan whole_row = {
+	.spans = 1,
+	.span = {{nullptr, 0, GRID_MAX_COLS, RENDER_SPAN_MIXED}},
+};
+
+
+
+
 void
 HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 {
@@ -684,9 +1122,10 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	const unsigned glyph_bytes = font->glyph_bytes;
 	const uint8_t *glyph_rows = font->glyphs + sub * row_bytes;
 	const unsigned cols = grid->cols;
-	bool cursor_covered = false;	/* under an overlay (render.h) */
-	const struct cell *cells = compose_row(render, grid, text_row,
-	    &cursor_covered);
+	const struct render_plan *plan = render->plan;
+	const struct render_row_plan *row_plan = plan != nullptr ?
+	    &plan->row[text_row] : &whole_row;
+	const struct cell *row_cells = grid_row(grid, text_row);
 	const bool invert = grid->reverse_video;
 	const bool blink_off = (render->frame >> 5) & 1;
 	const unsigned attr_mask = attr_mask_for(render);
@@ -702,75 +1141,66 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	 * Double-width / double-height lines (DECDWL/DECDHL): only the first
 	 * cols/2 cells exist, each drawn 16 px wide; double-height halves
 	 * stretch glyph rows 0..h/2-1 (top) or h/2..h-1 (bottom) over the
-	 * whole cell. Slow path, 8-px fonts only (all built-ins).
+	 * whole cell. Slow path, 8-px fonts only (all built-ins); an overlay
+	 * over one is composed here, the rare case spans don't cover.
 	 */
 	uint8_t line_size = grid->row_attr[grid->row_map[text_row]];
 	if (line_size != ROW_NORMAL && width == 8) {
+		bool covered_ignored = false;
+		const struct cell *cells = row_plan->covered ?
+		    compose_row(render, grid, text_row, &covered_ignored) :
+		    row_cells;
 		render_double_line(render, out, cells, sub, line_size, invert,
 		    attr_mask, text_row, blink_off);
 		return;
 	}
 
-	if (width == 8) {
-		/*
-		 * Hot loop for the common case. Kept free of calls unless
-		 * a cell has attributes, so GCC keeps everything in
-		 * registers.
-		 */
-		const uint32_t (*masks)[4] = byte_masks[invert];
-		uint32_t *words = (uint32_t *)out;
-		/* Picture cells: per-line state, so the loop only indexes. */
-		const uint8_t *tile_rows = render->tiles +
-		    sub * render->tile_row_bytes;
-		const unsigned tile_bytes = render->tile_bytes;
-		const unsigned tile_bpp = render->tile_bpp;
-		uint16_t *tile_colour = render->palette;
-		for (unsigned col = 0; col < cols; col++, words += 4) {
-			const struct cell *cell = &cells[col];
-			uint32_t glyph_attr;
+	const bool pair_ok = render->pair_ready &&
+	    render->pair_invert == invert;
+	uint32_t loop_started = HOT_CYCLES();
+	for (unsigned i = 0; i < row_plan->spans; i++) {
+		const struct render_span *span = &row_plan->span[i];
+		if (span->col >= cols)
+			break;
+		unsigned count = cols - span->col < span->count ?
+		    cols - span->col : span->count;
+		const struct cell *cells = span->cells != nullptr ?
+		    span->cells : row_cells + span->col;
+		/* Measured: PAIR rows gain 10%; PLAIN rows, whose loop is
+		 * arithmetic rather than loads, lost 5%. */
+		if (!row_plan->covered && span->kind == RENDER_SPAN_PAIR &&
+		    pair_ok)
+			cells = preloaded(render, row_cells, cols);
 
-			/* glyph (low half) and attr (high half) in one load. */
-			memcpy(&glyph_attr, cell, sizeof(glyph_attr));
-			uint32_t bits;
-			/*
-			 * Only text cells may index the font: a picture cell's
-			 * "glyph" is a tile number, up to 16383, and reading
-			 * glyph_rows that far out ran off the end of RAM
-			 * (a bus fault, first seen at 1 bit per pixel).
-			 */
-			if (glyph_attr & ((CELL_ATTR_ALL | CELL_GRAPHIC) <<
-			    16)) {
-				if (glyph_attr & (CELL_GRAPHIC << 16)) {
-					tile_colour[(1u << tile_bpp) - 1] =
-					    cell->bg;	/* see-through */
-					draw_tile8(words, tile_rows +
-					    (glyph_attr & 0xffff) *
-					    tile_bytes, tile_colour,
-					    tile_bpp);
-					continue;
-				}
-				bits = attr_bits(render, glyph_rows[
-				    (glyph_attr & 0xffff) * glyph_bytes],
-				    glyph_attr >> 16, sub, attr_mask);
-			} else {
-				bits = glyph_rows[(glyph_attr & 0xffff) *
-				    glyph_bytes];
-			}
-			/* fg (low half) and bg (high half) in one load too. */
-			uint32_t colours;
-			memcpy(&colours, &cell->fg, sizeof(colours));
-			uint32_t bg = colours >> 16;
-			uint32_t diff = (colours ^ bg) & 0xffff;
-			emit8(words, bits, bg | bg << 16, diff | diff << 16,
-			    masks);
+		if (width == 8) {
+			const struct span_context context = {
+				.render = render,
+				.glyph_rows = glyph_rows,
+				.masks = byte_masks[invert],
+				.glyph_bytes = glyph_bytes,
+				.sub = sub,
+				.attr_mask = attr_mask,
+			};
+			uint32_t *words = (uint32_t *)out + span->col * 4u;
+			unsigned done = 0;
+			/* The table is only right in the reverse video it was
+			 * built for (a visual bell flips it for a moment). */
+			if (span->kind == RENDER_SPAN_PAIR && pair_ok)
+				done = draw_pair_span(&context, words, cells,
+				    count);
+			else if (span->kind != RENDER_SPAN_MIXED)
+				done = draw_plain_span(&context, words, cells,
+				    count);
+			if (done < count)
+				draw_mixed_span(&context, words + done * 4u,
+				    cells + done, count - done);
+			continue;
 		}
-	} else {
-		for (unsigned col = 0; col < cols; col++) {
+		for (unsigned col = 0; col < count; col++) {
 			const struct cell *cell = &cells[col];
+			uint16_t *at = out + (span->col + col) * width;
 			if (cell->attr & CELL_GRAPHIC) {
-				draw_tile(render, out + col * width,
-				    cell, sub,
-				    width);
+				draw_tile(render, at, cell, sub, width);
 				continue;
 			}
 			uint32_t bits = read_bits(glyph_rows +
@@ -779,19 +1209,36 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 			if (cell->attr & CELL_ATTR_ALL)
 				bits = attr_bits(render, bits, cell->attr, sub,
 				    attr_mask);
-			draw_cell(render, out + col * width, cell, bits, invert);
+			draw_cell(render, at, cell, bits, invert);
 		}
 	}
+	if (HOT_PROFILE) {
+		render->profile_loop_cycles += HOT_CYCLES() - loop_started;
+		render->profile_loop_lines++;
+	}
+#ifdef VEETEE_RENDER_EXPERIMENTS
+	if (line == EXPERIMENT_LINE && width == 8)
+		run_experiments(render, row_cells, glyph_rows);
+#endif
+
+	/* An overlay over the cursor's cell hides the cursor. */
+	unsigned cursor_col = grid->cursor_col;
+	bool cursor_covered = false;
+	if (row_plan->covered)
+		for (unsigned i = 0; i < row_plan->spans; i++)
+			if (row_plan->span[i].cells != nullptr &&
+			    cursor_col - row_plan->span[i].col <
+			    row_plan->span[i].count)
+				cursor_covered = true;
 
 	/*
 	 * Cursor: redraw its cell with modified bits. Block = inverted
 	 * colours; underline = solid underline row; bar = left column.
 	 */
-	unsigned cursor_col = grid->cursor_col;
 	if (grid->cursor_visible && grid->cursor_row == text_row &&
 	    !cursor_covered &&
 	    cursor_col < cols && !(grid->cursor_blink && blink_off)) {
-		const struct cell *cell = &cells[cursor_col];
+		const struct cell *cell = &row_cells[cursor_col];
 		uint32_t bits = (cell->attr & CELL_GRAPHIC) ? 0 :
 		    read_bits(glyph_rows + cell->glyph * glyph_bytes,
 		    row_bytes);
