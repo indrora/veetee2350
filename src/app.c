@@ -203,7 +203,8 @@ apply_settings(void)
 	options.colour_depth = settings.colour_depth;
 	options.utf8 = settings.utf8;
 	options.alt_screen = settings.alt_screen;
-	options.sixel = settings.sixel;
+	options.sixel = settings.sixel != 0;
+	options.sixel_bpp = settings.sixel != 0 ? settings.sixel : 8;
 	settings_colours(&options);
 	memcpy(options.answerback, settings.answerback,
 	    sizeof(options.answerback));
@@ -492,15 +493,17 @@ report_stats(void)
 		    (unsigned long)watchdog_hw->scratch[5],
 		    (unsigned long)watchdog_hw->scratch[6],
 		    (unsigned long)watchdog_hw->scratch[7]);
-		usbio_printf("\r\n[mem] term cells=%p/%p", (void *)term.primary.cells,
-		    (void *)term.alternate.cells);
+	usbio_printf("\r\n[mem] term cells=%p/%p sixel cells=%u",
+	    (void *)term.primary.cells, (void *)term.alternate.cells,
+	    term.graphics.tiles);
 	usbio_printf("\r\n[stats] frames=%lu encode avg=%lu max=%lu "
-	    "render avg=%lu max=%lu starved=%lu budget=%u\r\n",
+	    "render avg=%lu max=%lu starved=%lu yields=%lu budget=%u\r\n",
 	    (unsigned long)stats.frames, (unsigned long)stats.avg_encode_cycles,
 	    (unsigned long)stats.max_encode_cycles,
 	    (unsigned long)stats.avg_render_cycles,
 	    (unsigned long)stats.max_render_cycles,
-	    (unsigned long)stats.starved, video_line_budget());
+	    (unsigned long)stats.starved, (unsigned long)stats.yields,
+	    video_line_budget());
 }
 #endif
 
@@ -578,6 +581,7 @@ app_poll(void)
 	char buffer[256];
 
 	board_watchdog_feed();
+	video_poll();
 #ifdef VEETEE_FLASH_PROBE
 	static absolute_time_t next_probe_report;
 	if (time_reached(next_probe_report)) {

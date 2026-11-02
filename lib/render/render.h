@@ -29,7 +29,12 @@
 /* line_row[] value for scanlines above/below the grid. */
 #define RENDER_LINE_BORDER	0xff
 
-#define RENDER_TRANSPARENT	255	/* tile pixel: show the cell bg */
+/*
+ * Tile pixels are 8, 4, 2 or 1 bits (the Sixel depth in SET-UP), packed
+ * LSB-first within each byte. The all-ones value of the depth is
+ * "transparent": the cell's background shows (255 at 8 bits).
+ */
+#define RENDER_TRANSPARENT	255	/* at 8 bits per pixel */
 
 struct render {
 	const struct font *font;
@@ -51,8 +56,11 @@ struct render {
 	 * RENDER_TRANSPARENT shows the cell's background instead.
 	 */
 	const uint8_t	*tiles;
-	const uint16_t	*palette;	/* 256 x RGB565 */
-	uint16_t	 tile_bytes;	/* font width x height */
+	uint16_t	*palette;	/* 256 x RGB565; the all-ones entry is
+					   scratch for the renderer */
+	uint16_t	 tile_bytes;	/* tile_row_bytes x font height */
+	uint8_t		 tile_row_bytes;
+	uint8_t		 tile_bpp;	/* 8, 4, 2 or 1 */
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };

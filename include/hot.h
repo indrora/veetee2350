@@ -19,9 +19,17 @@
 #include "pico.h"
 #define HOT_FUNC(name)	__not_in_flash_func(name)
 #define HOT_DATA	__not_in_flash("hot")
+/*
+ * Scratch Y (4 KB, its own bus port): mostly core 0's stack, growing
+ * down from the top. Small, hot tables that the renderer reads while
+ * core 1's encoder hammers main SRAM go at the bottom; keep it to a
+ * few hundred bytes so the stack keeps its headroom.
+ */
+#define SCRATCH_DATA	__scratch_y("veetee")
 #else
 #define HOT_FUNC(name)	name
 #define HOT_DATA
+#define SCRATCH_DATA
 #endif
 
 #define HOT_INLINE	static inline __attribute__((always_inline))

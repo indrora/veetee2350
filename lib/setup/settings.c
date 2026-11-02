@@ -99,6 +99,9 @@ settings_valid(const struct settings *settings)
 	    settings->emulation < EMU_COUNT &&
 	    settings->colour_depth < DEPTH_COUNT &&
 	    settings->screenshot_format < SHOT_COUNT &&
+	    (settings->sixel == 0 || settings->sixel == 1 ||
+	    settings->sixel == 2 || settings->sixel == 4 ||
+	    settings->sixel == 8) &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
 }
 

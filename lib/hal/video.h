@@ -34,6 +34,7 @@ struct video_stats {
 	uint32_t	avg_render_cycles;/* core 0 scanline callback, last frame */
 	uint32_t	max_render_cycles;
 	uint32_t	starved;	  /* lines the ring was empty (cumulative) */
+	uint32_t	yields;		  /* render IRQ gave way to the main loop */
 };
 
 /*
@@ -60,5 +61,8 @@ void	video_get_stats(struct video_stats *out);
  * glitches if that exceeds ~250 us (the ring's slack).
  */
 bool	video_flash_safe(void);
+
+/* From the main loop, every pass: re-arms rendering after a yield. */
+void	video_poll(void);
 
 #endif /* HAL_VIDEO_H */

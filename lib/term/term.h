@@ -77,7 +77,7 @@ struct term_emulation_info {
 	uint8_t		 depth;		/* defaults: */
 	bool		 utf8;
 	bool		 alt_screen;
-	bool		 sixel;		/* DA1 claims ;4, DCS q draws */
+	uint8_t		 sixel;		/* 0: none; else default bits/pixel */
 };
 
 extern const struct term_emulation_info term_emulations[EMU_COUNT];
@@ -102,6 +102,7 @@ struct term_options {
 	bool		utf8;		/* off: 8-bit bytes, C1 + Latin-1 GR */
 	bool		alt_screen;	/* off: ignore DECSET 47/1047/1049 */
 	bool		sixel;		/* off: DCS q ignored, no ;4 in DA1 */
+	uint8_t		sixel_bpp;	/* tile depth: 8, 4, 2 or 1 */
 	bool		ansi_set;	/* use `ansi`, not xterm's 16 colours */
 	uint8_t		ansi[16][3];	/* ANSI colours 0-15 (base16 schemes) */
 };

@@ -26,7 +26,7 @@ grid_init(struct grid *grid, unsigned cols, unsigned rows, struct cell blank)
 	grid->cursor_visible = true;
 	grid->cursor_blink = true;
 	grid->cursor_shape = CURSOR_BLOCK;
-	grid->border2 = blank.bg2;
+	grid->border2 = grid_dup565(blank.bg);
 	return true;
 }
 

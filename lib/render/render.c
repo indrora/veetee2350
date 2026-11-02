@@ -7,8 +7,8 @@
  *
  *   pixel pair (p0, p1) = bg2 ^ (diff2 & mask[bits])
  *
- * where bg2/diff2 come straight from the cell (precomputed by the writer)
- * and mask[] is a constant table of {0, 0xffff} halfword patterns indexed
+ * where bg2/diff2 are the cell's bg and (fg ^ bg) RGB565 in both halves
+ * (built per cell from its plain RGB565 colours: a few ALU ops) and mask[] is a constant table of {0, 0xffff} halfword patterns indexed
  * by glyph bits. The table is indexed by a whole glyph byte (256 entries
  * x 4 words = 4 KB per polarity), so an 8-pixel cell is one address
  * calculation, one 4-word load, eight ALU ops and one 4-word store.
@@ -26,6 +26,10 @@
 #include <string.h>
 
 #include "hot.h"
+
+/* The two colour words emit8() wants, from a cell's fg/bg. */
+#define CELL_BG2(cell)		grid_dup565((cell)->bg)
+#define CELL_DIFF2(cell)	grid_dup565((uint16_t)((cell)->fg ^ (cell)->bg))
 
 /*
  * byte_masks[invert][glyph byte] = four words covering 8 pixels, built at
@@ -237,31 +241,119 @@ HOT_FUNC(draw_cell)(const struct render *render, uint16_t *out,
 	const uint32_t (*masks)[4] = byte_masks[invert];
 
 	if (font->width == 8) {
-		emit8((uint32_t *)out, bits, cell->bg2, cell->diff2, masks);
+		emit8((uint32_t *)out, bits, CELL_BG2(cell), CELL_DIFF2(cell),
+		    masks);
 	} else if (font->width == 16) {
-		emit8((uint32_t *)out, bits >> 8, cell->bg2, cell->diff2,
-		    masks);
-		emit8((uint32_t *)out + 4, bits, cell->bg2, cell->diff2,
-		    masks);
+		emit8((uint32_t *)out, bits >> 8, CELL_BG2(cell),
+		    CELL_DIFF2(cell), masks);
+		emit8((uint32_t *)out + 4, bits, CELL_BG2(cell),
+		    CELL_DIFF2(cell), masks);
 	} else {
 		emit_generic(out, bits, font->width, font->row_bytes,
-		    cell->bg2, cell->diff2, invert);
+		    CELL_BG2(cell), CELL_DIFF2(cell), invert);
 	}
 }
 
-/* One scanline of a Sixel tile: palette lookups, transparent -> bg. */
+/*
+ * Sixel tiles, decoded with plain palette lookups -- no per-pixel
+ * compare and branch -- a whole byte at a time, two pixels per 32-bit
+ * store. The trick for transparency: the all-ones index of the depth
+ * (255 at 8 bits, 15 at 4) is never handed out as a colour, so its
+ * palette entry is free, and each cell writes its own background there
+ * before decoding. (Two contexts render -- the display interrupt and a
+ * screenshot in the main loop -- so in theory one can briefly see the
+ * other's cell background in that entry: at worst one transparent
+ * pixel of one line in the wrong background, which nobody will see.)
+ *
+ * The first version tested every pixel for transparency, unpacked bit
+ * by bit, and then copied the palette into a table with memcpy, which
+ * on this build runs from flash: a full-width picture line cost ~13800
+ * cycles against a budget of 8000, and the main loop starved until the
+ * watchdog reset the board. Now ~30-40 cycles per cell, all from RAM.
+ */
+/*
+ * One 8-pixel tile row into four pixel-pair words. Reads the row as
+ * whole words (rows are 1, 2, 4 or 8 bytes, word-aligned since tiles are
+ * 8 x height) and pulls the pixels out with shifts: the pool is in main
+ * SRAM, which core 1's DVI encoder has bus priority over, so every load
+ * counts. The caller has already put the cell's background into
+ * colour[transparent].
+ */
+HOT_INLINE void
+draw_tile8(uint32_t *words, const uint8_t *src, const uint16_t *colour,
+    unsigned bpp)
+{
+	uint32_t w0, w1;
+
+	switch (bpp) {
+	case 8:
+		memcpy(&w0, src, 4);
+		memcpy(&w1, src + 4, 4);
+		words[0] = colour[w0 & 0xff] |
+		    (uint32_t)colour[(w0 >> 8) & 0xff] << 16;
+		words[1] = colour[(w0 >> 16) & 0xff] |
+		    (uint32_t)colour[w0 >> 24] << 16;
+		words[2] = colour[w1 & 0xff] |
+		    (uint32_t)colour[(w1 >> 8) & 0xff] << 16;
+		words[3] = colour[(w1 >> 16) & 0xff] |
+		    (uint32_t)colour[w1 >> 24] << 16;
+		return;
+	/* Unrolled: straight-line code, one shift-and-mask per pixel. */
+	case 4:
+		memcpy(&w0, src, 4);
+		words[0] = colour[w0 & 15] | (uint32_t)colour[(w0 >> 4) & 15] << 16;
+		words[1] = colour[(w0 >> 8) & 15] |
+		    (uint32_t)colour[(w0 >> 12) & 15] << 16;
+		words[2] = colour[(w0 >> 16) & 15] |
+		    (uint32_t)colour[(w0 >> 20) & 15] << 16;
+		words[3] = colour[(w0 >> 24) & 15] |
+		    (uint32_t)colour[w0 >> 28] << 16;
+		return;
+	case 2:
+		w0 = (uint32_t)src[0] | (uint32_t)src[1] << 8;
+		words[0] = colour[w0 & 3] | (uint32_t)colour[(w0 >> 2) & 3] << 16;
+		words[1] = colour[(w0 >> 4) & 3] |
+		    (uint32_t)colour[(w0 >> 6) & 3] << 16;
+		words[2] = colour[(w0 >> 8) & 3] |
+		    (uint32_t)colour[(w0 >> 10) & 3] << 16;
+		words[3] = colour[(w0 >> 12) & 3] |
+		    (uint32_t)colour[(w0 >> 14) & 3] << 16;
+		return;
+	default:	/* 1 */
+		w0 = src[0];
+		words[0] = colour[w0 & 1] | (uint32_t)colour[(w0 >> 1) & 1] << 16;
+		words[1] = colour[(w0 >> 2) & 1] |
+		    (uint32_t)colour[(w0 >> 3) & 1] << 16;
+		words[2] = colour[(w0 >> 4) & 1] |
+		    (uint32_t)colour[(w0 >> 5) & 1] << 16;
+		words[3] = colour[(w0 >> 6) & 1] |
+		    (uint32_t)colour[w0 >> 7] << 16;
+		return;
+	}
+}
+
 static void
 HOT_FUNC(draw_tile)(const struct render *render, uint16_t *out,
     const struct cell *cell, unsigned sub, unsigned width)
 {
 	const uint8_t *src = render->tiles +
-	    (size_t)cell->glyph * render->tile_bytes + sub * width;
-	const uint16_t *palette = render->palette;
-	uint16_t bg = (uint16_t)cell->bg2;
+	    (size_t)cell->glyph * render->tile_bytes +
+	    sub * render->tile_row_bytes;
+	const unsigned bpp = render->tile_bpp;
+	const unsigned mask = (1u << bpp) - 1;	/* also "transparent" */
+	uint16_t *colour = render->palette;
 
+	colour[mask] = cell->bg;		/* see-through: this cell's bg */
+
+	if (width == 8 && ((uintptr_t)out & 3) == 0 &&
+	    ((uintptr_t)src & 3) == 0) {
+		draw_tile8((uint32_t *)out, src, colour, bpp);
+		return;
+	}
+	/* Other cell widths: pixel x is bits (x * bpp) % 8 up of byte x * bpp / 8. */
 	for (unsigned x = 0; x < width; x++) {
-		unsigned index = src[x];
-		out[x] = index == RENDER_TRANSPARENT ? bg : palette[index];
+		unsigned bit = x * bpp;
+		out[x] = colour[(src[bit >> 3] >> (bit & 7)) & mask];
 	}
 }
 
@@ -305,10 +397,10 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 		}
 		uint16_t wide = double_bits[bits & 0xff];
 		const uint32_t (*masks)[4] = byte_masks[cell_invert];
-		emit8((uint32_t *)(out + col * 16), wide >> 8, cell->bg2,
-		    cell->diff2, masks);
+		emit8((uint32_t *)(out + col * 16), wide >> 8, CELL_BG2(cell),
+		    CELL_DIFF2(cell), masks);
 		emit8((uint32_t *)(out + col * 16 + 8), wide & 0xff,
-		    cell->bg2, cell->diff2, masks);
+		    CELL_BG2(cell), CELL_DIFF2(cell), masks);
 	}
 	/* Odd column count: the last 8 px have no cell; use the border. */
 	for (unsigned x = half * 16; x < grid->cols * 8u; x++)
@@ -371,31 +463,57 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 		 */
 		const uint32_t (*masks)[4] = byte_masks[invert];
 		uint32_t *words = (uint32_t *)out;
+		/* Picture cells: per-line state, so the loop only indexes. */
+		const uint8_t *tile_rows = render->tiles +
+		    sub * render->tile_row_bytes;
+		const unsigned tile_bytes = render->tile_bytes;
+		const unsigned tile_bpp = render->tile_bpp;
+		uint16_t *tile_colour = render->palette;
 		for (unsigned col = 0; col < cols; col++, words += 4) {
 			const struct cell *cell = &cells[col];
 			uint32_t glyph_attr;
 
 			/* glyph (low half) and attr (high half) in one load. */
 			memcpy(&glyph_attr, cell, sizeof(glyph_attr));
-			uint32_t bits = glyph_rows[(glyph_attr & 0xffff) *
-			    glyph_bytes];
+			uint32_t bits;
+			/*
+			 * Only text cells may index the font: a picture cell's
+			 * "glyph" is a tile number, up to 16383, and reading
+			 * glyph_rows that far out ran off the end of RAM
+			 * (a bus fault, first seen at 1 bit per pixel).
+			 */
 			if (glyph_attr & ((CELL_ATTR_ALL | CELL_GRAPHIC) <<
 			    16)) {
 				if (glyph_attr & (CELL_GRAPHIC << 16)) {
-					draw_tile(render, (uint16_t *)words,
-					    cell, sub, 8);
+					tile_colour[(1u << tile_bpp) - 1] =
+					    cell->bg;	/* see-through */
+					draw_tile8(words, tile_rows +
+					    (glyph_attr & 0xffff) *
+					    tile_bytes, tile_colour,
+					    tile_bpp);
 					continue;
 				}
-				bits = attr_bits(render, bits, glyph_attr >> 16,
-				    sub, attr_mask);
+				bits = attr_bits(render, glyph_rows[
+				    (glyph_attr & 0xffff) * glyph_bytes],
+				    glyph_attr >> 16, sub, attr_mask);
+			} else {
+				bits = glyph_rows[(glyph_attr & 0xffff) *
+				    glyph_bytes];
 			}
-			emit8(words, bits, cell->bg2, cell->diff2, masks);
+			/* fg (low half) and bg (high half) in one load too. */
+			uint32_t colours;
+			memcpy(&colours, &cell->fg, sizeof(colours));
+			uint32_t bg = colours >> 16;
+			uint32_t diff = (colours ^ bg) & 0xffff;
+			emit8(words, bits, bg | bg << 16, diff | diff << 16,
+			    masks);
 		}
 	} else {
 		for (unsigned col = 0; col < cols; col++) {
 			const struct cell *cell = &cells[col];
 			if (cell->attr & CELL_GRAPHIC) {
-				draw_tile(render, out + col * width, cell, sub,
+				draw_tile(render, out + col * width,
+				    cell, sub,
 				    width);
 				continue;
 			}

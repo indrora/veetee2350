@@ -39,13 +39,13 @@ void	term_feed_through(struct term *term, const uint8_t *bytes,
  */
 const struct term_emulation_info term_emulations[EMU_COUNT] = {
 	[EMU_VT100] = {"VT100", "vt100", "?1;2c", nullptr,
-	    DEPTH_MONO, false, false, false},
+	    DEPTH_MONO, false, false, 0},
 	[EMU_VT220] = {"VT220", "vt220", "?62;6;22c", ">1;10;0c",
-	    DEPTH_MONO, false, false, false},
+	    DEPTH_MONO, false, false, 0},
 	[EMU_VT340] = {"VT340", "vt340", "?63;6;22c", ">19;10;0c",
-	    DEPTH_16, false, false, true},
+	    DEPTH_16, false, false, 4},	/* 16 colour registers */
 	[EMU_XTERM] = {"xterm", "xterm-256color", "?64;6;22c", ">41;390;0c",
-	    DEPTH_TRUE, true, true, true},
+	    DEPTH_TRUE, true, true, 8},
 };
 
 /*
@@ -1692,6 +1692,7 @@ term_init(struct term *term, const struct font_builtin *builtin,
 		.utf8 = true,
 		.alt_screen = true,
 		.sixel = true,
+		.sixel_bpp = 8,
 	};
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
@@ -1790,6 +1791,7 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	    memcmp(options->fg_rgb, term->options.fg_rgb, 3) != 0 ||
 	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0 ||
 	    options->ansi_set != term->options.ansi_set ||
+	    options->sixel_bpp != term->options.sixel_bpp ||
 	    (options->ansi_set && memcmp(options->ansi, term->options.ansi,
 	    sizeof(options->ansi)) != 0);
 

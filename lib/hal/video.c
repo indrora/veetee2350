@@ -183,12 +183,33 @@ dwt_counter_start(void)
 /* --- core 0: producer ------------------------------------------------ */
 
 /*
- * Render lines until the ring is full. Called from the doorbell IRQ, and
- * once synchronously at init to prime the ring before scanout starts.
+ * Safety valve. The doorbell IRQ has the highest priority on core 0, so
+ * if lines ever cost more to render than they take to display (a screen
+ * full of pictures at a low Sixel depth once did), it would re-enter
+ * forever, the main loop would never run, and the watchdog would reset
+ * the board. So one IRQ entry may spend at most SLICE_LINES line-times;
+ * past that it masks itself and returns, and video_poll() -- called from
+ * the main loop -- unmasks it. Overload then costs a torn picture (core 1
+ * waits for lines), never the board. In normal running the ring fills
+ * long before the slice is used.
  */
-static void __not_in_flash_func(produce_lines)(void)
+#define SLICE_LINES	4
+static uint32_t slice_cycles;		/* SLICE_LINES x the line period */
+static unsigned bell_irq;
+static volatile bool yielded;
+
+/*
+ * Render lines until the ring is full, or (`sliced`) the slice is used
+ * up: returns false then. Called from the doorbell IRQ, and once
+ * synchronously at init to prime the ring before scanout starts.
+ */
+static bool __not_in_flash_func(produce_lines)(bool sliced)
 {
+	uint32_t entry = m33_hw->dwt_cyccnt;
+
 	while (ring_head - ring_tail < RING_LINES) {
+		if (sliced && m33_hw->dwt_cyccnt - entry > slice_cycles)
+			return false;
 		uint32_t start = m33_hw->dwt_cyccnt;
 		scanline_fn(ring[ring_head & (RING_LINES - 1)], produce_line,
 		    scanline_ctx);
@@ -210,6 +231,7 @@ static void __not_in_flash_func(produce_lines)(void)
 			render_frame_max = 0;
 		}
 	}
+	return true;
 }
 
 /*
@@ -222,7 +244,22 @@ static void __not_in_flash_func(doorbell_irq)(void)
 	if (!multicore_doorbell_is_set_current_core(VIDEO_DOORBELL))
 		return;
 	multicore_doorbell_clear_current_core(VIDEO_DOORBELL);
-	produce_lines();
+	if (!produce_lines(true)) {
+		/* Mask (by register: the SDK call lives in flash). */
+		m33_hw->nvic_icer[bell_irq / 32] = 1u << (bell_irq % 32);
+		yielded = true;
+		live_stats.yields = live_stats.yields + 1;
+	}
+}
+
+void
+video_poll(void)
+{
+	if (yielded) {
+		yielded = false;
+		/* A pending doorbell fires as soon as it's unmasked. */
+		m33_hw->nvic_iser[bell_irq / 32] = 1u << (bell_irq % 32);
+	}
 }
 
 /* --- core 1: consumer ------------------------------------------------ */
@@ -373,9 +410,10 @@ video_init(unsigned mode, video_scanline_fn scanline, void *ctx)
 
 	/* Prime the ring, then let core 1's doorbells drive core 0. */
 	dwt_counter_start();
-	produce_lines();
+	produce_lines(false);
+	slice_cycles = SLICE_LINES * video_line_budget();
 	multicore_doorbell_claim(VIDEO_DOORBELL, 0b11);
-	uint bell_irq = multicore_doorbell_irq_num(VIDEO_DOORBELL);
+	bell_irq = multicore_doorbell_irq_num(VIDEO_DOORBELL);
 	irq_add_shared_handler(bell_irq, doorbell_irq,
 	    PICO_SHARED_IRQ_HANDLER_HIGHEST_ORDER_PRIORITY);
 	irq_set_priority(bell_irq, PICO_HIGHEST_IRQ_PRIORITY);
@@ -404,6 +442,7 @@ video_get_stats(struct video_stats *out)
 		out->avg_render_cycles = live_stats.avg_render_cycles;
 		out->max_render_cycles = live_stats.max_render_cycles;
 		out->starved = live_stats.starved;
+		out->yields = live_stats.yields;
 		__dmb();
 	} while (frames != live_stats.frames);
 	out->frames = frames;

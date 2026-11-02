@@ -207,7 +207,12 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		    "ignored (full-screen apps leave output behind)");
 		break;
 	case ITEM_SIXEL:
-		snprintf(out, len, "%s", work->sixel ? "on" : "off");
+		snprintf(out, len, "%s", work->sixel == 8 ?
+		    "255 colours  (8 bits a pixel)" : work->sixel == 4 ?
+		    "15 colours  (4 bits, VT340; 2x the image area)" :
+		    work->sixel == 2 ? "3 colours  (2 bits; 4x the area)" :
+		    work->sixel == 1 ? "1 colour  (1 bit; 8x the area)" :
+		    "off");
 		break;
 	case ITEM_PRINTER:
 		snprintf(out, len, "%s", work->printer ?
@@ -456,9 +461,16 @@ change_value(struct setup *setup, int step)
 	case ITEM_ALTSCREEN:
 		work->alt_screen = !work->alt_screen;
 		break;
-	case ITEM_SIXEL:
-		work->sixel = !work->sixel;
+	case ITEM_SIXEL: {
+		/* off -> 8 -> 4 -> 2 -> 1 -> off (Right; Left the reverse) */
+		static const uint8_t depths[] = {0, 8, 4, 2, 1};
+		unsigned at = 0;
+		for (unsigned i = 0; i < sizeof(depths); i++)
+			if (depths[i] == work->sixel)
+				at = i;
+		work->sixel = depths[cycle(at, sizeof(depths), step)];
 		break;
+	}
 	case ITEM_PRINTER:
 		work->printer = !work->printer;
 		break;

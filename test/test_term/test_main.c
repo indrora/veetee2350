@@ -4,6 +4,7 @@
  * Runs the real libvterm + term glue on the host against the default
  * font's 80x30 grid. Each test feeds a byte string and inspects cells.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include <unity.h>
@@ -52,13 +53,13 @@ glyph(uint32_t codepoint)
 static uint16_t
 cell_fg(const struct cell *cell)
 {
-	return (uint16_t)(cell->bg2 ^ cell->diff2);
+	return cell->fg;
 }
 
 static uint16_t
 cell_bg(const struct cell *cell)
 {
-	return (uint16_t)cell->bg2;
+	return cell->bg;
 }
 
 void
@@ -675,8 +676,10 @@ tile_px(unsigned row, unsigned col, unsigned x, unsigned y)
 	const struct graphics *graphics = &term.graphics;
 
 	TEST_ASSERT_TRUE(cell->attr & CELL_GRAPHIC);
-	return graphics->pool[cell->glyph * graphics->tile_bytes +
-	    y * graphics->tile_width + x];
+	const uint8_t *line = graphics->pool + cell->glyph *
+	    graphics->tile_bytes + y * graphics->tile_row_bytes;
+	unsigned bit = x * graphics->bpp;
+	return (line[bit / 8] >> (bit % 8)) & graphics->transparent;
 }
 
 static void
@@ -691,8 +694,8 @@ test_sixel_basic(void)
 	unsigned red = tile_px(0, 0, 0, 0);
 	TEST_ASSERT_EQUAL_HEX16(0xf800, term.graphics.palette[red]);
 	TEST_ASSERT_EQUAL(red, tile_px(0, 0, 1, 5));
-	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(0, 0, 2, 0));
-	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(0, 0, 0, 6));
+	TEST_ASSERT_EQUAL(term.graphics.transparent, tile_px(0, 0, 2, 0));
+	TEST_ASSERT_EQUAL(term.graphics.transparent, tile_px(0, 0, 0, 6));
 	TEST_ASSERT_FALSE(cell_at(0, 1)->attr & CELL_GRAPHIC);
 	/* Cursor: left column of the image, on the line below it. */
 	TEST_ASSERT_EQUAL(1, term.screen->cursor_row);
@@ -715,9 +718,9 @@ test_sixel_runs_and_bands(void)
 	unsigned blue = tile_px(1, 2, 0, 0);
 	TEST_ASSERT_EQUAL_HEX16(0x001f, term.graphics.palette[blue]);
 	TEST_ASSERT_EQUAL(blue, tile_px(1, 3, 1, 0));
-	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(1, 3, 2, 0));
+	TEST_ASSERT_EQUAL(term.graphics.transparent, tile_px(1, 3, 2, 0));
 	TEST_ASSERT_EQUAL(blue, tile_px(1, 2, 0, 11));
-	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(1, 2, 1, 11));
+	TEST_ASSERT_EQUAL(term.graphics.transparent, tile_px(1, 2, 1, 11));
 	TEST_ASSERT_EQUAL(2, term.screen->cursor_row);
 	TEST_ASSERT_EQUAL(2, term.screen->cursor_col);
 }
@@ -897,6 +900,52 @@ test_printer_status(void)
 	TEST_ASSERT_EQUAL_STRING("\x1b[?11n", reply);
 }
 
+/* Sixel at fewer bits a pixel: packed tiles, a smaller palette. */
+static void
+use_sixel_depth(unsigned bpp)
+{
+	struct term_options options = term.options;
+	options.sixel_bpp = (uint8_t)bpp;
+	TEST_ASSERT_TRUE(term_configure(&term, term.font_source, &options));
+	enable_sixel();
+	TEST_ASSERT_EQUAL(bpp, term.graphics.bpp);
+}
+
+static void
+test_sixel_depths(void)
+{
+	use_sixel_depth(4);
+	TEST_ASSERT_EQUAL(4, term.graphics.tile_row_bytes);	/* 8 px */
+	feed("\x1bPq#1;2;100;0;0#2;2;0;0;100#1~#2~#1~\x1b\\");
+	unsigned red = tile_px(0, 0, 0, 0), blue = tile_px(0, 0, 1, 0);
+	TEST_ASSERT_EQUAL_HEX16(0xf800, term.graphics.palette[red]);
+	TEST_ASSERT_EQUAL_HEX16(0x001f, term.graphics.palette[blue]);
+	TEST_ASSERT_EQUAL(red, tile_px(0, 0, 2, 5));
+	TEST_ASSERT_EQUAL(15, tile_px(0, 0, 3, 0));	/* transparent */
+
+	/* 20 distinct colours: only 15 slots, the rest take the nearest. */
+	char image[512] = "\x1bPq";
+	for (int i = 0; i < 20; i++) {
+		char one[24];
+		snprintf(one, sizeof(one), "#%d;2;%d;%d;0#%d~", i + 3, i * 5,
+		    100 - i * 5, i + 3);
+		strcat(image, one);
+	}
+	strcat(image, "\x1b\\");
+	feed("\x1b[2;1H");
+	feed(image);
+	TEST_ASSERT_EQUAL(15, term.graphics.palette_used);
+
+	/* 2 bits: four pixels a byte, and the renderer unpacks them. */
+	use_sixel_depth(2);
+	feed("\x1b[H\x1bPq#1;2;100;0;0#1~?~\x1b\\");
+	uint16_t line[640];
+	render_scanline(line, render.y_offset, &render);	/* top row */
+	TEST_ASSERT_EQUAL_HEX16(0xf800, line[render.x_offset]);
+	TEST_ASSERT_EQUAL_HEX16(cell_at(0, 0)->bg, line[render.x_offset + 1]);
+	TEST_ASSERT_EQUAL_HEX16(0xf800, line[render.x_offset + 2]);
+}
+
 int
 main(void)
 {
@@ -939,6 +988,7 @@ main(void)
 	RUN_TEST(test_sixel_scrolls);
 	RUN_TEST(test_sixel_queries_and_off);
 	RUN_TEST(test_sixel_after_font_switch);
+	RUN_TEST(test_sixel_depths);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

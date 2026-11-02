@@ -203,7 +203,7 @@ test_term_configure(void)
 	TEST_ASSERT_EQUAL(CURSOR_BAR, term.screen->cursor_shape);
 	TEST_ASSERT_FALSE(term.screen->cursor_blink);
 	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(20, 10, 0),
-	    (uint16_t)grid_row(term.screen, 0)[0].bg2);
+	    grid_row(term.screen, 0)[0].bg);
 	/* 24 rows of 16 px = 384 lines, centred: 48 border lines on top. */
 	TEST_ASSERT_EQUAL(48, render.y_offset);
 

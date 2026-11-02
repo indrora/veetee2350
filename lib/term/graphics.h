@@ -25,7 +25,7 @@
 
 #include "sixel.h"
 
-#define GRAPHICS_MAX_TILES	4096	/* fits cell.glyph; bitmap is 512 B */
+#define GRAPHICS_MAX_TILES	16384	/* fits cell.glyph; bitmap is 2 KB */
 #define GRAPHICS_NO_SLOT	0xffff
 
 struct term;
@@ -41,12 +41,16 @@ struct graphics {
 	unsigned	 tile_width;	/* = font cell */
 	unsigned	 tile_height;
 	unsigned	 tile_bytes;
+	unsigned	 tile_row_bytes;
+	unsigned	 bpp;		/* 8, 4, 2 or 1 (term options) */
+	unsigned	 transparent;	/* all-ones index at that depth */
 	unsigned	 tiles;		/* capacity, <= GRAPHICS_MAX_TILES */
 	unsigned	 in_use;
 	unsigned	 next;		/* allocation scan position */
 	uint8_t		 used[GRAPHICS_MAX_TILES / 8];
 
-	uint16_t	 palette[256];	/* RGB565; slot 255 unused */
+	uint16_t	*palette;	/* 256 x RGB565 (graphics.c: in scratch
+					   RAM, for the renderer) */
 	unsigned	 palette_used;
 	uint16_t	 reg_rgb[SIXEL_REGISTERS];	/* register -> RGB565 */
 	uint16_t	 reg_slot[SIXEL_REGISTERS];	/* -> slot, lazily */

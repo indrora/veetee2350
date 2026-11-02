@@ -24,6 +24,7 @@
  * for nearly all images is the terminal background anyway.
  */
 #include "graphics.h"
+#include "hot.h"
 #include "term.h"
 #include "vterm_internal.h"
 
@@ -31,6 +32,14 @@
 #include <string.h>
 
 #define TILE_NONE	UINT32_MAX
+
+/*
+ * The image palette, read by the renderer for every picture pixel. In
+ * main SRAM those reads queue behind core 1's DVI encoder (which has
+ * bus priority); in scratch RAM they don't: a full-width picture line
+ * went from ~9800 to ~ cycles. One terminal, one palette.
+ */
+static uint16_t palette_store[256] SCRATCH_DATA;
 
 /* term.c: DEC private mode state for the modes kept in its table. */
 bool	term_dec_mode(const struct term *term, unsigned mode);
@@ -88,7 +97,8 @@ palette_slot(struct graphics *graphics, uint16_t colour)
 		if (distance == 0)
 			return slot;
 	}
-	if (graphics->palette_used < RENDER_TRANSPARENT) {
+	/* At low depths most colours land on their nearest: 15 at 4 bpp. */
+	if (graphics->palette_used < graphics->transparent) {
 		graphics->palette[graphics->palette_used] = colour;
 		return graphics->palette_used++;
 	}
@@ -181,9 +191,9 @@ cell_tile(struct term *term, unsigned row, unsigned col)
 	if (tile == TILE_NONE)
 		return nullptr;
 	uint8_t *pixels = graphics->pool + (size_t)tile * graphics->tile_bytes;
-	memset(pixels, RENDER_TRANSPARENT, graphics->tile_bytes);
+	memset(pixels, 0xff, graphics->tile_bytes);	/* all transparent */
 	cell->glyph = (uint16_t)tile;
-	cell->attr = CELL_GRAPHIC;	/* bg2/diff2 kept: bg under the image */
+	cell->attr = CELL_GRAPHIC;	/* fg/bg kept: bg shows under the image */
 	return pixels;
 }
 
@@ -250,7 +260,19 @@ sink_paint(void *ctx, unsigned x, unsigned y, uint8_t bits, unsigned count,
 			uint8_t *tile = cell_tile(term, (unsigned)row, col);
 			if (tile == nullptr)
 				return;		/* pool exhausted */
-			memset(tile + sub * tile_width + first, slot, span);
+			uint8_t *line = tile + sub * graphics->tile_row_bytes;
+			if (graphics->bpp == 8) {
+				memset(line + first, slot, span);
+			} else {
+				unsigned bpp = graphics->bpp;
+				unsigned mask = (1u << bpp) - 1;
+				for (unsigned i = first; i < first + span; i++) {
+					unsigned bit = i * bpp;
+					uint8_t *byte = &line[bit >> 3];
+					*byte = (uint8_t)((*byte & ~(mask <<
+					    (bit & 7))) | (slot << (bit & 7)));
+				}
+			}
 			px += span;
 		}
 	}
@@ -324,6 +346,12 @@ graphics_acquire(struct term *term)
 	bytes = avail - reserve;
 	if (bytes > graphics->budget)
 		bytes = graphics->budget;
+	/* No more than the tile cap can use (it bites at low depths). */
+	unsigned bpp = term->options.sixel_bpp ? term->options.sixel_bpp : 8;
+	size_t tile = (size_t)(term->font.width * bpp + 7) / 8 *
+	    term->font.height;
+	if (tile > 0 && bytes > GRAPHICS_MAX_TILES * tile)
+		bytes = GRAPHICS_MAX_TILES * tile;
 	/*
 	 * Free bytes aren't one block: a font loaded while the old pool was
 	 * held, say, can sit in the middle of its old space. Step down until
@@ -342,9 +370,16 @@ graphics_reset(struct term *term)
 	struct graphics *graphics = &term->graphics;
 	struct render *render = term->render;
 
+	graphics->palette = palette_store;
+	graphics->bpp = term->options.sixel_bpp;
+	if (graphics->bpp != 1 && graphics->bpp != 2 && graphics->bpp != 4)
+		graphics->bpp = 8;
+	graphics->transparent = (1u << graphics->bpp) - 1;
 	graphics->tile_width = term->font.width;
 	graphics->tile_height = term->font.height;
-	graphics->tile_bytes = graphics->tile_width * graphics->tile_height;
+	graphics->tile_row_bytes = (graphics->tile_width * graphics->bpp +
+	    7) / 8;
+	graphics->tile_bytes = graphics->tile_row_bytes * graphics->tile_height;
 	graphics->tiles = graphics->tile_bytes == 0 ? 0 :
 	    (unsigned)(graphics->pool_bytes / graphics->tile_bytes);
 	if (graphics->tiles > GRAPHICS_MAX_TILES)
@@ -357,6 +392,8 @@ graphics_reset(struct term *term)
 		render->tiles = graphics->pool;
 		render->palette = graphics->palette;
 		render->tile_bytes = (uint16_t)graphics->tile_bytes;
+		render->tile_row_bytes = (uint8_t)graphics->tile_row_bytes;
+		render->tile_bpp = (uint8_t)graphics->bpp;
 	}
 }
 

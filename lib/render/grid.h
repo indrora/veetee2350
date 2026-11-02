@@ -55,13 +55,22 @@ enum cell_attr {
 	CELL_GRAPHIC	= 1 << 13,
 };
 
+/*
+ * 8 bytes. Colours are plain RGB565, exactly what reaches the screen, so
+ * nothing is lost; the renderer builds the doubled bg and (fg ^ bg)
+ * words it works with from them (a handful of ALU ops per cell). Cells
+ * used to carry those words pre-built, at 12 bytes: at 1280x720 the two
+ * screens of 160x45 cells were 173 KB, now 115 KB (phase G).
+ */
 struct cell {
 	uint16_t	glyph;		/* font glyph index */
 	uint16_t	attr;		/* enum cell_attr bits */
-	uint32_t	bg2;		/* bg RGB565 in both halves */
-	uint32_t	diff2;		/* (fg ^ bg) RGB565 in both halves */
-};
-static_assert(sizeof(struct cell) == 12);
+	uint16_t	fg;		/* RGB565 */
+	uint16_t	bg;		/* RGB565 */
+} __attribute__((aligned(4)));
+static_assert(sizeof(struct cell) == 8);
+/* The renderer fetches fg+bg as one little-endian word, too. */
+static_assert(__builtin_offsetof(struct cell, fg) == 4);
 /* The renderer fetches glyph+attr as one little-endian word. */
 static_assert(__builtin_offsetof(struct cell, glyph) == 0);
 static_assert(__builtin_offsetof(struct cell, attr) == 2);
@@ -117,8 +126,8 @@ grid_make_cell(uint16_t glyph, uint16_t fg, uint16_t bg, uint16_t attr)
 	return (struct cell){
 		.glyph = glyph,
 		.attr = attr,
-		.bg2 = grid_dup565(bg),
-		.diff2 = grid_dup565(fg ^ bg),
+		.fg = fg,
+		.bg = bg,
 	};
 }
 
