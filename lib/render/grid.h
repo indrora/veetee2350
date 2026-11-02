@@ -35,6 +35,7 @@ enum cell_attr {
 	CELL_INVISIBLE	= 1 << 2,
 	CELL_STRIKE	= 1 << 3,
 	CELL_OVERLINE	= 1 << 4,
+	CELL_ATTR_ALL	= (1 << 5) - 1,	/* render.c tables: 32 combos */
 };
 
 struct cell {
@@ -44,6 +45,9 @@ struct cell {
 	uint32_t	diff2;		/* (fg ^ bg) RGB565 in both halves */
 };
 static_assert(sizeof(struct cell) == 12);
+/* The renderer fetches glyph+attr as one little-endian word. */
+static_assert(__builtin_offsetof(struct cell, glyph) == 0);
+static_assert(__builtin_offsetof(struct cell, attr) == 2);
 
 enum cursor_shape {
 	CURSOR_BLOCK,

@@ -37,16 +37,38 @@ rebased, **pio0 cannot reach GPIO 0–15**.
 | 2 symbols/word, unroll 4, PROC1 bus prio | 4 392  |  5 173   |  5 845   |
 
 The second row's line figures are for the test pattern, whose render
-step is just a memcpy plus border (about 780 cycles). That leaves
-roughly **2 100 cycles of worst-case headroom per line** for the text
-renderer on core 1, or about 26 cycles per 8-pixel cell at 80 columns.
+step is just a memcpy plus border (about 780 cycles).
+
+### Text renderer (80 columns, every cell inked, 1 in 4 underlined)
+
+Render cost was measured on idle core 0, so with no DMA and no IRQs.
+
+| Renderer version                                  | Render | Line avg | Line max |
+|---------------------------------------------------|--------|----------|----------|
+| -Os, helper out-lined into flash via a veneer     |  ~6300 | 10 968   | 12 123   |
+| -O2 + always_inline, nibble masks, attr call      |   3770 |  8 296   |  9 618   |
+| byte masks, inline attr (and, or) table           |   3032 |  7 407   |  8 074   |
+
+Lessons:
+- The core builds at -Os, which out-lines `static inline` helpers into
+  flash. That's why hot helpers use `HOT_INLINE` and lib/render builds
+  at -O2.
+- An out-of-line call for attributed cells cost about 35 cycles per
+  cell.
+- Running render_scanline from flash instead of RAM changed nothing
+  (3740 vs 3770), so this loop is not limited by bus contention between
+  instruction fetch and data access.
+
+The current renderer fits at 60 fps on average, but the worst line can
+slightly exceed the budget.
 
 ## Capture
 
-The Genki ShadowCast 2 is avfoundation device 2. It upscales
-640×480 to 2560×1440 (stretched to 16:9). Grab a frame with:
+The Genki ShadowCast 2 upscales 640×480 to 2560×1440 (stretched to
+16:9). Its avfoundation index moves around between sessions, so select it
+by name:
 
-    ffmpeg -f avfoundation -framerate 30 -i "2" -frames:v 1 capture.jpg
+    ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 capture.jpg
 
 This has to run from a terminal that has macOS camera permission. The
 sandboxed agent shell doesn't, so use the user's Terminal panel.

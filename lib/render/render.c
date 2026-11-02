@@ -9,8 +9,11 @@
  *
  * where bg2/diff2 come straight from the cell (precomputed by the writer)
  * and mask[] is a constant table of {0, 0xffff} halfword patterns indexed
- * by glyph bits. With a 16-entry table indexed by a nibble, one table load
- * covers 4 pixels, so an 8-pixel cell is two lookups and four word stores.
+ * by glyph bits. The table is indexed by a whole glyph byte (256 entries
+ * x 4 words = 4 KB per polarity), so an 8-pixel cell is one address
+ * calculation, one 4-word load, eight ALU ops and one 4-word store.
+ * (A first version used a 16-entry nibble table: smaller, but ~40 cycles
+ * per cell, which overran the line budget at 80 columns.)
  * RGB565 pixels are little-endian halfwords, so the LEFT pixel of a pair
  * is the LOW halfword.
  *
@@ -25,31 +28,29 @@
 #include "hot.h"
 
 /*
- * nibble_masks[invert][nibble] = two words covering 4 pixels. Built at
- * init into RAM (core 1 reads it ~160 times per line).
+ * byte_masks[invert][glyph byte] = four words covering 8 pixels, built at
+ * init into RAM (8 KB; core 1 reads one entry per cell). 16-byte aligned
+ * so an entry never straddles anything awkward for ldm.
  */
-static uint32_t nibble_masks[2][16][2];
+static uint32_t byte_masks[2][256][4] __attribute__((aligned(16)));
 
 static void
 build_mask_tables(void)
 {
 	for (unsigned invert = 0; invert < 2; invert++) {
-		for (unsigned nibble = 0; nibble < 16; nibble++) {
-			unsigned bits = invert ? ~nibble & 0xf : nibble;
-			uint32_t pair0 = 0;
-			uint32_t pair1 = 0;
+		for (unsigned byte = 0; byte < 256; byte++) {
+			unsigned bits = invert ? ~byte & 0xff : byte;
 
-			/* Bit 3 is the leftmost of the four pixels. */
-			if (bits & 0x8)
-				pair0 |= 0x0000ffff;
-			if (bits & 0x4)
-				pair0 |= 0xffff0000;
-			if (bits & 0x2)
-				pair1 |= 0x0000ffff;
-			if (bits & 0x1)
-				pair1 |= 0xffff0000;
-			nibble_masks[invert][nibble][0] = pair0;
-			nibble_masks[invert][nibble][1] = pair1;
+			/* Bit 7 is the leftmost pixel; pixel pairs fill
+			 * one word each, left pixel in the low half. */
+			for (unsigned pair = 0; pair < 4; pair++) {
+				uint32_t word = 0;
+				if (bits & (0x80 >> (pair * 2)))
+					word |= 0x0000ffff;
+				if (bits & (0x40 >> (pair * 2)))
+					word |= 0xffff0000;
+				byte_masks[invert][byte][pair] = word;
+			}
 		}
 	}
 }
@@ -80,6 +81,24 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 	 * way up to the baseline; overline on the top row. */
 	render->strike_row = (uint8_t)(font->baseline * 3 / 5);
 	render->overline_row = 0;
+
+	uint32_t full = (1u << (font->row_bytes * 8)) - 1;
+	for (unsigned sub = 0; sub < font->height; sub++) {
+		for (unsigned attr = 0; attr < RENDER_ATTR_COMBOS; attr++) {
+			uint32_t keep = full;
+			uint32_t set = 0;
+
+			if (attr & (CELL_INVISIBLE | CELL_BLINK))
+				keep = 0;
+			if (((attr & CELL_UNDERLINE) &&
+			    sub == font->underline_row) ||
+			    ((attr & CELL_STRIKE) && sub == render->strike_row) ||
+			    ((attr & CELL_OVERLINE) &&
+			    sub == render->overline_row))
+				set = full;
+			render->attr_ops[sub][attr] = set << 16 | keep;
+		}
+	}
 
 	for (unsigned line = 0; line < RENDER_HEIGHT; line++) {
 		if (line < render->y_offset ||
@@ -118,46 +137,51 @@ HOT_FUNC(fill_words)(uint32_t *out, unsigned words, uint32_t value)
 }
 
 /*
- * Glyph bits for one cell row, left-aligned in the low `row_bytes * 8`
- * bits, with text attributes applied. Out of line: most cells have
- * attr == 0 and never call it.
+ * Apply text attributes to one cell row's glyph bits via the per-row
+ * (and, or) table built in render_init(): bits = (bits & and) | or. Inline
+ * and branch-free, so a cell with attributes costs a few cycles more than
+ * one without. (An out-of-line version cost ~35 cycles per attributed
+ * cell, ~700 cycles/line on a screen with every 4th cell underlined.)
  */
-static uint32_t
-HOT_FUNC(apply_attr)(const struct render *render, uint32_t bits,
-    uint16_t attr, unsigned sub, bool blink_off)
+HOT_INLINE uint32_t
+attr_bits(const struct render *render, uint32_t bits, unsigned attr,
+    unsigned sub, unsigned attr_mask)
 {
-	const struct font *font = render->font;
-	uint32_t full = (1u << (font->row_bytes * 8)) - 1;
+	uint32_t op = render->attr_ops[sub][attr & attr_mask];
 
-	if ((attr & CELL_INVISIBLE) || ((attr & CELL_BLINK) && blink_off))
-		bits = 0;
-	if ((attr & CELL_UNDERLINE) && sub == font->underline_row)
-		bits = full;
-	if ((attr & CELL_STRIKE) && sub == render->strike_row)
-		bits = full;
-	if ((attr & CELL_OVERLINE) && sub == render->overline_row)
-		bits = full;
-	return bits;
+	return (bits & op) | (op >> 16);
 }
 
-static inline uint32_t
+/* Blink is implemented by masking CELL_BLINK out of the attr index during
+ * the visible half of the cycle; the table entries assume "hidden". */
+HOT_INLINE unsigned
+attr_mask_for(const struct render *render)
+{
+	bool blink_off = (render->frame >> 5) & 1;
+
+	return blink_off ? RENDER_ATTR_COMBOS - 1 :
+	    (RENDER_ATTR_COMBOS - 1) & ~(unsigned)CELL_BLINK;
+}
+
+HOT_INLINE uint32_t
 read_bits(const uint8_t *row, unsigned row_bytes)
 {
 	return row_bytes == 1 ? row[0] : (uint32_t)row[0] << 8 | row[1];
 }
 
 /* Write one 8-pixel group (bits 7..0, MSB leftmost) as four words. */
-static inline void
+HOT_INLINE void
 emit8(uint32_t *out, uint32_t bits, uint32_t bg2, uint32_t diff2,
-    const uint32_t (*masks)[2])
+    const uint32_t (*masks)[4])
 {
-	const uint32_t *high = masks[(bits >> 4) & 0xf];
-	const uint32_t *low = masks[bits & 0xf];
+	const uint32_t *mask = masks[bits & 0xff];
+	uint32_t mask0 = mask[0], mask1 = mask[1];
+	uint32_t mask2 = mask[2], mask3 = mask[3];
 
-	out[0] = bg2 ^ (diff2 & high[0]);
-	out[1] = bg2 ^ (diff2 & high[1]);
-	out[2] = bg2 ^ (diff2 & low[0]);
-	out[3] = bg2 ^ (diff2 & low[1]);
+	out[0] = bg2 ^ (diff2 & mask0);
+	out[1] = bg2 ^ (diff2 & mask1);
+	out[2] = bg2 ^ (diff2 & mask2);
+	out[3] = bg2 ^ (diff2 & mask3);
 }
 
 /* Cell widths that aren't 8 or 16: one halfword store per pixel. */
@@ -180,7 +204,7 @@ HOT_FUNC(draw_cell)(const struct render *render, uint16_t *out,
     const struct cell *cell, uint32_t bits, bool invert)
 {
 	const struct font *font = render->font;
-	const uint32_t (*masks)[2] = nibble_masks[invert];
+	const uint32_t (*masks)[4] = byte_masks[invert];
 
 	if (font->width == 8) {
 		emit8((uint32_t *)out, bits, cell->bg2, cell->diff2, masks);
@@ -221,6 +245,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	const unsigned cols = grid->cols;
 	const bool invert = grid->reverse_video;
 	const bool blink_off = (render->frame >> 5) & 1;
+	const unsigned attr_mask = attr_mask_for(render);
 	uint16_t *out = pixels + render->x_offset;
 
 	/* Side borders (zero width when the font divides 640 evenly). */
@@ -235,16 +260,19 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 		 * a cell has attributes, so GCC keeps everything in
 		 * registers.
 		 */
-		const uint32_t (*masks)[2] = nibble_masks[invert];
+		const uint32_t (*masks)[4] = byte_masks[invert];
 		uint32_t *words = (uint32_t *)out;
-
 		for (unsigned col = 0; col < cols; col++, words += 4) {
 			const struct cell *cell = &cells[col];
-			uint32_t bits = glyph_rows[cell->glyph * glyph_bytes];
+			uint32_t glyph_attr;
 
-			if (__builtin_expect(cell->attr != 0, 0))
-				bits = apply_attr(render, bits, cell->attr, sub,
-				    blink_off);
+			/* glyph (low half) and attr (high half) in one load. */
+			memcpy(&glyph_attr, cell, sizeof(glyph_attr));
+			uint32_t bits = glyph_rows[(glyph_attr & 0xffff) *
+			    glyph_bytes];
+			if (glyph_attr >> 16)
+				bits = attr_bits(render, bits, glyph_attr >> 16,
+				    sub, attr_mask);
 			emit8(words, bits, cell->bg2, cell->diff2, masks);
 		}
 	} else {
@@ -254,8 +282,8 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 			    cell->glyph * glyph_bytes, row_bytes);
 
 			if (cell->attr != 0)
-				bits = apply_attr(render, bits, cell->attr, sub,
-				    blink_off);
+				bits = attr_bits(render, bits, cell->attr, sub,
+				    attr_mask);
 			draw_cell(render, out + col * width, cell, bits, invert);
 		}
 	}
@@ -275,8 +303,8 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 		bool cursor_invert = invert;
 
 		if (cell->attr != 0)
-			bits = apply_attr(render, bits, cell->attr, sub,
-			    blink_off);
+			bits = attr_bits(render, bits, cell->attr, sub,
+			    attr_mask);
 		switch (grid->cursor_shape) {
 		case CURSOR_UNDERLINE:
 			if (sub >= font->height - 2u)

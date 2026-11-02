@@ -21,6 +21,10 @@
 #define RENDER_WIDTH	640
 #define RENDER_HEIGHT	480
 
+/* Every combination of enum cell_attr bits (5 bits today). */
+#define RENDER_ATTR_COMBOS	32
+#define RENDER_MAX_CELL_HEIGHT	32
+
 /* line_row[] value for scanlines above/below the grid. */
 #define RENDER_LINE_BORDER	0xff
 
@@ -35,6 +39,8 @@ struct render {
 	volatile uint32_t frame;	/* bumped by core 1 at line 0 */
 	uint8_t		 line_row[RENDER_HEIGHT];	/* grid row or BORDER */
 	uint8_t		 line_sub[RENDER_HEIGHT];	/* glyph row */
+	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
+	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };
 
 /* Grid dimensions a font produces on the 640x480 screen. */

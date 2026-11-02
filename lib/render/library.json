@@ -1,0 +1,8 @@
+{
+  "name": "render",
+  "version": "0.1.0",
+  "description": "Cell grid and scanline text renderer (pure; runs on core 1 in the DVI line budget)",
+  "build": {
+    "flags": "-O2"
+  }
+}
