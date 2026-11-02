@@ -231,3 +231,17 @@ end of `vterm_state_reset()`: after DECSTR (soft), RIS (hard), and the
 embedder's own calls. term.c keeps state libvterm doesn't (the DECLL
 user lights, the status line type) and needs to know when RIS happens;
 no existing callback says so.
+
+## 29. One UTF-8 decoder for split characters (`src/state.c`)
+
+In UTF-8 mode, G0-G3 default to UTF-8 decoders, each an instance with
+its own half-read-character state, and `on_text()` picks one per chunk
+by the chunk's first byte: G0's for ASCII, the separate `encoding_utf8`
+for a high-bit byte. A character split between two writes (USB packets
+are 64 bytes) was begun by one and finished by the other, so it came out
+as U+FFFD, and the half left in G0's instance spoiled the next ASCII
+chunk with a second one. Whenever the chosen decoder is UTF-8, the shared
+`encoding_utf8` is used, so the state carries over; a designated 94-set
+(DEC Special Graphics) still decodes ASCII itself. Reset clears the
+shared decoder too. Found when the capture demo's box drawing broke
+(devlog 023).

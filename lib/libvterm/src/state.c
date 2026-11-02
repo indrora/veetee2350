@@ -408,6 +408,14 @@ static int on_text(const char bytes[], size_t len, void *user)
     state->vt->mode.utf8   ? &state->encoding_utf8 :
                              &state->encoding[state->gr_set];
 
+  /* VeeTee patch 29: G0-G3 default to UTF-8 instances of their own, so a
+   * character split between two writes (E2 94 | 80) was half-decoded by
+   * G0's instance (the chunk began with ASCII) and finished by
+   * encoding_utf8 (the next began with 0x80): two U+FFFD instead of one
+   * U+2500. All UTF-8 decoding goes through one instance now. */
+  if(state->vt->mode.utf8 && encoding->enc == state->encoding_utf8.enc)
+    encoding = &state->encoding_utf8;
+
   (*encoding->enc->decode)(encoding->enc, encoding->data,
       codepoints, &npoints, state->gsingle_set ? 1 : maxpoints,
       bytes, &eaten, len);
@@ -2589,6 +2597,11 @@ void vterm_state_reset(VTermState *state, int hard)
     if(default_enc->init)
       (*default_enc->init)(default_enc, state->encoding[i].data);
   }
+  /* VeeTee patch 29: and the shared UTF-8 decoder forgets a half
+   * character. */
+  if(state->encoding_utf8.enc->init)
+    (*state->encoding_utf8.enc->init)(state->encoding_utf8.enc,
+        state->encoding_utf8.data);
 
   state->gl_set = 0;
   state->gr_set = 1;

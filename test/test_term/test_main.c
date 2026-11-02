@@ -1461,6 +1461,23 @@ test_status_peek_top(void)
 	TEST_ASSERT_EQUAL(2, render.line_sub[2]);
 }
 
+/* A UTF-8 character split between two feeds (a USB packet boundary). */
+static void
+test_utf8_split_feed(void)
+{
+	feed("A\xe2\x94");
+	feed("\x80" "B\r\nC");
+	TEST_ASSERT_EQUAL(glyph('A'), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph(0x2500), cell_at(0, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph('B'), cell_at(0, 2)->glyph);
+	TEST_ASSERT_EQUAL(glyph('C'), cell_at(1, 0)->glyph);
+	/* Split after the first byte, too. */
+	feed("\xe2");
+	feed("\x94\x82" "D");
+	TEST_ASSERT_EQUAL(glyph(0x2502), cell_at(1, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph('D'), cell_at(1, 2)->glyph);
+}
+
 int
 main(void)
 {
@@ -1518,6 +1535,7 @@ main(void)
 	RUN_TEST(test_hpa_origin);
 	RUN_TEST(test_osc104_specials);
 	RUN_TEST(test_iso_protection);
+	RUN_TEST(test_utf8_split_feed);
 	RUN_TEST(test_decll);
 	RUN_TEST(test_decssdt);
 	RUN_TEST(test_status_row_layout);
