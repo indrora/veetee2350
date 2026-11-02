@@ -182,12 +182,13 @@ esctest2 runs unattended through `tools/hostshell.py` (see devlog 012):
 ```
 cd tools && python3 hostshell.py /dev/cu.usbmodem*1 --type \
   "cd …/esctest2/esctest && python3 esctest.py --expected-terminal=xterm \
-   --xterm-checksum=390 --max-vt-level=4 --timeout=2 --logfile=run.log \
+   --xterm-checksum=390 --xterm-reverse-wrap=390 --max-vt-level=4 \
+   --timeout=2 --logfile=run.log \
    --no-print-logs; exit" --exit-after 3000
 python3 tools/esc_summary.py run.log [--failures] [--compare old.log]
 ```
 
-Latest: **451 / 567** pass (80%) at 640×480 (baseline 169). `docs/esctest-latest.log`
+Latest: **474 / 567** pass (84%) at 640×480 (baseline 169). `docs/esctest-latest.log`
 holds the full log; `docs/esctest-baseline.log` the first run.
 
 ## Known gaps

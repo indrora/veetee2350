@@ -27,6 +27,9 @@
 #define BUFIDX_PRIMARY   0
 #define BUFIDX_ALTSCREEN 1
 
+/* The DECSC save for the screen being shown (VeeTee patch 13). */
+#define SAVED(state) ((state)->saved_screen[(state)->mode.alt_screen ? 1 : 0])
+
 typedef struct VTermEncoding VTermEncoding;
 
 typedef struct {
@@ -119,6 +122,7 @@ struct VTermState
     unsigned int screen:1;
     unsigned int leftrightmargin:1;
     unsigned int reverse_wrap:1; /* VeeTee patch 6: DECSET 45 */
+    unsigned int reverse_wrap_ext:1; /* VeeTee patch 16: DECSET 1045 */
     unsigned int bracketpaste:1;
     unsigned int report_focus:1;
   } mode;
@@ -136,7 +140,13 @@ struct VTermState
 
   unsigned int protected_cell : 1;
 
-  /* Saved state under DEC mode 1048/1049 */
+  /* VeeTee patch 18: DECSCL conformance level (1 = VT100 ... 5 = VT500),
+   * set by the embedder; 0 means no limits. Below 4 DECLRMM is refused,
+   * below 3 DECRQM goes unanswered. */
+  int vt_level;
+
+  /* Saved state under DEC mode 1048/1049. VeeTee patch 13: one per
+   * screen (main, alternate), as xterm keeps them; see SAVED(). */
   struct {
     VTermPos pos;
     struct VTermPen pen;
@@ -148,7 +158,7 @@ struct VTermState
       unsigned int origin:1;          /* VeeTee patch 7 */
     } mode;
     unsigned int protected_cell:1;    /* VeeTee patch 7 */
-  } saved;
+  } saved_screen[2];
 
   /* Temporary state for DECRQSS parsing */
   union {

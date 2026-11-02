@@ -113,3 +113,46 @@ DEC STD 070 (and xterm): after filling the screen with E, DECALN resets
 the top/bottom and left/right margins and moves the cursor home.
 libvterm only filled the screen.
 
+
+## 13. A DECSC save per screen (`src/vterm_internal.h`, `state.c`, `pen.c`)
+
+xterm keeps the DECSC/DECRC (and 1048) save separately for the main and
+the alternate screen. `saved` became `saved_screen[2]`, used through
+`SAVED(state)`, which picks the one for the screen shown; mode 1049
+saves before switching to the alternate screen and restores after
+switching back, so its save lives on the main screen. Reset clears both.
+
+## 14. Index outside the left/right margins (`src/state.c`)
+
+With DECLRMM margins set, LF/IND/NEL/VT/FF at the bottom margin and RI
+at the top margin scroll only when the cursor is between the left and
+right margins; outside them the cursor stays put and nothing scrolls
+(xterm, DEC STD 070).
+
+## 15. Text and the left/right margins (`src/state.c`)
+
+Printing between DECSLRM margins treats the right margin as the line's
+edge: autowrap continues at the next line's *left margin*, without
+autowrap the cursor sticks at the right margin, and insert mode pushes
+characters off at the right margin. Outside the margins (or with
+DECLRMM off) the screen edge applies, as before.
+
+## 16. Reverse wraparound as xterm 383+ (`src/state.c`)
+
+Extends patch 6. Mode 45 now backs BS up onto the previous line only
+when the current line is its continuation (it wrapped); new mode 1045
+always does, and from the top margin wraps to the bottom margin. Both
+need DECAWM, stop at the left margin when the cursor is at or inside
+it, land on the previous line's right margin, and from the
+pending-wrap position only cancel the wrap. DECRQM and reset know 1045.
+
+## 17. Mode 47 (`src/state.c`)
+
+xterm's original alternate-screen switch, DECSET 47, is handled like
+1047 (libvterm knew only 1047 and 1049). DECRQM reports it.
+
+## 18. Conformance level limits (`src/vterm_internal.h`, `state.c`)
+
+`state->vt_level` (1-5, set by the embedder from DECSCL; 0 = no limit):
+below level 4 DECSET 69 (DECLRMM) is ignored, below level 3 DEC-private
+DECRQM is not answered -- as a VT220 or VT320 would behave.

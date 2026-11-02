@@ -557,10 +557,21 @@ test_scosc_and_reverse_wrap(void)
 	feed("\x1b[5;6H\x1b[s\x1b[1;1H\x1b[u\x1b[6n");	/* SCOSC/SCORC */
 	TEST_ASSERT_EQUAL_STRING("\x1b[5;6R", reply);
 	reply_len = 0;
-	feed("\x1b[?45h\x1b[3;1H\x08\x1b[6n");	/* BS wraps back */
+	/* Mode 45 backs up only onto a line that wrapped into this one. */
+	feed("\x1b[?45h\x1b[3;1H\x08\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[3;1R", reply);	/* row 3 didn't wrap */
+	reply_len = 0;
+	feed("\x1b[10;79Habc\x1b[11;1H\x08\x1b[6n");	/* row 11 did */
+	TEST_ASSERT_EQUAL_STRING("\x1b[10;80R", reply);
+	/* Mode 1045 always does, and wraps from the top to the bottom. */
+	reply_len = 0;
+	feed("\x1b[?45l\x1b[?1045h\x1b[3;1H\x08\x1b[6n");
 	TEST_ASSERT_EQUAL_STRING("\x1b[2;80R", reply);
 	reply_len = 0;
-	feed("\x1b[?45l\x1b[3;1H\x08\x1b[6n");	/* off: stays */
+	feed("\x1b[1;1H\x08\x1b[6n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[30;80R", reply);
+	reply_len = 0;
+	feed("\x1b[?1045l\x1b[3;1H\x08\x1b[6n");	/* off: stays */
 	TEST_ASSERT_EQUAL_STRING("\x1b[3;1R", reply);
 }
 
@@ -1023,6 +1034,72 @@ test_window_ops(void)
 	TEST_ASSERT_EQUAL_STRING("\x1b[2t\x1b[1t\x1b[3;12;34t", reply);
 }
 
+static void
+test_saved_cursor_per_screen(void)
+{
+	/* Save on the main screen, save elsewhere on the alternate,
+	 * restore on main: the main screen's save. */
+	feed("\x1b[3;2H\x1b" "7\x1b[?1047h\x1b[7;6H\x1b" "7\x1b[?1047l"
+	    "\x1b[1;1H\x1b" "8");
+	TEST_ASSERT_EQUAL(2, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(1, term.screen->cursor_col);
+	/* The same with xterm's original mode 47. */
+	feed("\x1b[3;2H\x1b" "7\x1b[?47h\x1b[7;6H\x1b" "7\x1b[?47l"
+	    "\x1b[1;1H\x1b" "8");
+	TEST_ASSERT_EQUAL(2, term.screen->cursor_row);
+	/* 1049 still brings the cursor back. */
+	feed("\x1b[5;5H\x1b[?1049h\x1b[10;10H\x1b[?1049l");
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_col);
+}
+
+static void
+test_index_outside_lr_margins(void)
+{
+	feed("\x1b[2;5r\x1b[?69h\x1b[2;5s\x1b[5;3Hx");
+	feed("\x1b[5;6H\x1b" "D");		/* IND right of the margins */
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(glyph('x'), cell_at(4, 2)->glyph);	/* no scroll */
+	feed("\x1b[2;6H\x1b" "M");		/* RI at the top margin */
+	TEST_ASSERT_EQUAL(1, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(glyph('x'), cell_at(4, 2)->glyph);
+	feed("\x1b[5;3H\x1b" "D");		/* inside: scrolls */
+	TEST_ASSERT_EQUAL(glyph('x'), cell_at(3, 2)->glyph);
+}
+
+static void
+test_text_lr_margins(void)
+{
+	/* Margins 5..10: printing wraps at 10 to column 5 of the next line. */
+	feed("\x1b[?69h\x1b[5;10s\x1b[1;9Habcd");
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 8)->glyph);
+	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 9)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 10)->glyph);
+	TEST_ASSERT_EQUAL(glyph('c'), cell_at(1, 4)->glyph);
+	TEST_ASSERT_EQUAL(glyph('d'), cell_at(1, 5)->glyph);
+	/* Autowrap off: stuck at the right margin, last char wins. */
+	feed("\x1b[?7l\x1b[3;9Hxyz");
+	TEST_ASSERT_EQUAL(glyph('z'), cell_at(2, 9)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(2, 10)->glyph);
+	feed("\x1b[?7h");
+}
+
+static void
+test_decscl_levels(void)
+{
+	/* Level 3 (VT320): no left/right margins. */
+	feed("\x1b[63;1\"p\x1b[?69h\x1b[5;6s\x1b[1;5Habc");
+	TEST_ASSERT_EQUAL(7, term.screen->cursor_col);
+	/* Level 2 (VT220): DECRQM isn't answered at all. */
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[62;1\"p\x1b[?7$p\x1b[4$p");
+	TEST_ASSERT_EQUAL(0, reply_len);
+	/* DECRQSS reports the level, capped at the emulation's (64). */
+	feed("\x1b[65;1\"p\x1bP$q\"p\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r64;1\"p\x1b\\", reply);
+}
+
 int
 main(void)
 {
@@ -1068,6 +1145,10 @@ main(void)
 	RUN_TEST(test_sixel_depths);
 	RUN_TEST(test_decbi_decfi);
 	RUN_TEST(test_window_ops);
+	RUN_TEST(test_saved_cursor_per_screen);
+	RUN_TEST(test_index_outside_lr_margins);
+	RUN_TEST(test_text_lr_margins);
+	RUN_TEST(test_decscl_levels);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

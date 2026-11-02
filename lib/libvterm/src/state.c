@@ -155,9 +155,20 @@ static void scroll(VTermState *state, VTermRect rect, int downward, int rightwar
         state->callbacks->moverect, state->callbacks->erase, state->cbdata);
 }
 
+/* VeeTee patch 14: is the cursor between the left and right margins? */
+static int in_lr_margins(const VTermState *state)
+{
+  return state->pos.col >= SCROLLREGION_LEFT(state) &&
+         state->pos.col < SCROLLREGION_RIGHT(state);
+}
+
 static void linefeed(VTermState *state)
 {
   if(state->pos.row == SCROLLREGION_BOTTOM(state) - 1) {
+    /* VeeTee patch 14: outside the left/right margins, the bottom
+     * margin neither scrolls nor lets the cursor past. */
+    if(!in_lr_margins(state))
+      return;
     VTermRect rect = {
       .start_row = state->scrollregion_top,
       .end_row   = SCROLLREGION_BOTTOM(state),
@@ -384,11 +395,23 @@ static int on_text(const char bytes[], size_t len, void *user)
     printf("}, onscreen width %d\n", width);
 #endif
 
-    if(state->at_phantom || state->pos.col + width > THISROWWIDTH(state)) {
+    /* VeeTee patch 15: between the left/right margins, the right margin
+     * is the edge: text wraps to the next line's left margin, sticks at
+     * the right margin without autowrap, and insert mode pushes text
+     * off at the right margin. */
+    int right_edge = THISROWWIDTH(state);
+    if(in_lr_margins(state) && SCROLLREGION_RIGHT(state) < right_edge)
+      right_edge = SCROLLREGION_RIGHT(state);
+
+    if(state->at_phantom || state->pos.col + width > right_edge) {
+      int left = in_lr_margins(state) ? SCROLLREGION_LEFT(state) : 0;
       linefeed(state);
-      state->pos.col = 0;
+      state->pos.col = left;
       state->at_phantom = 0;
       state->lineinfo[state->pos.row].continuation = 1;
+      right_edge = THISROWWIDTH(state);
+      if(in_lr_margins(state) && SCROLLREGION_RIGHT(state) < right_edge)
+        right_edge = SCROLLREGION_RIGHT(state);
     }
 
     if(state->mode.insert) {
@@ -400,7 +423,7 @@ static int on_text(const char bytes[], size_t len, void *user)
         .start_row = state->pos.row,
         .end_row   = state->pos.row + 1,
         .start_col = state->pos.col,
-        .end_col   = THISROWWIDTH(state),
+        .end_col   = right_edge,
       };
       scroll(state, rect, 0, -1);
     }
@@ -423,7 +446,7 @@ static int on_text(const char bytes[], size_t len, void *user)
       state->combine_pos = state->pos;
     }
 
-    if(state->pos.col + width >= THISROWWIDTH(state)) {
+    if(state->pos.col + width >= right_edge) {
       if(state->mode.autowrap)
         state->at_phantom = 1;
     }
@@ -459,15 +482,38 @@ static int on_control(unsigned char control, void *user)
     break;
 
   case 0x08: // BS - ECMA-48 8.3.5
-    if(state->pos.col > 0)
+  {
+    /* VeeTee patches 6 and 16: reverse wraparound, as xterm since 383.
+     * Both need DECAWM. Mode 45 backs up onto the previous line only if
+     * this one is its continuation (it wrapped); mode 1045 always does,
+     * and from the top margin wraps to the bottom margin. Either way
+     * the stop is the left margin (if the cursor is at or inside it),
+     * and the landing spot the previous line's right margin. From the
+     * pending-wrap position BS just cancels the wrap. */
+    int reverse = state->mode.autowrap &&
+                  (state->mode.reverse_wrap || state->mode.reverse_wrap_ext);
+    int left = state->pos.col >= SCROLLREGION_LEFT(state) ?
+               SCROLLREGION_LEFT(state) : 0;
+
+    if(reverse && state->at_phantom)
+      state->at_phantom = 0;              /* cancel the pending wrap */
+    else if(state->pos.col > left)
       state->pos.col--;
-    /* VeeTee patch 6: xterm reverse-wraparound (DECSET 45, with DECAWM):
-     * BS at the left edge goes to the end of the previous line. */
-    else if(state->mode.reverse_wrap && state->mode.autowrap && state->pos.row > 0) {
-      state->pos.row--;
-      state->pos.col = state->cols - 1;
+    else if(reverse) {
+      int top = state->pos.row == state->scrollregion_top;
+      int wrapped = state->lineinfo[state->pos.row].continuation;
+      if(state->mode.reverse_wrap_ext && top) {
+        state->pos.row = SCROLLREGION_BOTTOM(state) - 1;
+        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
+      }
+      else if(state->pos.row > 0 &&
+              (state->mode.reverse_wrap_ext || wrapped)) {
+        state->pos.row--;
+        state->pos.col = SCROLLREGION_RIGHT(state) - 1;
+      }
     }
     break;
+  }
 
   case 0x09: // HT - ECMA-48 8.3.60
     tab(state, 1, +1);
@@ -514,6 +560,8 @@ static int on_control(unsigned char control, void *user)
 
   case 0x8d: // RI - ECMA-48 8.3.104
     if(state->pos.row == state->scrollregion_top) {
+      if(!in_lr_margins(state))     /* VeeTee patch 14 */
+        break;
       VTermRect rect = {
         .start_row = state->scrollregion_top,
         .end_row   = SCROLLREGION_BOTTOM(state),
@@ -578,26 +626,26 @@ static int settermprop_string(VTermState *state, VTermProp prop, VTermStringFrag
 static void savecursor(VTermState *state, int save)
 {
   if(save) {
-    state->saved.pos = state->pos;
-    state->saved.mode.cursor_visible = state->mode.cursor_visible;
-    state->saved.mode.cursor_blink   = state->mode.cursor_blink;
-    state->saved.mode.cursor_shape   = state->mode.cursor_shape;
+    SAVED(state).pos = state->pos;
+    SAVED(state).mode.cursor_visible = state->mode.cursor_visible;
+    SAVED(state).mode.cursor_blink   = state->mode.cursor_blink;
+    SAVED(state).mode.cursor_shape   = state->mode.cursor_shape;
     /* VeeTee patch 7: DECSC also saves DECOM and DECSCA (DEC STD 070). */
-    state->saved.mode.origin         = state->mode.origin;
-    state->saved.protected_cell      = state->protected_cell;
+    SAVED(state).mode.origin         = state->mode.origin;
+    SAVED(state).protected_cell      = state->protected_cell;
 
     vterm_state_savepen(state, 1);
   }
   else {
     VTermPos oldpos = state->pos;
 
-    state->pos = state->saved.pos;
+    state->pos = SAVED(state).pos;
 
-    settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, state->saved.mode.cursor_visible);
-    settermprop_bool(state, VTERM_PROP_CURSORBLINK,   state->saved.mode.cursor_blink);
-    settermprop_int (state, VTERM_PROP_CURSORSHAPE,   state->saved.mode.cursor_shape);
-    state->mode.origin    = state->saved.mode.origin;     /* VeeTee patch 7 */
-    state->protected_cell = state->saved.protected_cell;
+    settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, SAVED(state).mode.cursor_visible);
+    settermprop_bool(state, VTERM_PROP_CURSORBLINK,   SAVED(state).mode.cursor_blink);
+    settermprop_int (state, VTERM_PROP_CURSORSHAPE,   SAVED(state).mode.cursor_shape);
+    state->mode.origin    = SAVED(state).mode.origin;     /* VeeTee patch 7 */
+    state->protected_cell = SAVED(state).protected_cell;
 
     vterm_state_savepen(state, 0);
 
@@ -855,8 +903,14 @@ static void set_dec_mode(VTermState *state, int num, int val)
     state->mode.reverse_wrap = val;
     break;
 
+  case 1045: /* VeeTee patch 16: extended reverse-wraparound */
+    state->mode.reverse_wrap_ext = val;
+    break;
+
   case 69: // DECVSSM - vertical split screen mode
            // DECLRMM - left/right margin mode
+    if(state->vt_level && state->vt_level < 4)   /* VeeTee patch 18 */
+      break;
     state->mode.leftrightmargin = val;
     if(val) {
       // Setting DECVSSM must clear doublewidth/doubleheight state of every line
@@ -893,6 +947,7 @@ static void set_dec_mode(VTermState *state, int num, int val)
     state->mouse_protocol = val ? MOUSE_RXVT : MOUSE_X10;
     break;
 
+  case 47:   /* VeeTee patch 17: xterm's original alternate screen */
   case 1047:
     settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
     break;
@@ -902,8 +957,16 @@ static void set_dec_mode(VTermState *state, int num, int val)
     break;
 
   case 1049:
-    settermprop_bool(state, VTERM_PROP_ALTSCREEN, val);
-    savecursor(state, val);
+    /* VeeTee patch 13: saves are per screen, so save on the main screen
+     * before switching and restore after switching back. */
+    if(val) {
+      savecursor(state, 1);
+      settermprop_bool(state, VTERM_PROP_ALTSCREEN, 1);
+    }
+    else {
+      settermprop_bool(state, VTERM_PROP_ALTSCREEN, 0);
+      savecursor(state, 0);
+    }
     break;
 
   case 2004:
@@ -957,6 +1020,10 @@ static void request_dec_mode(VTermState *state, int num)
       reply = state->mode.reverse_wrap;
       break;
 
+    case 1045:
+      reply = state->mode.reverse_wrap_ext;
+      break;
+
     case 69:
       reply = state->mode.leftrightmargin;
       break;
@@ -989,6 +1056,7 @@ static void request_dec_mode(VTermState *state, int num)
       reply = state->mouse_protocol == MOUSE_RXVT;
       break;
 
+    case 47:   /* VeeTee patch 17 */
     case 1047:
       reply = state->mode.alt_screen;
       break;
@@ -1542,6 +1610,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     break;
 
   case LEADER('?', INTERMED('$', 0x70)):
+    if(state->vt_level && state->vt_level < 3)   /* VeeTee patch 18 */
+      break;
     request_dec_mode(state, CSI_ARG(args[0]));
     break;
 
@@ -2257,14 +2327,17 @@ void vterm_state_reset(VTermState *state, int hard)
   state->mode.bracketpaste    = 0;
   state->mode.report_focus    = 0;
   state->mode.reverse_wrap    = 0;    /* VeeTee patch 6 */
+  state->mode.reverse_wrap_ext = 0;   /* VeeTee patch 16 */
 
   /* VeeTee patch 7: soft and hard reset also reset the DECSC save
    * (home, no origin mode, unprotected), so a later DECRC can't bring
    * back state from before the reset. */
-  state->saved.pos.row = 0;
-  state->saved.pos.col = 0;
-  state->saved.mode.origin = 0;
-  state->saved.protected_cell = 0;
+  for(int i = 0; i < 2; i++) {
+    state->saved_screen[i].pos.row = 0;
+    state->saved_screen[i].pos.col = 0;
+    state->saved_screen[i].mode.origin = 0;
+    state->saved_screen[i].protected_cell = 0;
+  }
 
   state->mouse_flags = 0;
 
@@ -2285,7 +2358,8 @@ void vterm_state_reset(VTermState *state, int hard)
   vterm_state_resetpen(state);
   /* VeeTee patch 7: DECRC with nothing saved restores the default pen,
    * as xterm does, not a zeroed one (which reads as black RGB). */
-  state->saved.pen = state->pen;
+  state->saved_screen[0].pen = state->pen;
+  state->saved_screen[1].pen = state->pen;
 
   VTermEncoding *default_enc = state->vt->mode.utf8 ?
       vterm_lookup_encoding(ENC_UTF8,      'u') :

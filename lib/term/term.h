@@ -174,6 +174,7 @@ struct term {
 	 * here, e.g. DECARM, DECNKM, KAM. Index into term.c's table. */
 	uint8_t		 stored_modes[40];
 	uint8_t		 decsace;	/* DECSACE, reported by DECRQSS only */
+	uint8_t		 conformance;	/* DECSCL level: 61 (VT100) .. 65 */
 
 	/* OSC colour state (4/5/10-19 and their resets). */
 	uint8_t		 palette_initial[256][3];	/* for OSC 104 */

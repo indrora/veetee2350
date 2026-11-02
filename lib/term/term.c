@@ -829,6 +829,14 @@ fb_osc(int command, VTermStringFragment frag, void *user)
 }
 
 /* ENQ (0x05): reply with the answerback message, as VT terminals do. */
+/* DECSCL level 61..65, mirrored into libvterm's limits (patch 18). */
+static void
+set_conformance(struct term *term, uint8_t level)
+{
+	term->conformance = level;
+	term->state->vt_level = level - 60;
+}
+
 static int	fb_csi(const char *leader, const long args[], int argcount,
 		    const char *intermed, char command, void *user);
 
@@ -1447,6 +1455,26 @@ fb_csi(const char *leader, const long args[], int argcount,
 		return 1;
 	}
 
+	/*
+	 * DECSCL, "CSI Pl ; Pc \" p": select conformance level 61 (VT100)
+	 * to 65 (VT500). A soft reset, as DEC specifies, and the level's
+	 * limits (libvterm patch 18): no left/right margins below VT420,
+	 * no DECRQM below VT320. (Pc, 7- or 8-bit controls, is ignored:
+	 * 8-bit output isn't implemented.)
+	 */
+	if (no_leader && intermed != nullptr && intermed[0] == '"' &&
+	    intermed[1] == '\0' && command == 'p') {
+		if (first >= 61 && first <= 65) {
+			/* No higher than the emulation level, as xterm caps
+			 * DECSCL at its terminal ID (VT420 for us). */
+			long most = 61 + term->options.emulation % EMU_COUNT;
+			set_conformance(term, (uint8_t)(first < most ? first :
+			    most));
+			vterm_state_reset(term->state, 0);
+		}
+		return 1;
+	}
+
 	/* DECSACE, "CSI Ps * x": remembered for DECRQSS. */
 	if (no_leader && intermed != nullptr && intermed[0] == '*' &&
 	    intermed[1] == '\0' && command == 'x') {
@@ -1522,6 +1550,8 @@ fb_csi(const char *leader, const long args[], int argcount,
 	/* DECRQM: "CSI [?] Ps $ p" -> "CSI [?] Ps ; Pm $ y". */
 	if (intermed != nullptr && intermed[0] == '$' && command == 'p' &&
 	    first != 2048) {
+		if (term->conformance < 63)
+			return 1;	/* VT100/VT220: no DECRQM */
 		unsigned value = 0;	/* not recognised */
 		int index = stored_mode_index(first, private);
 		if (index >= 0)
@@ -1654,13 +1684,10 @@ xtgettcap_reply(struct term *term, const char *hex_name, size_t hex_len)
 static int
 decrqss_reply(struct term *term, const char *setting, size_t len)
 {
-	static const char *const conformance[EMU_COUNT] = {"61", "62", "63",
-	    "64"};
 	char value[24];
 
 	if (len == 2 && memcmp(setting, "\"p", 2) == 0)	/* DECSCL */
-		snprintf(value, sizeof(value), "%s;1\"p",
-		    conformance[term->options.emulation % EMU_COUNT]);
+		snprintf(value, sizeof(value), "%u;1\"p", term->conformance);
 	else if (len == 1 && setting[0] == 't')		/* DECSLPP */
 		snprintf(value, sizeof(value), "%ut", term->screen->rows);
 	else if (len == 2 && memcmp(setting, "*|", 2) == 0)	/* DECSNLS */
@@ -1739,6 +1766,8 @@ static const VTermStateFallbacks state_fallbacks = {
 static void
 apply_modes(struct term *term)
 {
+	/* The emulation level's conformance: VT100 61 ... xterm 64 (VT420). */
+	set_conformance(term, (uint8_t)(61 + term->options.emulation % EMU_COUNT));
 	static const char shape_codes[] = {'1', '3', '5'};  /* blinking */
 	const struct term_options *options = &term->options;
 	char sequence[32];
@@ -1832,6 +1861,8 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	memcpy(term->ansi_default, term->palette16, sizeof(term->ansi_default));
 	init_colour_state(term);
 	init_stored_modes(term);
+	set_conformance(term, (uint8_t)(61 + term->options.emulation %
+	    EMU_COUNT));
 	vterm_state_set_callbacks(term->state, &state_callbacks, term);
 	vterm_state_set_unrecognised_fallbacks(term->state, &state_fallbacks,
 	    term);
