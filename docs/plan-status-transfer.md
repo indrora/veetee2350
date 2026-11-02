@@ -23,8 +23,8 @@ plus capture to and replay from the card.
 | X/YMODEM | Started from SET-UP or a hotkey (Send / Receive); host runs `rx`/`sx`/`rb`/`sb`; received files to `/download` | Small, well specified protocols; licence of any borrowed code (Menie's `xmodem.c`) checked first. |
 | ZMODEM | Last: port NuttX's `system/zmodem` (Apache-2.0) after a licence check; auto-start on `sz`/`rz`'s ZRQINIT/ZRINIT | Too big to hand-roll; NuttX's is embedded-oriented. Needs POSIX file I/O mapped to `storage.h`. |
 
-The repository has no LICENSE file yet; that needs settling before
-Apache- or BSD-licensed code is vendored.
+The repository is MIT licensed (`LICENSE`, 2026-11-02); vendored and
+fetched code keeps its own licence, listed in `THIRD_PARTY.md`.
 
 ## Steps (one devlog entry and captures each)
 
