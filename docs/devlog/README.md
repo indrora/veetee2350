@@ -16,6 +16,7 @@ was learned.
 10. [Knowing its own size](010-terminal-size.md)
 11. [Emulation levels](011-emulation-level.md)
 12. [Taking the tests](012-conformance.md)
+13. [132 columns](013-132-columns.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

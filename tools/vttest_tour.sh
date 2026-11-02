@@ -11,6 +11,7 @@
 # prompts ("Push <RETURN>").
 set -u
 flags=${1:?usage: vttest_tour.sh FLAGDIR [LINE_PORT]}
+prefix=${PREFIX:-vttest}	# capture name prefix, e.g. PREFIX=vttest720
 port=${2:-$(ls /dev/cu.usbmodem*1 | head -1)}
 cd "$(dirname "$0")"
 
@@ -53,7 +54,7 @@ for menu_screens in "1 6" "4 5" "3 1"; do
 	set -- $menu_screens
 	for ((n = 1; n <= $2; n++)); do
 		sleep 1.5
-		cap "vttest-$1-$n"
+		cap "$prefix-$1-$n"
 		sleep 1.5
 	done
 	sleep 3

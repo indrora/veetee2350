@@ -2034,6 +2034,7 @@ static int on_resize(int rows, int cols, void *user)
 {
   VTermState *state = user;
   VTermPos oldpos = state->pos;
+  int oldrows = state->rows;    /* VeeTee patch 9 */
 
   if(cols != state->cols) {
     unsigned char *newtabstops = vterm_allocator_malloc(state->vt, (cols + 7) / 8);
@@ -2068,6 +2069,35 @@ static int on_resize(int rows, int cols, void *user)
   if(state->scrollregion_right > -1)
     UBOUND(state->scrollregion_right, state->cols);
 
+  /* VeeTee patch 9: resize the per-row line info whenever the row count
+   * changes. Upstream compared against state->rows after overwriting it
+   * (so never reallocated), and skipped this entirely when the embedder
+   * has a resize callback -- growing the screen then overran both
+   * arrays. Done before the callback so `fields` carries the new ones. */
+  if(rows != oldrows) {
+    for(int bufidx = BUFIDX_PRIMARY; bufidx <= BUFIDX_ALTSCREEN; bufidx++) {
+      VTermLineInfo *oldlineinfo = state->lineinfos[bufidx];
+      if(!oldlineinfo)
+        continue;
+
+      VTermLineInfo *newlineinfo = vterm_allocator_malloc(state->vt, rows * sizeof(VTermLineInfo));
+
+      int row;
+      for(row = 0; row < oldrows && row < rows; row++) {
+        newlineinfo[row] = oldlineinfo[row];
+      }
+
+      for( ; row < rows; row++) {
+        newlineinfo[row] = (VTermLineInfo){
+          .doublewidth = 0,
+        };
+      }
+
+      vterm_allocator_free(state->vt, state->lineinfos[bufidx]);
+      state->lineinfos[bufidx] = newlineinfo;
+    }
+  }
+
   VTermStateFields fields = {
     .pos       = state->pos,
     .lineinfos = { [0] = state->lineinfos[0], [1] = state->lineinfos[1] },
@@ -2079,31 +2109,6 @@ static int on_resize(int rows, int cols, void *user)
 
     state->lineinfos[0] = fields.lineinfos[0];
     state->lineinfos[1] = fields.lineinfos[1];
-  }
-  else {
-    if(rows != state->rows) {
-      for(int bufidx = BUFIDX_PRIMARY; bufidx <= BUFIDX_ALTSCREEN; bufidx++) {
-        VTermLineInfo *oldlineinfo = state->lineinfos[bufidx];
-        if(!oldlineinfo)
-          continue;
-
-        VTermLineInfo *newlineinfo = vterm_allocator_malloc(state->vt, rows * sizeof(VTermLineInfo));
-
-        int row;
-        for(row = 0; row < state->rows && row < rows; row++) {
-          newlineinfo[row] = oldlineinfo[row];
-        }
-
-        for( ; row < rows; row++) {
-          newlineinfo[row] = (VTermLineInfo){
-            .doublewidth = 0,
-          };
-        }
-
-        vterm_allocator_free(state->vt, state->lineinfos[bufidx]);
-        state->lineinfos[bufidx] = newlineinfo;
-      }
-    }
   }
 
   state->lineinfo = state->lineinfos[state->mode.alt_screen ? BUFIDX_ALTSCREEN : BUFIDX_PRIMARY];

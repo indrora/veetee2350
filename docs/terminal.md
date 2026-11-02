@@ -128,6 +128,21 @@ scrolling, ICH/DCH (moverect path), the 1049 alternate screen with cursor
 restore, DEC special graphics, DECSCNM/DECTCEM/DECSCUSR, DA1/DSR replies,
 and UTF-8 split across writes.
 
+## 132 columns (DECCOLM)
+
+`CSI ? 3 h` switches to 132 columns and `CSI ? 3 l` back to the
+**configured** width: 80 with a fixed 80×N terminal size, the full
+screen width with "full screen". (So `reset`, which sends `?3l`, never
+shrinks a full-width screen, but vttest's "80-column" screens only look
+right with a fixed 80×N size.) Rows don't change.
+
+132 needs 1056 px with an 8-pixel font, so only the 720p modes can do
+it; elsewhere the request is ignored, as xterm ignores it with 80/132
+switching disallowed. Mode 40 (xterm's "allow 80⇄132") is set by default
+and can turn DECCOLM off; mode 95 (DECNCSM) keeps the screen contents
+across a switch. A switch clears the screen, homes the cursor, resets
+the margins and, with DECSET 2048 on, sends the host a size report.
+
 ## Conformance (esctest2)
 
 esctest2 runs unattended through `tools/hostshell.py` (see devlog 012):
@@ -140,7 +155,7 @@ cd tools && python3 hostshell.py /dev/cu.usbmodem*1 --type \
 python3 tools/esc_summary.py run.log [--failures] [--compare old.log]
 ```
 
-Latest: **408 / 567** pass (72%) (baseline 169). `docs/esctest-latest.log`
+Latest: **408 / 567** pass (72%) at 640×480; 409 at 1280×720, where DECCOLM works (baseline 169). `docs/esctest-latest.log`
 holds the full log; `docs/esctest-baseline.log` the first run.
 
 ## Known gaps
@@ -151,7 +166,7 @@ holds the full log; `docs/esctest-baseline.log` the first run.
 | Italic renders upright, bold is colour-only | No italic or bold font faces. Could synthesize bold with a 1 px smear. |
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |
-| DECCOLM (132 columns) ignored | The grid size is fixed by the font. Plan: honour it when the resolution has room (≥ 132 × 8 px wide). |
+| DECCOLM (132 columns) ignored at 640×480, 800×480 and 960×540 | 132 × 8 px doesn't fit. Honoured at both 720p modes (see "132 columns" above). A narrow font would allow it elsewhere. |
 | Window ops (iconify, move, title stack, label reports) | There is no window. 19 esctest failures. |
 | DECBI/DECFI, DECCARA/DECRARA | Not implemented yet. |
 | Xcms colour spaces in OSC 4/10–19 | Only `rgb:`, `rgbi:` and `#hex` are parsed. |

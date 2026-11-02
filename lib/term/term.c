@@ -836,12 +836,13 @@ static const struct {
 } stored_mode_table[] = {
 	{2, false, 2},		/* KAM keyboard action */
 	{12, false, 1},		/* SRM send/receive (set: no local echo) */
-	{3, true, 2},		/* DECCOLM (accepted; size is fixed) */
+	{3, true, 2},		/* DECCOLM 132 columns, see set_columns() */
 	{4, true, 2},		/* DECSCLM smooth scroll */
 	{8, true, 1},		/* DECARM autorepeat */
 	{18, true, 2},		/* DECPFF print form feed */
 	{19, true, 2},		/* DECPEX print extent */
 	{34, true, 2},		/* DECRLM right-to-left */
+	{40, true, 1},		/* xterm: allow 80 <-> 132 (DECCOLM) */
 	{35, true, 2},		/* DECHEBM Hebrew keyboard */
 	{36, true, 2},		/* DECHEM Hebrew encoding */
 	{42, true, 2},		/* DECNRCM national replacement charsets */
@@ -1021,6 +1022,133 @@ send_size_report(struct term *term)
 	    grid->rows * term->font.height, grid->cols * term->font.width);
 }
 
+/* The size SET-UP asks for: what fits, capped by a fixed terminal size. */
+static void
+configured_size(const struct term *term, unsigned *cols, unsigned *rows)
+{
+	render_grid_size(&term->font, term->render->width,
+	    term->render->height, cols, rows);
+	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
+		*rows = term->options.max_rows;
+	if (term->options.max_cols != 0 && term->options.max_cols < *cols)
+		*cols = term->options.max_cols;
+}
+
+/*
+ * Reallocate both screens at `cols` columns, keeping the row count. With
+ * `keep` (DECNCSM) the old contents are copied across, clipped; that
+ * needs both sizes in memory at once, so if the new grids can't be had
+ * alongside the old ones, we fall back to a blank switch.
+ */
+static bool
+regrid_columns(struct term *term, unsigned cols, bool keep)
+{
+	struct grid *screens[2] = {&term->primary, &term->alternate};
+	unsigned rows = term->primary.rows;
+	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
+	    term->default_bg, CELL_ERASED);
+	struct grid next;
+
+	for (unsigned i = 0; i < 2; i++) {
+		struct grid *old = screens[i];
+
+		if (keep && grid_init(&next, cols, rows, blank)) {
+			unsigned width = cols < old->cols ? cols : old->cols;
+			for (unsigned row = 0; row < rows; row++) {
+				memcpy(grid_row(&next, row), grid_row(old, row),
+				    width * sizeof(struct cell));
+				*grid_row_attr(&next, row) =
+				    *grid_row_attr(old, row);
+			}
+			grid_free(old);
+		} else {
+			grid_free(old);
+			if (!grid_init(&next, cols, rows, blank))
+				return false;
+		}
+		*old = next;
+	}
+	return true;
+}
+
+/*
+ * DECCOLM, "CSI ? 3 h" / "CSI ? 3 l": 132 columns / back to normal.
+ *
+ * A VT100 switched between 80 and 132. Here "normal" is the width SET-UP
+ * configured (80 for the fixed 80xN sizes, the whole screen for "full"),
+ * so a host's `reset` (which sends ?3l) can't shrink a full-width
+ * screen. 132 is only honoured when the resolution and font have room
+ * for it -- 1056 px with an 8 px font, so 960x540 and the 720p modes,
+ * not 640x480 or 800x480. Otherwise the request is ignored, as xterm
+ * ignores it with 80/132 switching disallowed (mode 40 reset), and
+ * DECRQM keeps reporting the old state.
+ *
+ * Per DEC STD 070 a switch clears the screen (unless DECNCSM, mode 95),
+ * homes the cursor and resets the top/bottom and left/right margins,
+ * even when the width doesn't actually change.
+ *
+ * This runs synchronously inside libvterm's CSI dispatch, unlike a font
+ * switch, so the bytes that follow in the same chunk already land at the
+ * new width (vttest draws right after ?3h). That's safe because
+ * vterm_set_size() only touches the state layer (bounds, tab stops, line
+ * info -- see libvterm patch 9), never the parser that's calling us.
+ */
+static void
+set_columns(struct term *term, bool wide)
+{
+	VTermState *state = term->state;
+	unsigned cols, rows;
+	bool keep = term->stored_modes[stored_mode_index(95, true)] == 1;
+
+	if (term->stored_modes[stored_mode_index(40, true)] != 1)
+		return;
+	if (wide) {
+		render_grid_size(&term->font, term->render->width,
+		    term->render->height, &cols, &rows);
+		if (cols < 132)
+			return;
+		cols = 132;
+	} else {
+		configured_size(term, &cols, &rows);
+	}
+	term->stored_modes[stored_mode_index(3, true)] = wide ? 1 : 2;
+
+	rows = term->primary.rows;
+	bool resized = cols != term->primary.cols;
+	if (resized) {
+		render_pause(term->render);
+		if (!regrid_columns(term, cols, keep))
+			return;		/* out of memory: nothing to draw */
+		render_init(term->render, &term->font, term->screen);
+		vterm_set_size(term->vt, (int)rows, (int)cols);
+		sync_presentation(term);
+	} else if (!keep) {
+		struct cell blank = grid_make_cell(term->space_glyph,
+		    term->default_fg, term->default_bg, CELL_ERASED);
+		for (unsigned row = 0; row < rows; row++) {
+			grid_clear_span(term->screen, row, 0, cols, blank);
+			*grid_row_attr(term->screen, row) = ROW_NORMAL;
+		}
+	}
+
+	/* Margins off, cursor home, no double-size lines left behind. */
+	state->scrollregion_top = 0;
+	state->scrollregion_bottom = -1;
+	state->scrollregion_left = 0;
+	state->scrollregion_right = -1;
+	state->at_phantom = 0;
+	state->pos = (VTermPos){0, 0};
+	if (!keep)
+		for (unsigned buf = 0; buf < 2; buf++)
+			if (state->lineinfos[buf] != nullptr)
+				memset(state->lineinfos[buf], 0,
+				    rows * sizeof(VTermLineInfo));
+	term->screen->cursor_row = 0;
+	term->screen->cursor_col = 0;
+	if (resized && term->resize_reports)
+		send_size_report(term);
+}
+
 /*
  * CSI sequences libvterm doesn't handle (and, via our libvterm patch,
  * unknown DEC private modes and their DECRQM queries).
@@ -1188,6 +1316,12 @@ fb_csi(const char *leader, const long args[], int argcount,
 		}
 		for (long i = 0; i < count; i++)
 			vterm_input_write(term->vt, utf8, len);
+		return 1;
+	}
+
+	if (private && intermed == nullptr && first == 3 &&
+	    (command == 'h' || command == 'l')) {
+		set_columns(term, command == 'h');
 		return 1;
 	}
 
@@ -1425,12 +1559,7 @@ vterm_output(const char *bytes, size_t len, void *user)
 static bool
 build_screens(struct term *term, unsigned *cols, unsigned *rows)
 {
-	render_grid_size(&term->font, term->render->width,
-	    term->render->height, cols, rows);
-	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
-		*rows = term->options.max_rows;
-	if (term->options.max_cols != 0 && term->options.max_cols < *cols)
-		*cols = term->options.max_cols;
+	configured_size(term, cols, rows);
 	term->space_glyph = font_glyph_for(&term->font, ' ');
 	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
 	    term->default_bg, CELL_ERASED);
@@ -1525,6 +1654,7 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 		return false;
 
 	term->screen = &term->primary;
+	term->stored_modes[stored_mode_index(3, true)] = 2;	/* DECCOLM */
 	render_init(term->render, &term->font, term->screen);
 	/*
 	 * Resize libvterm's state (margins, tab stops, line info) and then

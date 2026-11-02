@@ -78,3 +78,13 @@ used to restore an all-zero pen, i.e. explicit black-on-black RGB.
 - Settings libvterm doesn't know go to `VTermStateFallbacks.dcs` as a
   complete `"$q"` string before libvterm replies `0$r` (invalid). VeeTee
   answers DECSCL, DECSLPP, DECSNLS, DECSACE, DECSASD and DECSSDT.
+
+## 9. Line info follows row-count changes (`src/state.c`)
+
+`on_resize()` is meant to reallocate the per-row `VTermLineInfo` arrays
+(DECDWL/DECDHL flags) when the row count changes, but it compared
+`rows != state->rows` after already assigning `state->rows = rows`, so it
+never did, and the code only ran when there was no resize callback.
+Growing the screen (a smaller font, a bigger SET-UP size) then wrote past
+the end of both arrays. The reallocation now always runs, against the
+old row count, before the embedder's resize callback.

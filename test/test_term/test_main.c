@@ -601,6 +601,57 @@ test_decrqss(void)
 	TEST_ASSERT_EQUAL_STRING("\x1bP1$r30t\x1b\\", reply);
 }
 
+/* Start over on a 1280x720 screen (160 x 45 with the default font). */
+static void
+reinit_720p(void)
+{
+	term_free(&term);
+	render_set_screen(&render, 1280, 720);
+	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render,
+	    capture_output, nullptr));
+}
+
+static void
+test_deccolm(void)
+{
+	/* 640x480 has no room for 132 columns: ignored, still reset. */
+	feed("\x1b[?3h\x1b[?3$p");
+	TEST_ASSERT_EQUAL(80, term.screen->cols);
+	TEST_ASSERT_EQUAL_STRING("\x1b[?3;2$y", reply);
+
+	reinit_720p();
+	TEST_ASSERT_EQUAL(160, term.screen->cols);
+	feed("junk\x1b[5;5r");
+	/* Bytes after ?3h in the same chunk land at the new width. */
+	reply_len = 0;
+	feed("\x1b[?3h\x1b[1;132HX\x1b[?3$p");
+	TEST_ASSERT_EQUAL(132, term.screen->cols);
+	TEST_ASSERT_EQUAL(45, term.screen->rows);
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(0, 131)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);	/* cleared */
+	TEST_ASSERT_EQUAL_STRING("\x1b[?3;1$y", reply);
+	/* Margins were reset: a newline on the last row scrolls the whole
+	 * screen, so row 0's X moves off it. */
+	feed("\x1b[45;1H\n");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 131)->glyph);
+
+	/* Back to normal = the configured (full) width, not 80. */
+	feed("\x1b[?3l");
+	TEST_ASSERT_EQUAL(160, term.screen->cols);
+	TEST_ASSERT_EQUAL(0, term.screen->cursor_row);
+
+	/* DECNCSM keeps the contents across the switch. */
+	feed("abc\x1b[?95h\x1b[?3h");
+	TEST_ASSERT_EQUAL(132, term.screen->cols);
+	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
+	feed("\x1b[?95l");
+
+	/* Mode 40 reset: DECCOLM ignored entirely. */
+	feed("\x1b[?40l\x1b[?3l");
+	TEST_ASSERT_EQUAL(132, term.screen->cols);
+	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
+}
+
 int
 main(void)
 {
@@ -637,5 +688,6 @@ main(void)
 	RUN_TEST(test_scosc_and_reverse_wrap);
 	RUN_TEST(test_decsc_saves_protection);
 	RUN_TEST(test_decrqss);
+	RUN_TEST(test_deccolm);
 	return UNITY_END();
 }
