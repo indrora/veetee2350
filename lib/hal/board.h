@@ -5,6 +5,7 @@
 #define HAL_BOARD_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -30,6 +31,14 @@ unsigned board_boot_begin(void);
  */
 bool	board_last_fault(uint32_t *pc, uint32_t *lr);
 void	board_boot_ok(void);
+
+/*
+ * Bytes malloc can still hand out: the heap's span (end of .bss up to
+ * core 0's stack limit) minus what's allocated, as arduino-pico's
+ * rp2040.getFreeHeap() computes it. Fragmentation can make the largest
+ * single block smaller.
+ */
+size_t	board_free_heap(void);
 void	board_watchdog_feed(void);
 
 /*

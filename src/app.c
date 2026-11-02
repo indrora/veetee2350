@@ -94,6 +94,7 @@ apply_settings(void)
 	options.colour_depth = settings.colour_depth;
 	options.utf8 = settings.utf8;
 	options.alt_screen = settings.alt_screen;
+	options.sixel = settings.sixel;
 	settings_scheme_rgb(settings.scheme, options.fg_rgb, options.bg_rgb);
 	memcpy(options.answerback, settings.answerback,
 	    sizeof(options.answerback));
@@ -108,6 +109,13 @@ load_settings(void)
 	if (!settings_valid(&settings))
 		settings_defaults(&settings);
 }
+
+/*
+ * Most heap Sixel tiles may take: 256 KB is ~2000 8x16 cells, 85% of an
+ * 80x30 screen. The pool gets less when less is free (720p grids are
+ * big); see lib/term/graphics.h.
+ */
+#define GRAPHICS_BUDGET	(256u * 1024u)
 
 /* --- SET-UP ----------------------------------------------------------- */
 
@@ -146,12 +154,16 @@ leave_setup(void)
 		board_reboot();
 	}
 
-	/* render_pause (inside a font change) can't race the grid free:
-	 * the renderer was pointed back at the terminal first. */
-	apply_settings();
-	render_pause(&render);	/* make sure no line still reads setup_grid */
-	render_init(&render, &term.font, term.screen);
+	/*
+	 * Free SET-UP's grid before applying: a font change rebuilds the
+	 * terminal's grids and the Sixel pool, and should have the memory.
+	 * The renderer was pointed back at the terminal above; the pause
+	 * makes sure no scanline still reads setup_grid.
+	 */
+	render_pause(&render);
 	grid_free(&setup_grid);
+	apply_settings();
+	render_init(&render, &term.font, term.screen);
 }
 
 static void
@@ -331,14 +343,16 @@ app_init(void)
 	apply_settings();
 	video_init(running_resolution, render_scanline, &render);
 	render.live = true;	/* from now on, render_pause must wait */
+	/* After video_init: its TMDS buffers come off the heap first. */
+	term_set_graphics_budget(&term, GRAPHICS_BUDGET, board_free_heap);
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. F3 or BOOTSEL: SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
 	char detail[96];
-	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u\r\n",
-	    mode->name, term.font_source->name, term.screen->cols,
-	    term.screen->rows);
+	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
+	    "sixel %u cells\r\n", mode->name, term.font_source->name,
+	    term.screen->cols, term.screen->rows, term.graphics.tiles);
 	term_feed(&term, (const uint8_t *)detail, (size_t)len);
 #ifdef VEETEE_FLASH_PROBE
 	extern struct board_flash_probe video_flash_probe_result;

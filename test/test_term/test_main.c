@@ -652,6 +652,131 @@ test_deccolm(void)
 	TEST_ASSERT_EQUAL(glyph('b'), cell_at(0, 1)->glyph);
 }
 
+/* --- Sixel ---------------------------------------------------------- */
+
+static size_t
+plenty_of_heap(void)
+{
+	return 1024 * 1024;
+}
+
+static void
+enable_sixel(void)
+{
+	term_set_graphics_budget(&term, 64 * 1024, plenty_of_heap);
+	TEST_ASSERT_NOT_NULL(term.graphics.pool);
+}
+
+/* Palette slot of the pixel at (x, y) inside cell (row, col). */
+static unsigned
+tile_px(unsigned row, unsigned col, unsigned x, unsigned y)
+{
+	const struct cell *cell = cell_at(row, col);
+	const struct graphics *graphics = &term.graphics;
+
+	TEST_ASSERT_TRUE(cell->attr & CELL_GRAPHIC);
+	return graphics->pool[cell->glyph * graphics->tile_bytes +
+	    y * graphics->tile_width + x];
+}
+
+static void
+test_sixel_basic(void)
+{
+	enable_sixel();
+	feed("\x1b[c");				/* DA1 now claims Sixel */
+	TEST_ASSERT_EQUAL_STRING("\x1b[?64;4;6;22c", reply);
+
+	/* Two red columns, six pixels tall, at the home cell. */
+	feed("\x1bPq#1;2;100;0;0#1~~\x1b\\");
+	unsigned red = tile_px(0, 0, 0, 0);
+	TEST_ASSERT_EQUAL_HEX16(0xf800, term.graphics.palette[red]);
+	TEST_ASSERT_EQUAL(red, tile_px(0, 0, 1, 5));
+	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(0, 0, 2, 0));
+	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(0, 0, 0, 6));
+	TEST_ASSERT_FALSE(cell_at(0, 1)->attr & CELL_GRAPHIC);
+	/* Cursor: left column of the image, on the line below it. */
+	TEST_ASSERT_EQUAL(1, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(0, term.screen->cursor_col);
+
+	/* Text over the picture makes the cell text again; its tile is
+	 * reclaimed. */
+	feed("\x1b[HA");
+	TEST_ASSERT_FALSE(cell_at(0, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_EQUAL(0, graphics_tiles_in_use(&term));
+}
+
+static void
+test_sixel_runs_and_bands(void)
+{
+	enable_sixel();
+	/* A 10-pixel run crosses into the second cell; '-' starts a band
+	 * six pixels down; HLS 0;50;100 is DEC blue. */
+	feed("\x1b[2;3H\x1bP0;1;0q#2;1;0;50;100#2!10~-~\x1b\\");
+	unsigned blue = tile_px(1, 2, 0, 0);
+	TEST_ASSERT_EQUAL_HEX16(0x001f, term.graphics.palette[blue]);
+	TEST_ASSERT_EQUAL(blue, tile_px(1, 3, 1, 0));
+	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(1, 3, 2, 0));
+	TEST_ASSERT_EQUAL(blue, tile_px(1, 2, 0, 11));
+	TEST_ASSERT_EQUAL(RENDER_TRANSPARENT, tile_px(1, 2, 1, 11));
+	TEST_ASSERT_EQUAL(2, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(2, term.screen->cursor_col);
+}
+
+static void
+test_sixel_scrolls(void)
+{
+	enable_sixel();
+	/* 36 px tall (three cells of 16) from the last row: the screen
+	 * scrolls so the image fits, then once more for the cursor. */
+	feed("\x1b[30;1H\x1bPq~-~-~-~-~-~\x1b\\");
+	TEST_ASSERT_TRUE(cell_at(26, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_TRUE(cell_at(28, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_FALSE(cell_at(29, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_EQUAL(29, term.screen->cursor_row);
+
+	/* DECSDM: top-left of the screen, no scrolling, cursor stays. */
+	feed("\x1b[2J\x1b[5;5H\x1b[?80h\x1bPq~\x1b\\");
+	TEST_ASSERT_TRUE(cell_at(0, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_row);
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_col);
+}
+
+static void
+test_sixel_queries_and_off(void)
+{
+	enable_sixel();
+	feed("\x1b[?1;1;0S");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?1;0;256S", reply);
+	reply_len = 0;
+	feed("\x1b[?2;1;0S");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?2;0;640;480S", reply);
+
+	/* Sixel switched off: the image is swallowed, nothing drawn. */
+	struct term_options options = term.options;
+	options.sixel = false;
+	TEST_ASSERT_TRUE(term_configure(&term, term.font_source, &options));
+	feed("\x1bPq~~\x1b\\ok");
+	TEST_ASSERT_FALSE(cell_at(0, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_EQUAL(glyph('o'), cell_at(0, 0)->glyph);
+}
+
+static void
+test_sixel_after_font_switch(void)
+{
+	enable_sixel();
+	feed("\x1bPq~\x1b\\");
+	TEST_ASSERT_TRUE(cell_at(0, 0)->attr & CELL_GRAPHIC);
+	/* The pool is handed back and re-taken around the rebuild. */
+	TEST_ASSERT_TRUE(term_set_font(&term, &font_builtins[1]));
+	TEST_ASSERT_NOT_NULL(term.graphics.pool);
+	TEST_ASSERT_NOT_EQUAL(0, term.graphics.tiles);
+	TEST_ASSERT_EQUAL(term.font.width * term.font.height,
+	    term.graphics.tile_bytes);
+	feed("\x1bPq~\x1b\\");
+	TEST_ASSERT_TRUE(cell_at(0, 0)->attr & CELL_GRAPHIC);
+	TEST_ASSERT_EQUAL(1, term.screen->cursor_row);
+}
+
 int
 main(void)
 {
@@ -689,5 +814,10 @@ main(void)
 	RUN_TEST(test_decsc_saves_protection);
 	RUN_TEST(test_decrqss);
 	RUN_TEST(test_deccolm);
+	RUN_TEST(test_sixel_basic);
+	RUN_TEST(test_sixel_runs_and_bands);
+	RUN_TEST(test_sixel_scrolls);
+	RUN_TEST(test_sixel_queries_and_off);
+	RUN_TEST(test_sixel_after_font_switch);
 	return UNITY_END();
 }

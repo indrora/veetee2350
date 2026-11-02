@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	4	/* 2 resolution, 3 size, 4 emulation */
+#define SETTINGS_VERSION	5	/* 2 resolution, 3 size, 4 emulation, 5 sixel */
 #define SETTINGS_FONT_MAX	24
 #define SETTINGS_ANSWERBACK_MAX	32
 
@@ -68,6 +68,7 @@ struct settings {
 	uint8_t		colour_depth;	/* enum colour_depth (term.h) */
 	uint8_t		utf8;
 	uint8_t		alt_screen;
+	uint8_t		sixel;
 	uint32_t	crc;
 };
 

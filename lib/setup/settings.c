@@ -52,6 +52,7 @@ settings_defaults(struct settings *settings)
 	settings->colour_depth = term_emulations[EMU_XTERM].depth;
 	settings->utf8 = term_emulations[EMU_XTERM].utf8;
 	settings->alt_screen = term_emulations[EMU_XTERM].alt_screen;
+	settings->sixel = term_emulations[EMU_XTERM].sixel;
 	settings_seal(settings);
 }
 

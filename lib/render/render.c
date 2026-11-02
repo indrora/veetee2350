@@ -249,6 +249,22 @@ HOT_FUNC(draw_cell)(const struct render *render, uint16_t *out,
 	}
 }
 
+/* One scanline of a Sixel tile: palette lookups, transparent -> bg. */
+static void
+HOT_FUNC(draw_tile)(const struct render *render, uint16_t *out,
+    const struct cell *cell, unsigned sub, unsigned width)
+{
+	const uint8_t *src = render->tiles +
+	    (size_t)cell->glyph * render->tile_bytes + sub * width;
+	const uint16_t *palette = render->palette;
+	uint16_t bg = (uint16_t)cell->bg2;
+
+	for (unsigned x = 0; x < width; x++) {
+		unsigned index = src[x];
+		out[x] = index == RENDER_TRANSPARENT ? bg : palette[index];
+	}
+}
+
 static void
 HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
     const struct cell *cells, unsigned sub, uint8_t line_size, bool invert,
@@ -271,7 +287,9 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 
 	for (unsigned col = 0; col < half; col++) {
 		const struct cell *cell = &cells[col];
-		uint32_t bits = glyph_rows[cell->glyph * font->glyph_bytes];
+		/* Graphics on a double-size line: not drawn (bg only). */
+		uint32_t bits = (cell->attr & CELL_GRAPHIC) ? 0 :
+		    glyph_rows[cell->glyph * font->glyph_bytes];
 		bool cell_invert = invert;
 
 		if (cell->attr & CELL_ATTR_ALL)
@@ -361,14 +379,26 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 			memcpy(&glyph_attr, cell, sizeof(glyph_attr));
 			uint32_t bits = glyph_rows[(glyph_attr & 0xffff) *
 			    glyph_bytes];
-			if (glyph_attr & (CELL_ATTR_ALL << 16))
+			if (glyph_attr & ((CELL_ATTR_ALL | CELL_GRAPHIC) <<
+			    16)) {
+				if (glyph_attr & (CELL_GRAPHIC << 16)) {
+					draw_tile(render, (uint16_t *)words,
+					    cell, sub, 8);
+					continue;
+				}
 				bits = attr_bits(render, bits, glyph_attr >> 16,
 				    sub, attr_mask);
+			}
 			emit8(words, bits, cell->bg2, cell->diff2, masks);
 		}
 	} else {
 		for (unsigned col = 0; col < cols; col++) {
 			const struct cell *cell = &cells[col];
+			if (cell->attr & CELL_GRAPHIC) {
+				draw_tile(render, out + col * width, cell, sub,
+				    width);
+				continue;
+			}
 			uint32_t bits = read_bits(glyph_rows +
 			    cell->glyph * glyph_bytes, row_bytes);
 
@@ -387,13 +417,14 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	if (grid->cursor_visible && grid->cursor_row == text_row &&
 	    cursor_col < cols && !(grid->cursor_blink && blink_off)) {
 		const struct cell *cell = &cells[cursor_col];
-		uint32_t bits = read_bits(glyph_rows + cell->glyph *
-		    glyph_bytes, row_bytes);
+		uint32_t bits = (cell->attr & CELL_GRAPHIC) ? 0 :
+		    read_bits(glyph_rows + cell->glyph * glyph_bytes,
+		    row_bytes);
 		uint32_t full = (1u << (row_bytes * 8)) - 1;
 		uint32_t leftmost = 1u << (row_bytes * 8 - 1);
 		bool cursor_invert = invert;
 
-		if (cell->attr != 0)
+		if (cell->attr & CELL_ATTR_ALL)
 			bits = attr_bits(render, bits, cell->attr, sub,
 			    attr_mask);
 		switch (grid->cursor_shape) {

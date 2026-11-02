@@ -45,6 +45,14 @@ enum cell_attr {
 	CELL_ERASED	= 1 << 15,
 	/* Not visual either: DECSCA-protected, skipped by DECSED/DECSEL. */
 	CELL_PROTECTED	= 1 << 14,
+	/*
+	 * A Sixel graphic cell: `glyph` is a tile index into the graphics
+	 * pool (lib/term/graphics.c) instead of a font glyph, and the
+	 * renderer copies the tile's pixels through the graphics palette.
+	 * Writing or erasing the cell makes it text again; the tile is
+	 * reclaimed by the pool's next sweep.
+	 */
+	CELL_GRAPHIC	= 1 << 13,
 };
 
 struct cell {

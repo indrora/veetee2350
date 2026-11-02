@@ -143,6 +143,29 @@ and can turn DECCOLM off; mode 95 (DECNCSM) keeps the screen contents
 across a switch. A switch clears the screen, homes the cursor, resets
 the margins and, with DECSET 2048 on, sends the host a size report.
 
+## Sixel graphics
+
+`DCS P1 ; P2 ; P3 q … ST` draws a DEC Sixel image at the cursor
+(`lib/sixel` decodes, `lib/term/graphics.c` places). Every cell the
+image covers becomes a *graphic cell*: its glyph index points at a tile,
+one font cell of 8-bit pixels, in a pool on the heap. So pictures scroll,
+erase, survive the alternate screen and get overwritten by text exactly
+like characters do. Tiles nothing points at are reclaimed by a sweep
+when the pool runs out.
+
+| | |
+|---|---|
+| Pool | up to 256 KB: 2048 cells (85% of 80×30) at 640×480; less at 720p, where the grids are big. The boot banner shows the count. |
+| Colours | 256 registers per image (1070 private by default); up to 255 distinct colours on screen at once, then nearest match |
+| Modes | 80 DECSDM (no scrolling, image at top-left), 1070 private registers, 8452 cursor right of image |
+| Queries | DA1 adds `4`; XTSMGRAPHICS (`CSI ? 1/2 ; 1 S`) reports 256 registers and the text area in pixels |
+| SET-UP | "Sixel graphics" on/off; on by default for the VT340 and xterm levels |
+
+Limits: pixels an image never paints stay transparent (P2 is not
+honoured for 0/2); pixel aspect is always 1:1; graphics on double-size
+lines aren't drawn; a font switch or DECCOLM drops all images (the pool
+is handed back so the grids can be rebuilt).
+
 ## Conformance (esctest2)
 
 esctest2 runs unattended through `tools/hostshell.py` (see devlog 012):

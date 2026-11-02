@@ -40,6 +40,7 @@
 #include <stdint.h>
 
 #include "font.h"
+#include "graphics.h"
 #include "grid.h"
 #include "render.h"
 #include "vterm.h"
@@ -76,6 +77,7 @@ struct term_emulation_info {
 	uint8_t		 depth;		/* defaults: */
 	bool		 utf8;
 	bool		 alt_screen;
+	bool		 sixel;		/* DA1 claims ;4, DCS q draws */
 };
 
 extern const struct term_emulation_info term_emulations[EMU_COUNT];
@@ -99,6 +101,7 @@ struct term_options {
 	uint8_t		colour_depth;	/* enum colour_depth */
 	bool		utf8;		/* off: 8-bit bytes, C1 + Latin-1 GR */
 	bool		alt_screen;	/* off: ignore DECSET 47/1047/1049 */
+	bool		sixel;		/* off: DCS q ignored, no ;4 in DA1 */
 };
 
 /* Current SGR state, as libvterm reports it through setpenattr. */
@@ -140,7 +143,7 @@ struct term {
 
 	/* Modes accepted and reported (DECRQM) but with no visible effect
 	 * here, e.g. DECARM, DECNKM, KAM. Index into term.c's table. */
-	uint8_t		 stored_modes[32];
+	uint8_t		 stored_modes[40];
 	uint8_t		 decsace;	/* DECSACE, reported by DECRQSS only */
 
 	/* OSC colour state (4/5/10-19 and their resets). */
@@ -159,6 +162,9 @@ struct term {
 	bool		 cursor_blink;
 	uint8_t		 cursor_shape;
 	bool		 reverse_video;
+
+	/* Sixel images as graphic cells (graphics.c). */
+	struct graphics	 graphics;
 };
 
 /*
@@ -188,6 +194,15 @@ struct term {
 [[nodiscard]] bool term_configure(struct term *term,
 	    const struct font_builtin *builtin,
 	    const struct term_options *options);
+
+/*
+ * Let Sixel images use up to `budget` bytes of heap for tiles, measured
+ * with `heap_free` (see graphics.h for how the pool coexists with grid
+ * rebuilds). Without this, Sixel images are parsed and dropped. Call
+ * after term_init.
+ */
+void	term_set_graphics_budget(struct term *term, size_t budget,
+	    graphics_heap_fn heap_free);
 
 /* Hard reset (like RIS), then re-apply the configured modes. */
 void	term_reset(struct term *term);

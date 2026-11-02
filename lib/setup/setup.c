@@ -146,6 +146,9 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "%s", work->alt_screen ? "allowed" :
 		    "ignored (full-screen apps leave output behind)");
 		break;
+	case ITEM_SIXEL:
+		snprintf(out, len, "%s", work->sixel ? "on" : "off");
+		break;
 	case ITEM_SCHEME:
 		snprintf(out, len, "%s", settings_scheme_name(work->scheme));
 		break;
@@ -184,6 +187,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_DEPTH] = "Colour depth",
 	[ITEM_UTF8] = "UTF-8",
 	[ITEM_ALTSCREEN] = "Alternate screen",
+	[ITEM_SIXEL] = "Sixel graphics",
 	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
@@ -317,6 +321,7 @@ change_value(struct setup *setup, int step)
 		work->colour_depth = info->depth;
 		work->utf8 = info->utf8;
 		work->alt_screen = info->alt_screen;
+		work->sixel = info->sixel;
 		break;
 	}
 	case ITEM_DEPTH:
@@ -328,6 +333,9 @@ change_value(struct setup *setup, int step)
 		break;
 	case ITEM_ALTSCREEN:
 		work->alt_screen = !work->alt_screen;
+		break;
+	case ITEM_SIXEL:
+		work->sixel = !work->sixel;
 		break;
 	case ITEM_SCHEME:
 		work->scheme = (uint8_t)cycle(work->scheme, SCHEME_COUNT, step);

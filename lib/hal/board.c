@@ -3,6 +3,8 @@
  */
 #include "board.h"
 
+#include <malloc.h>
+
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/timer.h"
 #include "hardware/sync.h"
@@ -206,3 +208,12 @@ void __no_inline_not_in_flash_func(board_flash_probe)(uint32_t sys_hz,
 	out->probe_us = timer0_hw->timerawl - started;
 }
 #endif
+
+size_t
+board_free_heap(void)
+{
+	extern char __StackLimit, __bss_end__;
+	struct mallinfo info = mallinfo();
+
+	return (size_t)(&__StackLimit - &__bss_end__) - info.uordblks;
+}

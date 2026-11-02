@@ -1,0 +1,8 @@
+{
+  "name": "sixel",
+  "version": "0.1.0",
+  "description": "Streaming DEC Sixel decoder (pure, no allocation)",
+  "build": {
+    "flags": "-O2"
+  }
+}

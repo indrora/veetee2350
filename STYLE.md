@@ -76,6 +76,8 @@ src/            main.cpp shim and app glue (app.c: wires modules together)
 include/        public headers that cross module boundaries
 lib/hal/        hardware abstraction: video (DVI), usbio (CDC), clocks, flash
 lib/term/       escape-sequence handling (libvterm state) -> cell grid model
+                graphics.c: Sixel images as CELL_GRAPHIC cells + tile pool
+lib/sixel/      streaming Sixel decoder (pure, no allocation, host-testable)
 lib/render/     cell grid + font -> scanlines (pure, host-testable)
 lib/font/       font formats (PSF2) and the embedded default font
 lib/input/      keyboard byte stream -> key events (pure, host-testable)

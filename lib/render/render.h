@@ -29,6 +29,8 @@
 /* line_row[] value for scanlines above/below the grid. */
 #define RENDER_LINE_BORDER	0xff
 
+#define RENDER_TRANSPARENT	255	/* tile pixel: show the cell bg */
+
 struct render {
 	const struct font *font;
 	struct grid * volatile grid;	/* swapped by render_set_grid */
@@ -43,6 +45,14 @@ struct render {
 	volatile uint32_t frame;	/* bumped by core 1 at line 0 */
 	uint8_t		 line_row[RENDER_MAX_HEIGHT];	/* grid row or BORDER */
 	uint8_t		 line_sub[RENDER_MAX_HEIGHT];	/* glyph row */
+	/*
+	 * Sixel tiles for CELL_GRAPHIC cells (set by lib/term/graphics.c):
+	 * one byte per pixel, font-cell sized, indexing `palette`;
+	 * RENDER_TRANSPARENT shows the cell's background instead.
+	 */
+	const uint8_t	*tiles;
+	const uint16_t	*palette;	/* 256 x RGB565 */
+	uint16_t	 tile_bytes;	/* font width x height */
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };

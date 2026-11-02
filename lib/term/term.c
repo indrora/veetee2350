@@ -32,13 +32,13 @@
  */
 const struct term_emulation_info term_emulations[EMU_COUNT] = {
 	[EMU_VT100] = {"VT100", "vt100", "?1;2c", nullptr,
-	    DEPTH_MONO, false, false},
+	    DEPTH_MONO, false, false, false},
 	[EMU_VT220] = {"VT220", "vt220", "?62;6;22c", ">1;10;0c",
-	    DEPTH_MONO, false, false},
+	    DEPTH_MONO, false, false, false},
 	[EMU_VT340] = {"VT340", "vt340", "?63;6;22c", ">19;10;0c",
-	    DEPTH_16, false, false},
+	    DEPTH_16, false, false, true},
 	[EMU_XTERM] = {"xterm", "xterm-256color", "?64;6;22c", ">41;390;0c",
-	    DEPTH_TRUE, true, true},
+	    DEPTH_TRUE, true, true, true},
 };
 
 /*
@@ -853,6 +853,7 @@ static const struct {
 	{67, true, 2},		/* DECBKM backarrow sends BS */
 	{68, true, 2},		/* DECKBUM keyboard usage */
 	{73, true, 2},		/* DECXRLM transmit rate limiting */
+	{80, true, 2},		/* DECSDM sixel display (no scrolling) */
 	{81, true, 2},		/* DECKPM key position */
 	{95, true, 2},		/* DECNCSM no clear on column change */
 	{96, true, 2},		/* DECRLCM cursor right-to-left */
@@ -865,6 +866,8 @@ static const struct {
 	{103, true, 2},		/* DECHDPXM half duplex */
 	{104, true, 2},		/* DECESKM secondary keyboard language */
 	{106, true, 2},		/* DECOSCNM overscan */
+	{1070, true, 1},	/* xterm: private sixel colour registers */
+	{8452, true, 2},	/* xterm: cursor right of a sixel image */
 };
 static_assert(sizeof(stored_mode_table) / sizeof(stored_mode_table[0]) <=
     sizeof(((struct term *)0)->stored_modes));
@@ -891,6 +894,15 @@ stored_mode_index(long num, bool dec)
 		    stored_mode_table[i].dec == dec)
 			return (int)i;
 	return -1;
+}
+
+/* For graphics.c: is DEC private mode `mode` (from the table) set? */
+bool
+term_dec_mode(const struct term *term, unsigned mode)
+{
+	int index = stored_mode_index(mode, true);
+
+	return index >= 0 && term->stored_modes[index] == 1;
 }
 
 static void
@@ -1117,9 +1129,13 @@ set_columns(struct term *term, bool wide)
 	bool resized = cols != term->primary.cols;
 	if (resized) {
 		render_pause(term->render);
+		/* Images don't survive the switch, even with DECNCSM: the
+		 * pool is given back so the grids can grow into it. */
+		graphics_release(term);
 		if (!regrid_columns(term, cols, keep))
 			return;		/* out of memory: nothing to draw */
 		render_init(term->render, &term->font, term->screen);
+		graphics_acquire(term);
 		vterm_set_size(term->vt, (int)rows, (int)cols);
 		sync_presentation(term);
 	} else if (!keep) {
@@ -1172,7 +1188,16 @@ fb_csi(const char *leader, const long args[], int argcount,
 		    (leader[0] == '>' ? info->da2 : nullptr);
 		if (no_leader || leader[0] == '>') {
 			if (reply != nullptr) {
+				/* DA1 with Sixel: ";4" after the class. */
+				size_t head = strcspn(reply, ";c");
 				term->output("\x1b[", 2, term->output_ctx);
+				if (no_leader && term->options.sixel &&
+				    term->graphics.tiles != 0) {
+					term->output(reply, head,
+					    term->output_ctx);
+					term->output(";4", 2, term->output_ctx);
+					reply += head;
+				}
 				term->output(reply, strlen(reply),
 				    term->output_ctx);
 			}
@@ -1227,7 +1252,8 @@ fb_csi(const char *leader, const long args[], int argcount,
 			const struct cell *cells = grid_row(term->screen,
 			    (unsigned)row - 1);
 			for (long col = left; col <= right; col++)
-				sum += (cells[col - 1].attr & CELL_ERASED) ? 0x20 :
+				sum += (cells[col - 1].attr &
+				    (CELL_ERASED | CELL_GRAPHIC)) ? 0x20 :
 				    font_codepoint_for(&term->font,
 				    cells[col - 1].glyph);
 		}
@@ -1261,6 +1287,34 @@ fb_csi(const char *leader, const long args[], int argcount,
 		default:
 			return 0;
 		}
+	}
+
+	/*
+	 * XTSMGRAPHICS, "CSI ? Pi ; Pa ; Pv S": graphics capabilities, as
+	 * Sixel-aware programs (notcurses, chafa) ask before sending images.
+	 * Pi 1 = colour registers, 2 = Sixel geometry; Pa 1 read, 2 reset,
+	 * 3 set (refused: fixed), 4 read maximum. Reply status 0 success,
+	 * 1 bad Pi, 3 failure.
+	 */
+	if (private && intermed == nullptr && command == 'S') {
+		long action = argcount > 1 ? CSI_ARG(args[1]) : 0;
+		bool have = term->options.sixel && term->graphics.tiles != 0;
+		unsigned width = grid->cols * term->font.width;
+		unsigned height = grid->rows * term->font.height;
+
+		if (!have || (first != 1 && first != 2))
+			send_printf(term, "\x1b[?%u;1;0S", (unsigned)first, 0,
+			    0, 0);
+		else if (action == 3)
+			send_printf(term, "\x1b[?%u;3;0S", (unsigned)first, 0,
+			    0, 0);
+		else if (first == 1)
+			send_printf(term, "\x1b[?1;0;%uS", SIXEL_REGISTERS,
+			    0, 0, 0);
+		else
+			send_printf(term, "\x1b[?2;0;%u;%uS", width, height,
+			    0, 0);
+		return 1;
 	}
 
 	/* DECSACE, "CSI Ps * x": remembered for DECRQSS. */
@@ -1492,6 +1546,18 @@ fb_dcs(const char *command, size_t commandlen, VTermStringFragment frag,
 
 	if (commandlen == 2 && command[0] == '$' && command[1] == 'q')
 		return decrqss_reply(term, frag.str, frag.len);
+	/* Sixel: "DCS [P1 ; P2 ; P3] q" -- digits and ';' then 'q'. */
+	size_t digits = 0;
+	while (digits < commandlen && ((command[digits] >= '0' &&
+	    command[digits] <= '9') || command[digits] == ';'))
+		digits++;
+	if (commandlen >= 1 && digits == commandlen - 1 &&
+	    command[digits] == 'q') {
+		if (term->options.sixel)
+			graphics_sixel(term, command, commandlen - 1,
+			    frag.str, frag.len, frag.initial, frag.final);
+		return 1;
+	}
 	if (commandlen != 2 || command[0] != '+' || command[1] != 'q')
 		return 0;
 	if (frag.initial) {
@@ -1588,6 +1654,7 @@ term_init(struct term *term, const struct font_builtin *builtin,
 		.colour_depth = DEPTH_TRUE,
 		.utf8 = true,
 		.alt_screen = true,
+		.sixel = true,
 	};
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
@@ -1645,6 +1712,7 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 		return false;
 
 	render_pause(term->render);
+	graphics_release(term);	/* re-taken below, sized to what's left */
 	grid_free(&term->primary);
 	grid_free(&term->alternate);
 	font_free(&term->font);
@@ -1656,6 +1724,7 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 	term->screen = &term->primary;
 	term->stored_modes[stored_mode_index(3, true)] = 2;	/* DECCOLM */
 	render_init(term->render, &term->font, term->screen);
+	graphics_acquire(term);	/* tiles are font-cell sized */
 	/*
 	 * Resize libvterm's state (margins, tab stops, line info) and then
 	 * hard-reset it, which homes the cursor, clears both screens through
@@ -1712,6 +1781,13 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 }
 
 void
+term_set_graphics_budget(struct term *term, size_t budget,
+    graphics_heap_fn heap_free)
+{
+	graphics_configure(term, budget, heap_free);
+}
+
+void
 term_reset(struct term *term)
 {
 	vterm_state_reset(term->state, 1);
@@ -1722,6 +1798,7 @@ term_reset(struct term *term)
 void
 term_free(struct term *term)
 {
+	graphics_release(term);
 	if (term->vt != nullptr)
 		vterm_free(term->vt);
 	grid_free(&term->primary);
