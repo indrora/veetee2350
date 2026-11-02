@@ -29,8 +29,8 @@ setUp(void)
 {
 	unsigned cols, rows;
 
-	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtins[0].data,
-	    font_builtins[0].len));
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtin_find("notjam-clean-16")->data,
+	    font_builtin_find("notjam-clean-16")->len));
 	render_set_screen(&render, 640, 480);
 	render_grid_size(&font, 640, 480, &cols, &rows);
 	TEST_ASSERT_TRUE(grid_init(&grid, cols, rows, blank_cell()));
@@ -134,8 +134,8 @@ test_border_for_uneven_font(void)
 	struct render render13;
 	unsigned cols, rows;
 
-	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font13, font_builtins[1].data,
-	    font_builtins[1].len));
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font13, font_builtin_find("notjam-clean-13")->data,
+	    font_builtin_find("notjam-clean-13")->len));
 	render_set_screen(&render13, 640, 480);
 	render_grid_size(&font13, 640, 480, &cols, &rows);
 	TEST_ASSERT_EQUAL(36, rows);
@@ -270,6 +270,94 @@ test_pair_table(void)
 	grid.reverse_video = false;
 }
 
+/* What a 6-px cell's pixel x should be, from the glyph's bits. */
+static uint16_t
+expected6(const struct font *font6, uint32_t codepoint, unsigned sub,
+    unsigned x, uint16_t fg, uint16_t bg, bool underline)
+{
+	uint8_t bits = *font_glyph_row(font6, font_glyph_for(font6, codepoint),
+	    sub);
+	if (underline && sub == font6->underline_row)
+		bits = 0xff;
+	return (bits & (0x80 >> x)) ? fg : bg;
+}
+
+/*
+ * 6-px fonts (the ATI Small Wonder default): three words a cell through
+ * the PAIR, PLAIN and MIXED loops, double width, and the status line,
+ * all pixel for pixel.
+ */
+static void
+test_six_pixel_cells(void)
+{
+	struct font font6;
+	struct grid grid6;
+	struct render render6;
+	unsigned cols, rows;
+
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font6,
+	    font_builtin_find("ati-smallw-6x8")->data,
+	    font_builtin_find("ati-smallw-6x8")->len));
+	TEST_ASSERT_EQUAL(6, font6.width);
+	render_set_screen(&render6, 640, 480);
+	render_grid_size(&font6, 640, 480, &cols, &rows);
+	TEST_ASSERT_EQUAL(106, cols);
+	TEST_ASSERT_EQUAL(60, rows);
+	TEST_ASSERT_TRUE(grid_init(&grid6, cols, rows,
+	    grid_make_cell(font_glyph_for(&font6, 'A'), WHITE, BLUE, 0)));
+	grid6.cursor_visible = false;
+	render_init(&render6, &font6, &grid6);
+	TEST_ASSERT_EQUAL(2, render6.x_offset);	/* 636 px centred */
+	/* Row 1: a PLAIN cell (other colours) and an underlined one. */
+	grid_row(&grid6, 1)[1] = grid_make_cell(font_glyph_for(&font6, 'g'),
+	    BLUE, WHITE, 0);
+	grid_row(&grid6, 2)[1] = grid_make_cell(font_glyph_for(&font6, 'j'),
+	    WHITE, BLUE, CELL_UNDERLINE);
+	render_plan(&render6);
+	render_plan(&render6);
+	TEST_ASSERT_EQUAL(RENDER_SPAN_PAIR, render6.plan->row[0].span[0].kind);
+	TEST_ASSERT_EQUAL(RENDER_SPAN_PLAIN, render6.plan->row[1].span[0].kind);
+	TEST_ASSERT_EQUAL(RENDER_SPAN_MIXED, render6.plan->row[2].span[0].kind);
+	for (unsigned sub = 0; sub < 8; sub++) {
+		render_scanline(pixels, sub, &render6);
+		for (unsigned x = 0; x < 12; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected6(&font6, 'A', sub,
+			    x % 6, WHITE, BLUE, false), pixels[2 + x]);
+		render_scanline(pixels, 8 + sub, &render6);
+		for (unsigned x = 0; x < 6; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected6(&font6, 'g', sub, x,
+			    BLUE, WHITE, false), pixels[2 + 6 + x]);
+		render_scanline(pixels, 16 + sub, &render6);
+		for (unsigned x = 0; x < 6; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected6(&font6, 'j', sub, x,
+			    WHITE, BLUE, true), pixels[2 + 6 + x]);
+	}
+	/* Double width: each cell 12 px, its pixels doubled. */
+	grid6.row_attr[grid6.row_map[3]] = ROW_DOUBLE_WIDTH;
+	render_scanline(pixels, 24 + 4, &render6);
+	for (unsigned x = 0; x < 12; x++)
+		TEST_ASSERT_EQUAL_HEX16(expected6(&font6, 'A', 4, x / 2, WHITE,
+		    BLUE, false), pixels[2 + x]);
+	/* The status line, drawn by its own 6-px loop. */
+	static struct cell status[GRID_MAX_COLS];
+	for (unsigned col = 0; col < GRID_MAX_COLS; col++)
+		status[col] = grid_make_cell(font_glyph_for(&font6, 'S'), BLUE,
+		    WHITE, 0);
+	render6.status_cells = status;
+	render6.status_place = RENDER_STATUS_BOTTOM;
+	grid_free(&grid6);
+	TEST_ASSERT_TRUE(grid_init(&grid6, cols, rows - 1,
+	    grid_make_cell(font_glyph_for(&font6, ' '), WHITE, BLUE, 0)));
+	grid6.cursor_visible = false;
+	render_init(&render6, &font6, &grid6);
+	render_scanline(pixels, 59 * 8 + 3, &render6);
+	for (unsigned x = 0; x < 6; x++)
+		TEST_ASSERT_EQUAL_HEX16(expected6(&font6, 'S', 3, x, BLUE, WHITE,
+		    false), pixels[2 + 6 + x]);
+	grid_free(&grid6);
+	font_free(&font6);
+}
+
 int
 main(void)
 {
@@ -281,6 +369,7 @@ main(void)
 	RUN_TEST(test_overlay_covers_cells_and_cursor);
 	RUN_TEST(test_stale_plain_plan);
 	RUN_TEST(test_pair_table);
+	RUN_TEST(test_six_pixel_cells);
 	RUN_TEST(test_scroll_up_reuses_rows);
 	RUN_TEST(test_border_for_uneven_font);
 	RUN_TEST(test_720p_geometry);

@@ -66,7 +66,7 @@ void
 setUp(void)
 {
 	render_set_screen(&render, 640, 480);
-	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render,
+	TEST_ASSERT_TRUE(term_init(&term, font_builtin_find("notjam-clean-16"), &render,
 	    capture_output, nullptr));
 	reply_len = 0;
 	reply[0] = '\0';
@@ -250,11 +250,11 @@ test_osc50_query_cycle_and_unknown(void)
 	feed("\x1b]50;?\a");
 	TEST_ASSERT_EQUAL_STRING("\x1b]50;notjam-clean-16\a", reply);
 	feed("\x1b]50;#+\a");
-	TEST_ASSERT_EQUAL_PTR(&font_builtins[1], term.font_source);
+	TEST_ASSERT_EQUAL_PTR(font_builtin_find("notjam-clean-13"), term.font_source);
 	feed("\x1b]50;#-\a");
-	TEST_ASSERT_EQUAL_PTR(&font_builtins[0], term.font_source);
+	TEST_ASSERT_EQUAL_PTR(font_builtin_find("notjam-clean-16"), term.font_source);
 	feed("\x1b]50;no-such-font\a");
-	TEST_ASSERT_EQUAL_PTR(&font_builtins[0], term.font_source);
+	TEST_ASSERT_EQUAL_PTR(font_builtin_find("notjam-clean-16"), term.font_source);
 	/* OSC split across writes (USB packet boundary). */
 	feed("\x1b]50;arbata-");
 	feed("compact\x1b\\");
@@ -619,7 +619,7 @@ reinit_720p(void)
 {
 	term_free(&term);
 	render_set_screen(&render, 1280, 720);
-	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render,
+	TEST_ASSERT_TRUE(term_init(&term, font_builtin_find("notjam-clean-16"), &render,
 	    capture_output, nullptr));
 }
 
@@ -785,7 +785,7 @@ test_sixel_after_font_switch(void)
 	feed("\x1bPq~\x1b\\");
 	TEST_ASSERT_TRUE(cell_at(0, 0)->attr & CELL_GRAPHIC);
 	/* The pool is handed back and re-taken around the rebuild. */
-	TEST_ASSERT_TRUE(term_set_font(&term, &font_builtins[1]));
+	TEST_ASSERT_TRUE(term_set_font(&term, font_builtin_find("notjam-clean-13")));
 	TEST_ASSERT_NOT_NULL(term.graphics.pool);
 	TEST_ASSERT_NOT_EQUAL(0, term.graphics.tiles);
 	TEST_ASSERT_EQUAL(term.font.width * term.font.height,

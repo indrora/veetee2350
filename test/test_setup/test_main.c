@@ -27,8 +27,8 @@ static struct settings settings;
 void
 setUp(void)
 {
-	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtins[0].data,
-	    font_builtins[0].len));
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtin_find("notjam-clean-16")->data,
+	    font_builtin_find("notjam-clean-16")->len));
 	TEST_ASSERT_TRUE(grid_init(&grid, 80, 30, grid_make_cell(0, 0, 0, 0)));
 	settings_defaults(&settings);
 	setup_begin(&setup, &settings, &grid, &font, VIDEO_MODE_640x480);
@@ -65,13 +65,19 @@ test_settings_crc(void)
 static void
 test_navigation_and_values(void)
 {
-	/* Starts on Resolution; Right picks the next mode. */
+	/* Starts on Resolution; Right picks the next mode in SET-UP's
+	 * order (640x480 @ 72 is listed second, though stored last). */
 	TEST_ASSERT_EQUAL(ITEM_RESOLUTION, setup.selected);
+	TEST_ASSERT_EQUAL(VIDEO_MODE_640x480, setup.work.resolution);
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(VIDEO_MODE_640x480_72, setup.work.resolution);
 	press(KEY_RIGHT, 0);
 	TEST_ASSERT_EQUAL(VIDEO_MODE_720x480, setup.work.resolution);
 	press(KEY_LEFT, 0);
-	press(KEY_LEFT, 0);	/* wraps to the last mode */
-	TEST_ASSERT_EQUAL(VIDEO_MODE_COUNT - 1, setup.work.resolution);
+	press(KEY_LEFT, 0);
+	TEST_ASSERT_EQUAL(VIDEO_MODE_640x480, setup.work.resolution);
+	press(KEY_LEFT, 0);	/* wraps to the last mode listed */
+	TEST_ASSERT_EQUAL(VIDEO_MODE_1280x720_24, setup.work.resolution);
 	/* Font: Right steps to the next built-in font. */
 	press(KEY_DOWN, 0);
 	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_RIGHT, 0));
@@ -86,7 +92,7 @@ test_navigation_and_values(void)
 	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
 	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_ENTER, 0));
 	/* The original settings are untouched until the app applies. */
-	TEST_ASSERT_EQUAL_STRING("notjam-clean-16", settings.font);
+	TEST_ASSERT_EQUAL_STRING(font_builtins[0].name, settings.font);
 }
 
 static void
@@ -196,9 +202,9 @@ test_term_configure(void)
 	};
 
 	render_set_screen(&render, 640, 480);
-	TEST_ASSERT_TRUE(term_init(&term, &font_builtins[0], &render, capture,
+	TEST_ASSERT_TRUE(term_init(&term, font_builtin_find("notjam-clean-16"), &render, capture,
 	    nullptr));
-	TEST_ASSERT_TRUE(term_configure(&term, &font_builtins[0], &options));
+	TEST_ASSERT_TRUE(term_configure(&term, font_builtin_find("notjam-clean-16"), &options));
 	TEST_ASSERT_EQUAL(24, term.screen->rows);	/* row limit */
 	TEST_ASSERT_EQUAL(64, term.screen->cols);	/* column limit */
 	/* 64 columns of 8 px centred in 640: 64 px border each side. */
@@ -470,7 +476,7 @@ test_settings_upgrade(void)
 	/* New fields are defaults, not the old padding or stale flash. */
 	TEST_ASSERT_EQUAL(KEY_F3, upgraded.hotkeys[TOOL_MENU].code);
 	TEST_ASSERT_EQUAL(1, upgraded.peek_time);
-	TEST_ASSERT_EQUAL(0, upgraded.profiler_bar);
+	TEST_ASSERT_EQUAL(PROFILER_DEBUG, upgraded.profiler_bar);
 	/* A corrupted old record is refused. */
 	raw[offsetof(struct settings, scheme)] ^= 1;
 	TEST_ASSERT_FALSE(settings_upgrade(&upgraded, raw));

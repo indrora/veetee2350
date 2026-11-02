@@ -22,6 +22,18 @@
 # `default = true` marks the font that is compiled into the firmware.
 
 [[font]]
+name = "ati-smallw-6x8"
+source = "../fonts/TUOPFP/ttf - Px (pixel outline)/Px437_ATI_SmallW_6x8.ttf"
+ppem = 8
+cell_w = 6
+cell_h = 8
+baseline = 7
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Px437 ATI SmallW 6x8 (ATI Small Wonder Graphics Solution) from The Ultimate Oldschool PC Font Pack by VileR (int10h.org), CC BY-SA 4.0 (converted to PSF2)"
+default = true
+
+[[font]]
 name = "notjam-clean-16"
 source = "../fonts/NotJamMonoClean13/Not Jam Mono Clean 16.ttf"
 ppem = 16
@@ -31,7 +43,6 @@ baseline = 13
 align = "origin"
 synth = ["box", "block", "dec"]
 license = "Not Jam Mono Clean by Not Jam, CC0 1.0"
-default = true
 
 [[font]]
 name = "notjam-clean-13"

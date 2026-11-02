@@ -34,13 +34,15 @@ glyph_has_ink(uint16_t glyph)
 static void
 test_default_font_geometry(void)
 {
-	TEST_ASSERT_EQUAL_STRING("notjam-clean-16", font_builtins[0].name);
-	TEST_ASSERT_EQUAL(8, font.width);
-	TEST_ASSERT_EQUAL(16, font.height);
+	/* ATI Small Wonder, 6x8, the default since devlog 025. */
+	TEST_ASSERT_EQUAL_STRING("ati-smallw-6x8", font_builtins[0].name);
+	TEST_ASSERT_EQUAL(6, font.width);
+	TEST_ASSERT_EQUAL(8, font.height);
 	TEST_ASSERT_EQUAL(1, font.row_bytes);
-	/* VTEX extension present: baseline 13, underline just below. */
-	TEST_ASSERT_EQUAL(13, font.baseline);
-	TEST_ASSERT_EQUAL(14, font.underline_row);
+	/* VTEX extension present: baseline on the last row, so the
+	 * underline can't go below it and shares it (as on the card). */
+	TEST_ASSERT_EQUAL(7, font.baseline);
+	TEST_ASSERT_EQUAL(7, font.underline_row);
 }
 
 static void

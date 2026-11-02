@@ -281,6 +281,32 @@ emit8(uint32_t *out, uint32_t bits, uint32_t bg2, uint32_t diff2,
 	out[3] = bg2 ^ (diff2 & mask3);
 }
 
+/*
+ * emit8 for the first `words` pixel pairs only: 3 for a 6-px cell (the
+ * glyph's bits are the top six of its byte, so they're the first three
+ * pairs), 2 for the right half of a doubled one. `words` is a constant
+ * at every call, so each use compiles to straight stores.
+ */
+HOT_INLINE void
+emit_cell(uint32_t *out, uint32_t bits, uint32_t bg2, uint32_t diff2,
+    const uint32_t (*masks)[4], unsigned words)
+{
+	if (words == 4) {
+		/* emit8's shape: all loads first (the interleaved version
+		 * cost colourful 8x16 text 5%). */
+		emit8(out, bits, bg2, diff2, masks);
+		return;
+	}
+	const uint32_t *mask = masks[bits & 0xff];
+	uint32_t mask0 = mask[0], mask1 = mask[1];
+	uint32_t mask2 = words > 2 ? mask[2] : 0;
+
+	out[0] = bg2 ^ (diff2 & mask0);
+	out[1] = bg2 ^ (diff2 & mask1);
+	if (words > 2)
+		out[2] = bg2 ^ (diff2 & mask2);
+}
+
 /* Cell widths that aren't 8 or 16: one halfword store per pixel. */
 static void
 HOT_FUNC(emit_generic)(uint16_t *out, uint32_t bits, unsigned width,
@@ -343,34 +369,50 @@ HOT_FUNC(draw_cell)(const struct render *render, uint16_t *out,
  * colour[transparent].
  */
 HOT_INLINE void
-draw_tile8(uint32_t *words, const uint8_t *src, const uint16_t *colour,
-    unsigned bpp)
+draw_tile_cell(uint32_t *words, const uint8_t *src, const uint16_t *colour,
+    unsigned bpp, unsigned cell_words)
 {
+	/*
+	 * Pixels are packed LSB-first, so a 6-px cell (cell_words 3) is the
+	 * first three pixel pairs of the 8-px expressions; only the reads
+	 * differ, so as not to run past a 6-px row: 6, 3, 2 (12 bits) and 1
+	 * byte at 8, 4, 2 and 1 bits a pixel.
+	 */
+	const bool eight = cell_words == 4;
 	uint32_t w0, w1;
 
 	switch (bpp) {
 	case 8:
 		memcpy(&w0, src, 4);
-		memcpy(&w1, src + 4, 4);
+		if (eight)
+			memcpy(&w1, src + 4, 4);
+		else
+			w1 = (uint32_t)src[4] | (uint32_t)src[5] << 8;
 		words[0] = colour[w0 & 0xff] |
 		    (uint32_t)colour[(w0 >> 8) & 0xff] << 16;
 		words[1] = colour[(w0 >> 16) & 0xff] |
 		    (uint32_t)colour[w0 >> 24] << 16;
 		words[2] = colour[w1 & 0xff] |
 		    (uint32_t)colour[(w1 >> 8) & 0xff] << 16;
-		words[3] = colour[(w1 >> 16) & 0xff] |
-		    (uint32_t)colour[w1 >> 24] << 16;
+		if (eight)
+			words[3] = colour[(w1 >> 16) & 0xff] |
+			    (uint32_t)colour[w1 >> 24] << 16;
 		return;
 	/* Unrolled: straight-line code, one shift-and-mask per pixel. */
 	case 4:
-		memcpy(&w0, src, 4);
+		if (eight)
+			memcpy(&w0, src, 4);
+		else
+			w0 = (uint32_t)src[0] | (uint32_t)src[1] << 8 |
+			    (uint32_t)src[2] << 16;
 		words[0] = colour[w0 & 15] | (uint32_t)colour[(w0 >> 4) & 15] << 16;
 		words[1] = colour[(w0 >> 8) & 15] |
 		    (uint32_t)colour[(w0 >> 12) & 15] << 16;
 		words[2] = colour[(w0 >> 16) & 15] |
 		    (uint32_t)colour[(w0 >> 20) & 15] << 16;
-		words[3] = colour[(w0 >> 24) & 15] |
-		    (uint32_t)colour[w0 >> 28] << 16;
+		if (eight)
+			words[3] = colour[(w0 >> 24) & 15] |
+			    (uint32_t)colour[w0 >> 28] << 16;
 		return;
 	case 2:
 		w0 = (uint32_t)src[0] | (uint32_t)src[1] << 8;
@@ -379,8 +421,9 @@ draw_tile8(uint32_t *words, const uint8_t *src, const uint16_t *colour,
 		    (uint32_t)colour[(w0 >> 6) & 3] << 16;
 		words[2] = colour[(w0 >> 8) & 3] |
 		    (uint32_t)colour[(w0 >> 10) & 3] << 16;
-		words[3] = colour[(w0 >> 12) & 3] |
-		    (uint32_t)colour[(w0 >> 14) & 3] << 16;
+		if (eight)
+			words[3] = colour[(w0 >> 12) & 3] |
+			    (uint32_t)colour[(w0 >> 14) & 3] << 16;
 		return;
 	default:	/* 1 */
 		w0 = src[0];
@@ -389,8 +432,9 @@ draw_tile8(uint32_t *words, const uint8_t *src, const uint16_t *colour,
 		    (uint32_t)colour[(w0 >> 3) & 1] << 16;
 		words[2] = colour[(w0 >> 4) & 1] |
 		    (uint32_t)colour[(w0 >> 5) & 1] << 16;
-		words[3] = colour[(w0 >> 6) & 1] |
-		    (uint32_t)colour[w0 >> 7] << 16;
+		if (eight)
+			words[3] = colour[(w0 >> 6) & 1] |
+			    (uint32_t)colour[w0 >> 7] << 16;
 		return;
 	}
 }
@@ -408,9 +452,10 @@ HOT_FUNC(draw_tile)(const struct render *render, uint16_t *out,
 
 	colour[mask] = cell->bg;		/* see-through: this cell's bg */
 
-	if (width == 8 && ((uintptr_t)out & 3) == 0 &&
-	    ((uintptr_t)src & 3) == 0) {
-		draw_tile8((uint32_t *)out, src, colour, bpp);
+	/* 8- and 6-px cells, word-aligned: whole pixel pairs. (A 6-px tile
+	 * row isn't word-aligned in the pool; the M33 loads it anyway.) */
+	if ((width == 8 || width == 6) && ((uintptr_t)out & 3) == 0) {
+		draw_tile_cell((uint32_t *)out, src, colour, bpp, width / 2);
 		return;
 	}
 	/* Other cell widths: pixel x is bits (x * bpp) % 8 up of byte x * bpp / 8. */
@@ -428,6 +473,7 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 	const struct font *font = render->font;
 	struct grid *grid = render->grid;
 	const unsigned half = grid->cols / 2;
+	const unsigned width = font->width;	/* 8 or 6 */
 	unsigned glyph_sub = sub;
 
 	if (line_size == ROW_DOUBLE_TOP)
@@ -460,13 +506,19 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 		}
 		uint16_t wide = double_bits[bits & 0xff];
 		const uint32_t (*masks)[4] = byte_masks[cell_invert];
-		emit8((uint32_t *)(out + col * 16), wide >> 8, CELL_BG2(cell),
-		    CELL_DIFF2(cell), masks);
-		emit8((uint32_t *)(out + col * 16 + 8), wide & 0xff,
-		    CELL_BG2(cell), CELL_DIFF2(cell), masks);
+		/* 16 px from an 8-px cell; 12 from a 6-px one, whose bits
+		 * are the top six, so the last 4 doubled ones are unused. */
+		uint32_t *at = (uint32_t *)(out + col * 2u * width);
+		emit8(at, wide >> 8, CELL_BG2(cell), CELL_DIFF2(cell), masks);
+		if (width == 8)
+			emit8(at + 4, wide & 0xff, CELL_BG2(cell),
+			    CELL_DIFF2(cell), masks);
+		else
+			emit_cell(at + 4, wide & 0xff, CELL_BG2(cell),
+			    CELL_DIFF2(cell), masks, 2);
 	}
-	/* Odd column count: the last 8 px have no cell; use the border. */
-	for (unsigned x = half * 16; x < grid->cols * 8u; x++)
+	/* Odd column count: the last cell's width has none; border. */
+	for (unsigned x = half * 2u * width; x < grid->cols * width; x++)
 		out[x] = (uint16_t)grid->border2;
 }
 
@@ -789,14 +841,22 @@ HOT_FUNC(draw_status_line)(const struct render *render, uint16_t *pixels,
 	for (unsigned x = render->x_offset + cols * font->width;
 	    x < render->width; x++)
 		pixels[x] = (uint16_t)grid->border2;
-	if (font->width == 8) {
+	if (font->width == 8 || font->width == 6) {
 		const uint32_t (*masks)[4] = byte_masks[0];
 		const unsigned glyph_bytes = font->glyph_bytes;
 		uint32_t *words = (uint32_t *)out;
-		for (unsigned col = 0; col < cols; col++, words += 4) {
+		for (unsigned col = 0; col < cols; col++) {
 			const struct cell *cell = &render->status_cells[col];
-			emit8(words, glyph_rows[cell->glyph * glyph_bytes],
-			    CELL_BG2(cell), CELL_DIFF2(cell), masks);
+			uint32_t bits = glyph_rows[cell->glyph * glyph_bytes];
+			if (font->width == 8) {
+				emit8(words, bits, CELL_BG2(cell),
+				    CELL_DIFF2(cell), masks);
+				words += 4;
+			} else {
+				emit_cell(words, bits, CELL_BG2(cell),
+				    CELL_DIFF2(cell), masks, 3);
+				words += 3;
+			}
 		}
 		return;
 	}
@@ -831,13 +891,13 @@ struct span_context {
  */
 HOT_INLINE unsigned
 draw_plain_span(const struct span_context *span, uint32_t *words,
-    const struct cell *cells, unsigned count)
+    const struct cell *cells, unsigned count, unsigned cell_words)
 {
 	const uint8_t *glyph_rows = span->glyph_rows;
 	const unsigned glyph_bytes = span->glyph_bytes;
 	const uint32_t (*masks)[4] = span->masks;
 
-	for (unsigned col = 0; col < count; col++, words += 4) {
+	for (unsigned col = 0; col < count; col++, words += cell_words) {
 		const struct cell *cell = &cells[col];
 		uint32_t glyph_attr, colours;
 
@@ -849,7 +909,8 @@ draw_plain_span(const struct span_context *span, uint32_t *words,
 		memcpy(&colours, &cell->fg, sizeof(colours));
 		uint32_t bg = colours >> 16;
 		uint32_t diff = (colours ^ bg) & 0xffff;
-		emit8(words, bits, bg | bg << 16, diff | diff << 16, masks);
+		emit_cell(words, bits, bg | bg << 16, diff | diff << 16, masks,
+		    cell_words);
 	}
 	return count;
 }
@@ -861,12 +922,12 @@ draw_plain_span(const struct span_context *span, uint32_t *words,
  */
 HOT_INLINE unsigned
 draw_pair_span(const struct span_context *span, uint32_t *words,
-    const struct cell *cells, unsigned count)
+    const struct cell *cells, unsigned count, unsigned cell_words)
 {
 	const uint8_t *glyph_rows = span->glyph_rows;
 	const unsigned glyph_bytes = span->glyph_bytes;
 
-	for (unsigned col = 0; col < count; col++, words += 4) {
+	for (unsigned col = 0; col < count; col++, words += cell_words) {
 		uint32_t glyph_attr;
 
 		memcpy(&glyph_attr, &cells[col], sizeof(glyph_attr));
@@ -875,11 +936,21 @@ draw_pair_span(const struct span_context *span, uint32_t *words,
 			return col;
 		const uint32_t *from = pair_words[glyph_rows[(glyph_attr &
 		    0xffff) * glyph_bytes]];
-		uint32_t w0 = from[0], w1 = from[1], w2 = from[2], w3 = from[3];
-		words[0] = w0;
-		words[1] = w1;
-		words[2] = w2;
-		words[3] = w3;
+		/* All loads, then all stores: block transfers. (Storing the
+		 * fourth word after the others cost 8x16 text 18%.) */
+		if (cell_words == 4) {
+			uint32_t w0 = from[0], w1 = from[1], w2 = from[2],
+			    w3 = from[3];
+			words[0] = w0;
+			words[1] = w1;
+			words[2] = w2;
+			words[3] = w3;
+		} else {
+			uint32_t w0 = from[0], w1 = from[1], w2 = from[2];
+			words[0] = w0;
+			words[1] = w1;
+			words[2] = w2;
+		}
 	}
 	return count;
 }
@@ -887,7 +958,7 @@ draw_pair_span(const struct span_context *span, uint32_t *words,
 /* MIXED spans: attributes and pictures handled in line, as before. */
 HOT_INLINE void
 draw_mixed_span(const struct span_context *span, uint32_t *words,
-    const struct cell *cells, unsigned count)
+    const struct cell *cells, unsigned count, unsigned cell_words)
 {
 	const struct render *render = span->render;
 	const uint8_t *glyph_rows = span->glyph_rows;
@@ -901,7 +972,7 @@ draw_mixed_span(const struct span_context *span, uint32_t *words,
 	const unsigned tile_bpp = render->tile_bpp;
 	uint16_t *tile_colour = render->palette;
 
-	for (unsigned col = 0; col < count; col++, words += 4) {
+	for (unsigned col = 0; col < count; col++, words += cell_words) {
 		const struct cell *cell = &cells[col];
 		uint32_t glyph_attr;
 
@@ -918,9 +989,9 @@ draw_mixed_span(const struct span_context *span, uint32_t *words,
 			if (glyph_attr & (CELL_GRAPHIC << 16)) {
 				tile_colour[(1u << tile_bpp) - 1] =
 				    cell->bg;	/* see-through */
-				draw_tile8(words, tile_rows + (glyph_attr &
+				draw_tile_cell(words, tile_rows + (glyph_attr &
 				    0xffff) * tile_bytes, tile_colour,
-				    tile_bpp);
+				    tile_bpp, cell_words);
 				continue;
 			}
 			bits = attr_bits(render, glyph_rows[(glyph_attr &
@@ -934,7 +1005,8 @@ draw_mixed_span(const struct span_context *span, uint32_t *words,
 		memcpy(&colours, &cell->fg, sizeof(colours));
 		uint32_t bg = colours >> 16;
 		uint32_t diff = (colours ^ bg) & 0xffff;
-		emit8(words, bits, bg | bg << 16, diff | diff << 16, masks);
+		emit_cell(words, bits, bg | bg << 16, diff | diff << 16, masks,
+		    cell_words);
 	}
 }
 
@@ -1141,11 +1213,11 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	 * Double-width / double-height lines (DECDWL/DECDHL): only the first
 	 * cols/2 cells exist, each drawn 16 px wide; double-height halves
 	 * stretch glyph rows 0..h/2-1 (top) or h/2..h-1 (bottom) over the
-	 * whole cell. Slow path, 8-px fonts only (all built-ins); an overlay
+	 * whole cell. Slow path, 8- and 6-px fonts (all built-ins); an overlay
 	 * over one is composed here, the rare case spans don't cover.
 	 */
 	uint8_t line_size = grid->row_attr[grid->row_map[text_row]];
-	if (line_size != ROW_NORMAL && width == 8) {
+	if (line_size != ROW_NORMAL && (width == 8 || width == 6)) {
 		bool covered_ignored = false;
 		const struct cell *cells = row_plan->covered ?
 		    compose_row(render, grid, text_row, &covered_ignored) :
@@ -1172,7 +1244,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 		    pair_ok)
 			cells = preloaded(render, row_cells, cols);
 
-		if (width == 8) {
+		if (width == 8 || width == 6) {
 			const struct span_context context = {
 				.render = render,
 				.glyph_rows = glyph_rows,
@@ -1181,19 +1253,40 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 				.sub = sub,
 				.attr_mask = attr_mask,
 			};
-			uint32_t *words = (uint32_t *)out + span->col * 4u;
+			/* Two pixels a word: 4 a cell at 8 px, 3 at 6. Each
+			 * width gets its own copy of the loops (the constant
+			 * is propagated), so neither pays for the other. */
+			const unsigned cell_words = width / 2;
+			uint32_t *words = (uint32_t *)out +
+			    span->col * cell_words;
 			unsigned done = 0;
 			/* The table is only right in the reverse video it was
 			 * built for (a visual bell flips it for a moment). */
-			if (span->kind == RENDER_SPAN_PAIR && pair_ok)
-				done = draw_pair_span(&context, words, cells,
-				    count);
-			else if (span->kind != RENDER_SPAN_MIXED)
-				done = draw_plain_span(&context, words, cells,
-				    count);
-			if (done < count)
-				draw_mixed_span(&context, words + done * 4u,
-				    cells + done, count - done);
+			bool pair = span->kind == RENDER_SPAN_PAIR && pair_ok;
+			bool plain = span->kind != RENDER_SPAN_MIXED;
+			if (width == 8) {
+				if (pair)
+					done = draw_pair_span(&context, words,
+					    cells, count, 4);
+				else if (plain)
+					done = draw_plain_span(&context, words,
+					    cells, count, 4);
+				if (done < count)
+					draw_mixed_span(&context, words +
+					    done * 4u, cells + done,
+					    count - done, 4);
+			} else {
+				if (pair)
+					done = draw_pair_span(&context, words,
+					    cells, count, 3);
+				else if (plain)
+					done = draw_plain_span(&context, words,
+					    cells, count, 3);
+				if (done < count)
+					draw_mixed_span(&context, words +
+					    done * 3u, cells + done,
+					    count - done, 3);
+			}
 			continue;
 		}
 		for (unsigned col = 0; col < count; col++) {
