@@ -62,6 +62,25 @@ Lessons:
 The current renderer fits at 60 fps on average, but the worst line can
 slightly exceed the budget.
 
+### Split pipeline: render on core 0, encode on core 1 (current)
+
+Core 0 renders into an 8-line ring from a top-priority doorbell IRQ.
+Core 1 only encodes. Measured with the `pizero-stats` env on the same
+worst-case screen:
+
+| Core | Work | Avg | Max | Budget |
+|------|------|-----|-----|--------|
+| 1 | TMDS encode | 4 348 | 4 348 | 8 000 |
+| 0 | text render (IRQ) | 3 657 | 3 728 | 8 000 |
+
+0 starved lines and a steady 60 fps. Core 1 has about 46% headroom for
+graphics overlays. Rendering takes about 42% of core 0, and the
+terminal and USB run in the rest.
+
+Gotcha: arduino-pico hooks the shared SIO_IRQ_BELL even in single-core
+mode, and watches doorbell 0 with an "idle forever" handler. The video
+ring therefore uses doorbell 7.
+
 ## Capture
 
 The Genki ShadowCast 2 upscales 640×480 to 2560×1440 (stretched to

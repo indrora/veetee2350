@@ -3,7 +3,10 @@ name = "veetee-tools"
 version = "0.1.0"
 description = "Host-side tooling for VeeTee 2350 (font conversion, captures)"
 requires-python = ">=3.11"
-dependencies = ["freetype-py>=2.4"]
+dependencies = [
+    "freetype-py>=2.4",
+    "pyte>=0.8.2",
+]
 
 [tool.uv]
 package = false

@@ -4,12 +4,12 @@
  * Layering: lowest level (STYLE.md §4). The renderer above us never sees
  * TMDS, PIO or DMA; it only fills one 640-pixel RGB565 line at a time.
  *
- * Model: video_init() hands core 1 over to scanout. Core 1 then loops
- * forever: for each visible line it calls the registered scanline
- * callback, TMDS-encodes the result with the RP2350's SIO encoder, and
- * queues it for DMA. The callback therefore runs ON CORE 1, from RAM,
- * with a hard budget (see VIDEO_LINE_BUDGET_CYCLES) — anything it reads
- * that core 0 writes must be designed for concurrent access.
+ * Model: video_init() hands core 1 over to TMDS encoding. The registered
+ * scanline callback runs ON CORE 0, inside a top-priority interrupt, and
+ * renders lines into a short ring a few lines ahead of the beam. It must
+ * live in RAM (__not_in_flash_func), must not block, and must not take
+ * locks that core 0 thread code can hold. Data it reads from thread code
+ * on the same core can change between lines (but not mid-line).
  */
 #ifndef HAL_VIDEO_H
 #define HAL_VIDEO_H
@@ -22,24 +22,27 @@
 /*
  * One 640x480p60 line is 800 pixel clocks including blanking. At one TMDS
  * bit per sysclk cycle and 10 bits per pixel, that is 8000 sysclk cycles
- * per line at 252 MHz. Render + encode must average below this or DVI
- * starts emitting "late" lines (solid colour) to stay in sync.
+ * per line at 252 MHz. Encode (core 1) and render (core 0) must each stay
+ * below it on average, or DVI emits "late" lines (solid colour) to resync.
  */
 #define VIDEO_SYSCLK_KHZ		252000
 #define VIDEO_LINE_BUDGET_CYCLES	8000
 
 /*
  * Fill `pixels` (VIDEO_WIDTH RGB565 values, 4-byte aligned) for visible
- * line `line` (0..VIDEO_HEIGHT-1). Runs on core 1; must live in RAM
- * (__not_in_flash_func) and must not block.
+ * line `line` (0..VIDEO_HEIGHT-1). Runs on core 0 in IRQ context; must
+ * live in RAM (__not_in_flash_func) and must not block. Lines are always
+ * requested in display order.
  */
 typedef void (*video_scanline_fn)(uint16_t *pixels, unsigned line, void *ctx);
 
 struct video_stats {
-	uint32_t	frames;		/* frames completed since start */
-	uint32_t	max_line_cycles;/* worst render+encode, last frame */
-	uint32_t	avg_line_cycles;/* mean render+encode, last frame */
-	uint32_t	avg_encode_cycles;/* mean TMDS encode only, last frame */
+	uint32_t	frames;		  /* frames encoded since start */
+	uint32_t	avg_encode_cycles;/* core 1, last frame */
+	uint32_t	max_encode_cycles;
+	uint32_t	avg_render_cycles;/* core 0 scanline callback, last frame */
+	uint32_t	max_render_cycles;
+	uint32_t	starved;	  /* lines the ring was empty (cumulative) */
 };
 
 /*

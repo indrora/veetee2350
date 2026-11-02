@@ -18,6 +18,7 @@
 #include "video.h"
 
 #include "pico.h"
+#include "pico/time.h"
 
 static_assert(RENDER_WIDTH == VIDEO_WIDTH && RENDER_HEIGHT == VIDEO_HEIGHT);
 
@@ -48,6 +49,33 @@ app_init(void)
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
 }
 
+#ifdef VEETEE_SERIAL_STATS
+/*
+ * Debug builds only (-DVEETEE_SERIAL_STATS): print scanout statistics to
+ * the host once a second. They go out on the same serial port as the
+ * terminal's replies, so don't run an interactive session at the same
+ * time; tools use them to measure the render/encode budget under load.
+ */
+static void
+report_stats(void)
+{
+	static absolute_time_t next_report;
+	struct video_stats stats;
+
+	if (!time_reached(next_report))
+		return;
+	next_report = make_timeout_time_ms(1000);
+	video_get_stats(&stats);
+	console_printf("\r\n[stats] frames=%lu encode avg=%lu max=%lu "
+	    "render avg=%lu max=%lu starved=%lu budget=%u\r\n",
+	    (unsigned long)stats.frames, (unsigned long)stats.avg_encode_cycles,
+	    (unsigned long)stats.max_encode_cycles,
+	    (unsigned long)stats.avg_render_cycles,
+	    (unsigned long)stats.max_render_cycles,
+	    (unsigned long)stats.starved, VIDEO_LINE_BUDGET_CYCLES);
+}
+#endif
+
 void
 app_poll(void)
 {
@@ -56,4 +84,7 @@ app_poll(void)
 
 	if (count > 0)
 		term_feed(&term, (const uint8_t *)buffer, count);
+#ifdef VEETEE_SERIAL_STATS
+	report_stats();
+#endif
 }
