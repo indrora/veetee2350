@@ -1912,11 +1912,14 @@ static void request_status_string(VTermState *state, VTermStringFragment frag)
       if(cur >= vt->tmpbuffer_len)
         return;
 
+      /* VeeTee patch 8: like xterm, always start with 0 (reset) so the
+       * reply can be replayed as-is: "0;1m", or "0m" for plain. */
+      cur += snprintf(vt->tmpbuffer + cur, vt->tmpbuffer_len - cur, "0");
       for(int argi = 0; argi < argc; argi++) {
+        if(CSI_ARG(args[argi]) == 0 && argi == 0 && argc == 1)
+          break;
         cur += snprintf(vt->tmpbuffer + cur, vt->tmpbuffer_len - cur,
-            argi == argc - 1             ? "%ld" :
-            CSI_ARG_HAS_MORE(args[argi]) ? "%ld:" :
-                                           "%ld;",
+            (argi > 0 && CSI_ARG_HAS_MORE(args[argi - 1])) ? ":%ld" : ";%ld",
             CSI_ARG(args[argi]));
         if(cur >= vt->tmpbuffer_len)
           return;
@@ -1965,6 +1968,13 @@ static void request_status_string(VTermState *state, VTermStringFragment frag)
       return;
   }
 
+  /* VeeTee patch 8: let the embedder answer settings libvterm doesn't
+   * track (DECSCL, DECSLPP, ...) before declaring the request invalid. */
+  if(state->fallbacks && state->fallbacks->dcs) {
+    VTermStringFragment query = { .str = tmp, .len = strlen(tmp), .initial = true, .final = true };
+    if((*state->fallbacks->dcs)("$q", 2, query, state->fbdata))
+      return;
+  }
   vterm_push_output_sprintf_str(state->vt, C1_DCS, true, "0$r");
 }
 
@@ -2160,6 +2170,15 @@ void vterm_state_reset(VTermState *state, int hard)
   state->mode.leftrightmargin = 0;
   state->mode.bracketpaste    = 0;
   state->mode.report_focus    = 0;
+  state->mode.reverse_wrap    = 0;    /* VeeTee patch 6 */
+
+  /* VeeTee patch 7: soft and hard reset also reset the DECSC save
+   * (home, no origin mode, unprotected), so a later DECRC can't bring
+   * back state from before the reset. */
+  state->saved.pos.row = 0;
+  state->saved.pos.col = 0;
+  state->saved.mode.origin = 0;
+  state->saved.protected_cell = 0;
 
   state->mouse_flags = 0;
 
@@ -2178,6 +2197,9 @@ void vterm_state_reset(VTermState *state, int hard)
     (*state->callbacks->initpen)(state->cbdata);
 
   vterm_state_resetpen(state);
+  /* VeeTee patch 7: DECRC with nothing saved restores the default pen,
+   * as xterm does, not a zeroed one (which reads as black RGB). */
+  state->saved.pen = state->pen;
 
   VTermEncoding *default_enc = state->vt->mode.utf8 ?
       vterm_lookup_encoding(ENC_UTF8,      'u') :

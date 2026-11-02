@@ -569,6 +569,36 @@ test_decsc_saves_protection(void)
 	feed("\x1b[1\"q\x1b" "7\x1b[0\"q\x1b" "8a");	/* DECSCA, DECSC, 0, DECRC */
 	feed("\x1b[1;1;1;1${");			/* DECSERA */
 	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+
+	/* A soft reset clears the saved protection: DECRC after DECSTR
+	 * must not bring it back. */
+	feed("\x1b[1\"q\x1b" "7\x1b[!p\x1b" "8b");
+	feed("\x1b[1;1;1;1${");
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);
+}
+
+static void
+test_decrqss(void)
+{
+	feed("\x1b[1m\x1bP$qm\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r0;1m\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[0m\x1bP$qm\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r0m\x1b\\", reply);
+	reply_len = 0;
+	/* esctest's between-test reset, after OSC 10/11 changed defaults */
+	feed("\x1b]10;rgb:ff/00/00\x1b\\\x1b]11;rgb:00/00/ff\x1b\\");
+	feed("\x1b[64;1\"p\x1b[!p\x1b[8;25;80t\x1b[?1047l\x1b[?1048l"
+	    "\x1b[?1049l\x1b[?69l\x1b[4l\x1b[20l");
+	reply_len = 0;
+	feed("\x1b[1m\x1bP$qm\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r0;1m\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1bP$q\"p\x1b\\");			/* DECSCL, xterm level */
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r64;1\"p\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1bP$qt\x1b\\");				/* DECSLPP */
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r30t\x1b\\", reply);
 }
 
 int
@@ -606,5 +636,6 @@ main(void)
 	RUN_TEST(test_rectangle_operations);
 	RUN_TEST(test_scosc_and_reverse_wrap);
 	RUN_TEST(test_decsc_saves_protection);
+	RUN_TEST(test_decrqss);
 	return UNITY_END();
 }

@@ -64,4 +64,17 @@ moves to the last column of the previous line, as xterm does.
 
 DEC STD 070 includes DECOM and the selective-erase attribute in the
 DECSC save. libvterm saved neither, so a protected character written
-after DECRC wasn't protected. Both are now saved and restored.
+after DECRC wasn't protected. Both are now saved and restored. Soft and
+hard reset (DECSTR, RIS) also reset the saved state (home, DECOM off,
+unprotected) and the reverse-wraparound bit; without that, protection
+saved before a reset leaked back in on the next DECRC. Reset also
+seeds the saved pen with the default pen: DECRC with nothing saved
+used to restore an all-zero pen, i.e. explicit black-on-black RGB.
+
+## 8. DECRQSS (`src/state.c`)
+
+- The SGR reply always starts with `0` (xterm form, replayable):
+  `DCS 1$r0;1m ST`, or `DCS 1$r0m ST` for plain.
+- Settings libvterm doesn't know go to `VTermStateFallbacks.dcs` as a
+  complete `"$q"` string before libvterm replies `0$r` (invalid). VeeTee
+  answers DECSCL, DECSLPP, DECSNLS, DECSACE, DECSASD and DECSSDT.

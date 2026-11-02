@@ -1135,6 +1135,13 @@ fb_csi(const char *leader, const long args[], int argcount,
 		}
 	}
 
+	/* DECSACE, "CSI Ps * x": remembered for DECRQSS. */
+	if (no_leader && intermed != nullptr && intermed[0] == '*' &&
+	    intermed[1] == '\0' && command == 'x') {
+		term->decsace = first == CSI_ARG_MISSING ? 0 : (uint8_t)first;
+		return 1;
+	}
+
 	/* VT420 rectangle operations (libvterm has none). */
 	if (no_leader && intermed != nullptr && intermed[0] == '$' &&
 	    intermed[1] == '\0' &&
@@ -1314,12 +1321,43 @@ xtgettcap_reply(struct term *term, const char *hex_name, size_t hex_len)
 	term->output(reply, (size_t)len, term->output_ctx);
 }
 
+/* DECRQSS for settings libvterm doesn't track (libvterm patch 8). */
+static int
+decrqss_reply(struct term *term, const char *setting, size_t len)
+{
+	static const char *const conformance[EMU_COUNT] = {"61", "62", "63",
+	    "64"};
+	char value[24];
+
+	if (len == 2 && memcmp(setting, "\"p", 2) == 0)	/* DECSCL */
+		snprintf(value, sizeof(value), "%s;1\"p",
+		    conformance[term->options.emulation % EMU_COUNT]);
+	else if (len == 1 && setting[0] == 't')		/* DECSLPP */
+		snprintf(value, sizeof(value), "%ut", term->screen->rows);
+	else if (len == 2 && memcmp(setting, "*|", 2) == 0)	/* DECSNLS */
+		snprintf(value, sizeof(value), "%u*|", term->screen->rows);
+	else if (len == 2 && memcmp(setting, "*x", 2) == 0)	/* DECSACE */
+		snprintf(value, sizeof(value), "%u*x", term->decsace);
+	else if (len == 2 && memcmp(setting, "$}", 2) == 0)	/* DECSASD */
+		snprintf(value, sizeof(value), "0$}");
+	else if (len == 2 && memcmp(setting, "$~", 2) == 0)	/* DECSSDT */
+		snprintf(value, sizeof(value), "0$~");
+	else
+		return 0;
+	term->output("\x1bP1$r", 5, term->output_ctx);
+	term->output(value, strlen(value), term->output_ctx);
+	term->output("\x1b\\", 2, term->output_ctx);
+	return 1;
+}
+
 static int
 fb_dcs(const char *command, size_t commandlen, VTermStringFragment frag,
     void *user)
 {
 	struct term *term = user;
 
+	if (commandlen == 2 && command[0] == '$' && command[1] == 'q')
+		return decrqss_reply(term, frag.str, frag.len);
 	if (commandlen != 2 || command[0] != '+' || command[1] != 'q')
 		return 0;
 	if (frag.initial) {

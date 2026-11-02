@@ -128,15 +128,33 @@ scrolling, ICH/DCH (moverect path), the 1049 alternate screen with cursor
 restore, DEC special graphics, DECSCNM/DECTCEM/DECSCUSR, DA1/DSR replies,
 and UTF-8 split across writes.
 
+## Conformance (esctest2)
+
+esctest2 runs unattended through `tools/hostshell.py` (see devlog 012):
+
+```
+cd tools && python3 hostshell.py /dev/cu.usbmodem*1 --type \
+  "cd …/esctest2/esctest && python3 esctest.py --expected-terminal=xterm \
+   --xterm-checksum=390 --max-vt-level=4 --timeout=2 --logfile=run.log \
+   --no-print-logs; exit" --exit-after 3000
+python3 tools/esc_summary.py run.log [--failures] [--compare old.log]
+```
+
+Latest: **408 / 567** pass (72%) (baseline 169). `docs/esctest-latest.log`
+holds the full log; `docs/esctest-baseline.log` the first run.
+
 ## Known gaps
 
 | Gap | Why / plan |
 |-----|------------|
 | Palette changes (OSC 4) recolour new text only | Cells store resolved RGB565. To fix, store the palette index alongside and re-resolve on change. |
 | Italic renders upright, bold is colour-only | No italic or bold font faces. Could synthesize bold with a 1 px smear. |
-| Double-width/height lines (DECDWL/DECDHL) not drawn | Needs a per-row attribute and a 2× render path. vttest exercises it. |
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |
-| DECCOLM (132 columns) ignored | The grid size is fixed by the font. A narrow font could provide it. |
+| DECCOLM (132 columns) ignored | The grid size is fixed by the font. Plan: honour it when the resolution has room (≥ 132 × 8 px wide). |
+| Window ops (iconify, move, title stack, label reports) | There is no window. 19 esctest failures. |
+| DECBI/DECFI, DECCARA/DECRARA | Not implemented yet. |
+| Xcms colour spaces in OSC 4/10–19 | Only `rgb:`, `rgbi:` and `#hex` are parsed. |
+| DECSLPP / DECSNLS (set lines per page) | Reported, not settable: the row count comes from SET-UP. |
 | 8-bit GR is Latin-1, not DEC Supplemental Graphics | libvterm has no 96-character sets. Close, but not identical for VT220 apps. |
 | A host RIS (`ESC c`) resets modes to libvterm defaults, not to the saved settings | libvterm doesn't signal RIS. SET-UP's settings are applied at boot, on exit, and by its "Reset terminal" action. |

@@ -141,6 +141,7 @@ struct term {
 	/* Modes accepted and reported (DECRQM) but with no visible effect
 	 * here, e.g. DECARM, DECNKM, KAM. Index into term.c's table. */
 	uint8_t		 stored_modes[32];
+	uint8_t		 decsace;	/* DECSACE, reported by DECRQSS only */
 
 	/* OSC colour state (4/5/10-19 and their resets). */
 	uint8_t		 palette_initial[256][3];	/* for OSC 104 */
