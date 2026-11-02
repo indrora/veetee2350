@@ -62,6 +62,7 @@ struct setup {
 	unsigned	 running_resolution;	/* mode the hardware is in now */
 	bool		 editing;	/* typing into the answerback field */
 	char		 message[64];
+	char		 storage[36];	/* SD card status, title row */
 };
 
 /*
@@ -76,6 +77,8 @@ void	setup_begin(struct setup *setup, const struct settings *current,
 /* Handle one key; redraws as needed. */
 enum setup_action setup_key(struct setup *setup, const struct key_event *key);
 
+/* Set the SD card status shown in the title row ("SD: 7.4 GB FAT32"). */
+void	setup_storage(struct setup *setup, const char *text);
 /* Show a status line message (e.g. "Saved.") and redraw. */
 void	setup_message(struct setup *setup, const char *text);
 

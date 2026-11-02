@@ -104,3 +104,58 @@ baseline = 10
 align = "center"
 synth = ["box", "block", "dec"]
 license = "Arbata Compact by Olga Yakovleva, CC BY 4.0 (modified: rasterized, re-celled)"
+
+# --- The Ultimate Oldschool PC Font Pack (int10h.org, by VileR) ---------
+# CC BY-SA 4.0: these conversions are adaptations and stay CC BY-SA 4.0.
+# Sources are the "Px437" pixel-outline TTFs (one design pixel = 100
+# units horizontally).
+
+[[font]]
+name = "rainbow100-80"
+source = "../fonts/TUOPFP/ttf - Px (pixel outline)/Px437_Rainbow100_re_80.ttf"
+# The DEC Rainbow 100's 80-column font: a 10x10 design whose rows are
+# drawn twice (y unit 200 vs x unit 100), so at 24 ppem a cell is 10x20.
+# Every text glyph fits in the left 8 columns (the last two are gap), so
+# the cell is cropped to 8x20 -- 80x24 at 640x480, a real VT100 screen.
+# Box/block glyphs that reach into columns 8-9 are dropped and
+# synthesized at 8 px instead.
+ppem = 24
+cell_w = 8
+cell_h = 20
+baseline = 16
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Px437 Rainbow100 re.80 from The Ultimate Oldschool PC Font Pack by VileR (int10h.org), CC BY-SA 4.0 (converted to PSF2, cropped to 8 px)"
+
+[[font]]
+name = "nix8810-m16"
+source = "../fonts/TUOPFP/ttf - Px (pixel outline)/Px437_Nix8810_M16.ttf"
+ppem = 16
+cell_w = 8
+cell_h = 16
+baseline = 12
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Px437 Nix8810 M16 from The Ultimate Oldschool PC Font Pack by VileR (int10h.org), CC BY-SA 4.0 (converted to PSF2)"
+
+[[font]]
+name = "fmtowns-8x16"
+source = "../fonts/TUOPFP/ttf - Px (pixel outline)/Px437_FMTowns_re_8x16.ttf"
+ppem = 16
+cell_w = 8
+cell_h = 16
+baseline = 14
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Px437 FMTowns re. 8x16 from The Ultimate Oldschool PC Font Pack by VileR (int10h.org), CC BY-SA 4.0 (converted to PSF2)"
+
+[[font]]
+name = "fmtowns-8x8"
+source = "../fonts/TUOPFP/ttf - Px (pixel outline)/Px437_FMTowns_re_8x8.ttf"
+ppem = 8
+cell_w = 8
+cell_h = 8
+baseline = 7
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Px437 FMTowns re. 8x8 from The Ultimate Oldschool PC Font Pack by VileR (int10h.org), CC BY-SA 4.0 (converted to PSF2)"

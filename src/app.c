@@ -24,6 +24,7 @@
 #include "keys.h"
 #include "render.h"
 #include "settings.h"
+#include "storage.h"
 #include "setup.h"
 #include "term.h"
 #include "usbio.h"
@@ -119,6 +120,24 @@ load_settings(void)
 
 /* --- SET-UP ----------------------------------------------------------- */
 
+/* Probe the card and put what we found in SET-UP's title row. */
+static void
+show_storage_status(void)
+{
+	struct storage_info info;
+	char text[40];
+
+	if (storage_mount() && storage_info(&info)) {
+		unsigned tenths = (unsigned)(info.bytes / 100000000u);
+		snprintf(text, sizeof(text), "SD: %u.%u GB %s", tenths / 10,
+		    tenths % 10, info.fat_type == 64 ? "exFAT" :
+		    info.fat_type == 32 ? "FAT32" : "FAT");
+	} else {
+		snprintf(text, sizeof(text), "SD: %s", storage_error());
+	}
+	setup_storage(&setup, text);
+}
+
 static void
 enter_setup(void)
 {
@@ -131,6 +150,7 @@ enter_setup(void)
 	setup_grid.border2 = grid_dup565(grid_rgb565(16, 40, 120));
 	setup_begin(&setup, &settings, &setup_grid, &term.font,
 	    running_resolution);
+	show_storage_status();
 	render_set_grid(&render, &setup_grid);
 	in_setup = true;
 }

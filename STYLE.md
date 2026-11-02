@@ -12,9 +12,11 @@ parallel one.
   `constexpr` objects, `static_assert` without a message, `[[nodiscard]]`,
   `[[maybe_unused]]`, digit separators (`393'504`), binary literals,
   `typeof`.
-- **No C++ in our code.** The only C++ file is `src/main.cpp`, a shim that
-  hands Arduino's `setup()`/`loop()` to C entry points. Everything else is
-  `.c`/`.h`. C++ libraries we depend on are wrapped behind a C API.
+- **No C++ in our code.** The only C++ files are shims in `src/`:
+  `main.cpp` hands Arduino's `setup()`/`loop()` to C entry points and
+  wraps the USB CDC ports (`usbio`); `storage_sd.cpp` wraps SdFat
+  (`storage`). Each implements a C header in `lib/hal/` and holds no
+  policy. Everything else is `.c`/`.h`.
 - Firmware environment: PlatformIO, `maxgerhardt/platform-raspberrypi`,
   arduino-pico core, board `waveshare_rp2350_pizero`.
 - Host environment: `pio test -e native` builds hardware-independent

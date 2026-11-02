@@ -226,6 +226,7 @@ setup_draw(struct setup *setup)
 	put(setup, 0, 1, "VeeTee 2350 SET-UP", TITLE_FG, TITLE_BG);
 	put(setup, 0, grid->cols - 21, "BOOTSEL / F3: leave", TITLE_FG,
 	    TITLE_BG);
+	put(setup, 0, 22, setup->storage, TITLE_FG, TITLE_BG);
 
 	for (unsigned item = 0; item < ITEM_COUNT; item++) {
 		bool selected = item == setup->selected;
@@ -252,6 +253,13 @@ setup_draw(struct setup *setup)
 	    DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
+}
+
+void
+setup_storage(struct setup *setup, const char *text)
+{
+	snprintf(setup->storage, sizeof(setup->storage), "%s", text);
+	setup_draw(setup);
 }
 
 void
