@@ -79,12 +79,12 @@ reset them one at a time.
 
 ## What's left
 
-Most of the remaining failures can't or shouldn't be fixed:
+All 30 remaining failures are ones that can't or shouldn't be fixed:
 
 - 21 Xcms colour tests: they expect one X server's colour
   characterisation.
-- Window and page resizing (DECSLPP, DECSNLS, 80 ↔ 132 at 640 wide):
-  the screen size comes from SET-UP.
+- 6 window and page resizing tests (DECSLPP, DECSNLS, 80 ↔ 132 at
+  640 wide): the screen size comes from SET-UP.
 - DA1 lists fewer attributes than xterm's (2 tests): VeeTee only
   claims what it does.
 - Two ISO-protection tests are now "expected failures": DECSED and
