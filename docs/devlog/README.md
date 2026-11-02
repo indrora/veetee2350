@@ -29,6 +29,7 @@ was learned.
 23. [Capture and replay](023-capture-replay.md)
 24. [A frame planner](024-frame-planner.md)
 25. [ATI Small Wonder, a 72 Hz mode, and debug builds that show it](025-small-wonder.md)
+26. [fastfetch](026-fastfetch.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`
