@@ -133,12 +133,22 @@ struct term {
 	term_output_fn	 output;
 	void		*output_ctx;
 	uint32_t	 bells;		/* BEL count, for a future visual bell */
+	uint32_t	 last_char;	/* last graphic character, for REP */
 
 	/* DECSET 2048: report the size in-band whenever it changes. */
 	bool		 resize_reports;
 
-	/* OSC 50 argument, reassembled from libvterm's string fragments. */
-	char		 osc_buf[48];
+	/* Modes accepted and reported (DECRQM) but with no visible effect
+	 * here, e.g. DECARM, DECNKM, KAM. Index into term.c's table. */
+	uint8_t		 stored_modes[32];
+
+	/* OSC colour state (4/5/10-19 and their resets). */
+	uint8_t		 palette_initial[256][3];	/* for OSC 104 */
+	uint8_t		 special_colours[5][3];		/* OSC 5: bold..italic */
+	uint8_t		 dynamic_colours[10][3];	/* OSC 10..19 */
+
+	/* OSC argument, reassembled from libvterm's string fragments. */
+	char		 osc_buf[160];
 	size_t		 osc_len;
 	bool		 osc_overflow;
 

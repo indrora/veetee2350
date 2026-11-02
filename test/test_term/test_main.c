@@ -402,14 +402,14 @@ test_decrqcra_checksums(void)
 	feed("\x1b[2;;1;1;1;2*y");		/* "AB" */
 	TEST_ASSERT_EQUAL_STRING("\x1bP2!~0083\x1b\\", reply);
 	reply_len = 0;
-	feed("\x1b[3;;2;1;2;1*y");		/* erased cell: 0 */
-	TEST_ASSERT_EQUAL_STRING("\x1bP3!~0000\x1b\\", reply);
+	feed("\x1b[3;;2;1;2;1*y");		/* erased: a space (xterm >= 334) */
+	TEST_ASSERT_EQUAL_STRING("\x1bP3!~0020\x1b\\", reply);
 	reply_len = 0;
 	feed("\x1b[4;;3;1;3;1*y");		/* written space: 0x20 */
 	TEST_ASSERT_EQUAL_STRING("\x1bP4!~0020\x1b\\", reply);
 	reply_len = 0;
 	feed("\x1b[1;1H\x1b[K\x1b[5;;1;1;1;1*y");	/* EL erases */
-	TEST_ASSERT_EQUAL_STRING("\x1bP5!~0000\x1b\\", reply);
+	TEST_ASSERT_EQUAL_STRING("\x1bP5!~0020\x1b\\", reply);
 }
 
 static void
@@ -455,6 +455,122 @@ test_double_width_and_height_lines(void)
 	TEST_ASSERT_EQUAL(ROW_NORMAL, *grid_row_attr(term.screen, 0));
 }
 
+static void
+test_osc_colours(void)
+{
+	feed("\x1b]4;1;rgb:f0f0/0000/0000;2;#888\x1b\\");
+	feed("\x1b]4;1;?;2;?\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1b]4;1;rgb:f0f0/0000/0000\x1b\\"
+	    "\x1b]4;2;rgb:8080/8080/8080\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b]104;1\x1b\\\x1b]4;1;?\x07");	/* reset entry 1 */
+	TEST_ASSERT_EQUAL_STRING_LEN("\x1b]4;1;rgb:", reply, 10);
+	TEST_ASSERT_NOT_EQUAL(0, strcmp(reply,
+	    "\x1b]4;1;rgb:f0f0/0000/0000\x1b\\"));
+	reply_len = 0;
+	feed("\x1b]10;#f0f0f0;rgb:1/2/3\x07\x1b]10;?;?\x07");
+	TEST_ASSERT_EQUAL_STRING("\x1b]10;rgb:f0f0/f0f0/f0f0\x1b\\"
+	    "\x1b]11;rgb:1111/2222/3333\x1b\\", reply);
+	/* New text uses the new default foreground. */
+	feed("Z");
+	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(0xf0, 0xf0, 0xf0),
+	    cell_fg(cell_at(0, 0)));
+}
+
+static void
+test_mode_reports(void)
+{
+	feed("\x1b[4$p");			/* IRM, real state */
+	TEST_ASSERT_EQUAL_STRING("\x1b[4;2$y", reply);
+	reply_len = 0;
+	feed("\x1b[4h\x1b[4$p");
+	TEST_ASSERT_EQUAL_STRING("\x1b[4;1$y", reply);
+	reply_len = 0;
+	feed("\x1b[7$p");			/* VEM: permanently reset */
+	TEST_ASSERT_EQUAL_STRING("\x1b[7;4$y", reply);
+	reply_len = 0;
+	feed("\x1b[?67h\x1b[?67$p");		/* DECBKM stored */
+	TEST_ASSERT_EQUAL_STRING("\x1b[?67;1$y", reply);
+	reply_len = 0;
+	feed("\x1b[?67l\x1b[?67$p");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?67;2$y", reply);
+	reply_len = 0;
+	feed("\x1b[?7$p");			/* DECAWM: libvterm's own */
+	TEST_ASSERT_EQUAL_STRING("\x1b[?7;1$y", reply);
+}
+
+static void
+test_status_reports(void)
+{
+	feed("\x1b[3;7H\x1b[?6n");		/* DECXCPR with page */
+	TEST_ASSERT_EQUAL_STRING("\x1b[?3;7;1R", reply);
+	reply_len = 0;
+	feed("\x1b[?15n");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?13n", reply);
+	reply_len = 0;
+	feed("\x1b[?63;9n");
+	TEST_ASSERT_EQUAL_STRING("\x1bP9!~0000\x1b\\", reply);
+}
+
+static void
+test_rep(void)
+{
+	feed("x\x1b[3b");
+	for (unsigned col = 0; col < 4; col++)
+		TEST_ASSERT_EQUAL(glyph('x'), cell_at(0, col)->glyph);
+	TEST_ASSERT_EQUAL(4, term.screen->cursor_col);
+}
+
+static void
+test_xtgettcap_and_special_colours(void)
+{
+	feed("\x1bP+q436F\x1b\\");		/* "Co" */
+	TEST_ASSERT_EQUAL_STRING("\x1bP1+r436F=323536\x1b\\", reply); /* 256 */
+	reply_len = 0;
+	feed("\x1bP+q7a7a\x1b\\");		/* unknown "zz" */
+	TEST_ASSERT_EQUAL_STRING("\x1bP0+r7a7a\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b]4;256;#f00\x1b\\\x1b]5;0;?\x1b\\");	/* same slot */
+	TEST_ASSERT_EQUAL_STRING("\x1b]5;0;rgb:f0f0/0000/0000\x1b\\", reply);
+}
+
+static void
+test_rectangle_operations(void)
+{
+	feed("\x1b[88;2;2;3;4$x");		/* DECFRA 'X' rows 2-3, cols 2-4 */
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(1, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(2, 3)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(1, 4)->glyph);
+	TEST_ASSERT_EQUAL(0, term.screen->cursor_row);	/* cursor untouched */
+	feed("\x1b[2;2;3;4;1;5;6;1$v");		/* DECCRA to row 5, col 6 */
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(4, 5)->glyph);
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(5, 7)->glyph);
+	feed("\x1b[2;2;2;4$z");			/* DECERA row 2 */
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(1, 2)->glyph);
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(2, 2)->glyph);
+}
+
+static void
+test_scosc_and_reverse_wrap(void)
+{
+	feed("\x1b[5;6H\x1b[s\x1b[1;1H\x1b[u\x1b[6n");	/* SCOSC/SCORC */
+	TEST_ASSERT_EQUAL_STRING("\x1b[5;6R", reply);
+	reply_len = 0;
+	feed("\x1b[?45h\x1b[3;1H\x08\x1b[6n");	/* BS wraps back */
+	TEST_ASSERT_EQUAL_STRING("\x1b[2;80R", reply);
+	reply_len = 0;
+	feed("\x1b[?45l\x1b[3;1H\x08\x1b[6n");	/* off: stays */
+	TEST_ASSERT_EQUAL_STRING("\x1b[3;1R", reply);
+}
+
+static void
+test_decsc_saves_protection(void)
+{
+	feed("\x1b[1\"q\x1b" "7\x1b[0\"q\x1b" "8a");	/* DECSCA, DECSC, 0, DECRC */
+	feed("\x1b[1;1;1;1${");			/* DECSERA */
+	TEST_ASSERT_EQUAL(glyph('a'), cell_at(0, 0)->glyph);
+}
+
 int
 main(void)
 {
@@ -482,5 +598,13 @@ main(void)
 	RUN_TEST(test_decrqcra_checksums);
 	RUN_TEST(test_selective_erase_keeps_protected);
 	RUN_TEST(test_double_width_and_height_lines);
+	RUN_TEST(test_osc_colours);
+	RUN_TEST(test_mode_reports);
+	RUN_TEST(test_status_reports);
+	RUN_TEST(test_rep);
+	RUN_TEST(test_xtgettcap_and_special_colours);
+	RUN_TEST(test_rectangle_operations);
+	RUN_TEST(test_scosc_and_reverse_wrap);
+	RUN_TEST(test_decsc_saves_protection);
 	return UNITY_END();
 }

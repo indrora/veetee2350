@@ -461,6 +461,12 @@ static int on_control(unsigned char control, void *user)
   case 0x08: // BS - ECMA-48 8.3.5
     if(state->pos.col > 0)
       state->pos.col--;
+    /* VeeTee patch 6: xterm reverse-wraparound (DECSET 45, with DECAWM):
+     * BS at the left edge goes to the end of the previous line. */
+    else if(state->mode.reverse_wrap && state->mode.autowrap && state->pos.row > 0) {
+      state->pos.row--;
+      state->pos.col = state->cols - 1;
+    }
     break;
 
   case 0x09: // HT - ECMA-48 8.3.60
@@ -570,6 +576,9 @@ static void savecursor(VTermState *state, int save)
     state->saved.mode.cursor_visible = state->mode.cursor_visible;
     state->saved.mode.cursor_blink   = state->mode.cursor_blink;
     state->saved.mode.cursor_shape   = state->mode.cursor_shape;
+    /* VeeTee patch 7: DECSC also saves DECOM and DECSCA (DEC STD 070). */
+    state->saved.mode.origin         = state->mode.origin;
+    state->saved.protected_cell      = state->protected_cell;
 
     vterm_state_savepen(state, 1);
   }
@@ -581,6 +590,8 @@ static void savecursor(VTermState *state, int save)
     settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, state->saved.mode.cursor_visible);
     settermprop_bool(state, VTERM_PROP_CURSORBLINK,   state->saved.mode.cursor_blink);
     settermprop_int (state, VTERM_PROP_CURSORSHAPE,   state->saved.mode.cursor_shape);
+    state->mode.origin    = state->saved.mode.origin;     /* VeeTee patch 7 */
+    state->protected_cell = state->saved.protected_cell;
 
     vterm_state_savepen(state, 0);
 
@@ -741,6 +752,13 @@ static void set_mode(VTermState *state, int num, int val)
     break;
 
   default:
+    /* VeeTee patch: unknown ANSI modes go to the CSI fallback as
+     * "CSI num h/l" (see PATCHES.md 4). */
+    if(state->fallbacks && state->fallbacks->csi) {
+      long arg = num;
+      if((*state->fallbacks->csi)(NULL, &arg, 1, NULL, val ? 'h' : 'l', state->fbdata))
+        return;
+    }
     DEBUG_LOG("libvterm: Unknown mode %d\n", num);
     return;
   }
@@ -777,6 +795,10 @@ static void set_dec_mode(VTermState *state, int num, int val)
 
   case 25:
     settermprop_bool(state, VTERM_PROP_CURSORVISIBLE, val);
+    break;
+
+  case 45: /* VeeTee patch 6: reverse-wraparound */
+    state->mode.reverse_wrap = val;
     break;
 
   case 69: // DECVSSM - vertical split screen mode
@@ -875,6 +897,10 @@ static void request_dec_mode(VTermState *state, int num)
 
     case 25:
       reply = state->mode.cursor_visible;
+      break;
+
+    case 45:
+      reply = state->mode.reverse_wrap;
       break;
 
     case 69:
@@ -1414,7 +1440,16 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
         vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "%s0n", qmark);
         break;
       case 6: // CPR - cursor position report
-        vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "%s%d;%dR", qmark, state->pos.row + 1, state->pos.col + 1);
+        /* VeeTee patch: DECXCPR (the "?" form) includes the page, 1. */
+        if(leader_byte == '?')
+          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "?%d;%d;1R", state->pos.row + 1, state->pos.col + 1);
+        else
+          vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, "%d;%dR", state->pos.row + 1, state->pos.col + 1);
+        break;
+      default:
+        /* VeeTee patch: other status reports go to the CSI fallback. */
+        if(state->fallbacks && state->fallbacks->csi)
+          (*state->fallbacks->csi)(leader, args, argcount, intermed, command, state->fbdata);
         break;
       }
     }
@@ -1506,7 +1541,17 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
 
     break;
 
+  case 0x75: // SCORC - restore cursor (VeeTee patch 5)
+    savecursor(state, 0);
+    break;
+
   case 0x73: // DECSLRM - DEC custom
+    /* VeeTee patch 5: like xterm, CSI s is SCOSC (save cursor) unless
+     * left/right margin mode (DECLRMM) is on. */
+    if(!state->mode.leftrightmargin) {
+      savecursor(state, 1);
+      break;
+    }
     // Always allow setting these margins, just they won't take effect without DECVSSM
     state->scrollregion_left = CSI_ARG_OR(args[0], 1) - 1;
     state->scrollregion_right = argcount < 2 || CSI_ARG_IS_MISSING(args[1]) ? -1 : CSI_ARG(args[1]);

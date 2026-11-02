@@ -14,8 +14,10 @@
 #include "term.h"
 
 #include "colour.h"
+#include "vterm_internal.h"	/* modes and margins (vendored libvterm) */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* xterm's default colours: light grey on black. */
@@ -180,6 +182,7 @@ cb_putglyph(VTermGlyphInfo *info, VTermPos pos, void *user)
 		return 1;
 
 	/* Combining characters (chars[1..]) are dropped: one glyph/cell. */
+	term->last_char = info->chars[0];
 	uint16_t glyph = font_glyph_for(&term->font, info->chars[0]);
 	struct cell *cells = grid_row(grid, pos.row);
 
@@ -444,33 +447,303 @@ static const VTermStateCallbacks state_callbacks = {
 	.setlineinfo = cb_setlineinfo,
 };
 
-/*
- * OSC 50 (xterm "set font"), via libvterm's fallback for OSC numbers it
- * doesn't handle. The string can arrive in several fragments.
- */
+/* --- OSC colour control (xterm) ------------------------------------- */
+
 static int
-fb_osc(int command, VTermStringFragment frag, void *user)
+hex_value(char c)
 {
-	struct term *term = user;
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
 
-	if (command != 50)
-		return 0;
-	if (frag.initial) {
-		term->osc_len = 0;
-		term->osc_overflow = false;
+/*
+ * Parse an X11 colour spec into 8-bit RGB:
+ *   rgb:R/G/B   1-4 hex digits per channel, scaled to the full range
+ *               (rgb:f0f0 -> 0xf0, rgb:f -> 0xff)
+ *   #RGB...     3/6/9/12 digits, left-aligned per X11 (#fff -> 0xf0)
+ *   rgbi:R/G/B  intensities 0.0..1.0
+ * Names (e.g. "red") and the Xcms device-independent spaces (CIELab,
+ * CIEXYZ, TekHVC...) are not supported: xterm gets those from Xlib's
+ * display-dependent colour management.
+ */
+static bool
+parse_colour_spec(const char *spec, size_t len, uint8_t rgb[3])
+{
+	if (len > 4 && memcmp(spec, "rgb:", 4) == 0) {
+		size_t at = 4;
+		for (int channel = 0; channel < 3; channel++) {
+			uint32_t value = 0;
+			unsigned digits = 0;
+			while (at < len && spec[at] != '/') {
+				int digit = hex_value(spec[at++]);
+				if (digit < 0 || ++digits > 4)
+					return false;
+				value = value << 4 | (uint32_t)digit;
+			}
+			if (digits == 0 || (channel < 2 && at >= len))
+				return false;
+			at++;	/* skip '/' */
+			uint32_t max = (1u << (4 * digits)) - 1;
+			rgb[channel] = (uint8_t)((value * 255 + max / 2) / max);
+		}
+		return true;
 	}
-	if (term->osc_len + frag.len >= sizeof(term->osc_buf))
-		term->osc_overflow = true;
-	else {
-		memcpy(term->osc_buf + term->osc_len, frag.str, frag.len);
-		term->osc_len += frag.len;
+	if (len > 5 && memcmp(spec, "rgbi:", 5) == 0) {
+		/* rgbi:R/G/B, each an intensity 0.0..1.0 (X11). Parsed by
+		 * hand: no strtod dependence on locale or float printf. */
+		size_t at = 5;
+		for (int channel = 0; channel < 3; channel++) {
+			uint32_t whole = 0, frac = 0, scale = 1;
+			bool dot = false, any = false;
+			while (at < len && spec[at] != '/') {
+				char c = spec[at++];
+				if (c == '.' && !dot) {
+					dot = true;
+				} else if (c >= '0' && c <= '9') {
+					any = true;
+					if (!dot)
+						whole = whole * 10 + (uint32_t)(c - '0');
+					else if (scale < 100000) {
+						frac = frac * 10 + (uint32_t)(c - '0');
+						scale *= 10;
+					}
+				} else {
+					return false;
+				}
+			}
+			if (!any || whole > 1 || (channel < 2 && at >= len))
+				return false;
+			at++;
+			uint32_t v16 = whole ? 65535 : (frac * 65535 + scale / 2) / scale;
+			rgb[channel] = (uint8_t)(v16 >> 8);
+		}
+		return true;
 	}
-	if (!frag.final || term->osc_overflow)
-		return 1;
-	term->osc_buf[term->osc_len] = '\0';
+	if (len >= 4 && spec[0] == '#' && (len - 1) % 3 == 0 && len - 1 <= 12) {
+		unsigned digits = (unsigned)(len - 1) / 3;
+		for (unsigned channel = 0; channel < 3; channel++) {
+			uint32_t value = 0;
+			for (unsigned i = 0; i < digits; i++) {
+				int digit = hex_value(spec[1 + channel * digits + i]);
+				if (digit < 0)
+					return false;
+				value = value << 4 | (uint32_t)digit;
+			}
+			/* Left-align to 16 bits, keep the top byte. */
+			rgb[channel] = (uint8_t)((value << (16 - 4 * digits)) >> 8);
+		}
+		return true;
+	}
+	return false;
+}
 
-	const char *arg = term->osc_buf;
+/* Reply "OSC <prefix> ; rgb:RRRR/GGGG/BBBB ST" (8-bit channels doubled). */
+static void
+reply_colour(struct term *term, const char *prefix, const uint8_t rgb[3])
+{
+	char reply[64];
+	int len = snprintf(reply, sizeof(reply),
+	    "\x1b]%s;rgb:%02x%02x/%02x%02x/%02x%02x\x1b\\", prefix,
+	    rgb[0], rgb[0], rgb[1], rgb[1], rgb[2], rgb[2]);
+	term->output(reply, (size_t)len, term->output_ctx);
+}
+
+static void
+palette_get(struct term *term, int index, uint8_t rgb[3])
+{
+	VTermColor colour;
+
+	vterm_state_get_palette_color(term->state, index, &colour);
+	vterm_state_convert_color_to_rgb(term->state, &colour);
+	rgb[0] = colour.rgb.red;
+	rgb[1] = colour.rgb.green;
+	rgb[2] = colour.rgb.blue;
+}
+
+static void
+palette_set(struct term *term, int index, const uint8_t rgb[3])
+{
+	VTermColor colour;
+
+	vterm_color_rgb(&colour, rgb[0], rgb[1], rgb[2]);
+	vterm_state_set_palette_color(term->state, index, &colour);
+	if (index < 16)
+		memcpy(term->palette16[index], rgb, 3);
+}
+
+/* Default fg/bg follow OSC 10/11 (for text written from now on). */
+static void
+apply_default_colours(struct term *term)
+{
+	const uint8_t *fg = term->dynamic_colours[0];
+	const uint8_t *bg = term->dynamic_colours[1];
+	VTermColor vfg, vbg;
+
+	term->default_fg = grid_rgb565(fg[0], fg[1], fg[2]);
+	term->default_bg = grid_rgb565(bg[0], bg[1], bg[2]);
+	vterm_color_rgb(&vfg, fg[0], fg[1], fg[2]);
+	vterm_color_rgb(&vbg, bg[0], bg[1], bg[2]);
+	vterm_state_set_default_colors(term->state, &vfg, &vbg);
+}
+
+/* Reset dynamic colours to the configured scheme (fg, bg; others fg/bg). */
+static void
+reset_dynamic_colour(struct term *term, unsigned which)
+{
+	const uint8_t *fg = term->options.fg_rgb;
+	const uint8_t *bg = term->options.bg_rgb;
+	/* 10 fg, 11 bg, 12 cursor, 13/14 mouse fg/bg, 15/16 Tek fg/bg,
+	 * 17 highlight bg, 18 Tek cursor, 19 highlight fg. */
+	static const bool is_background[10] = {
+		false, true, false, false, true, false, true, true, false,
+		false,
+	};
+
+	memcpy(term->dynamic_colours[which], is_background[which] ? bg : fg, 3);
+}
+
+/* Next ';'-separated field of buf[*at..len). */
+static bool
+next_field(const char *buf, size_t len, size_t *at, const char **field,
+    size_t *field_len)
+{
+	if (*at > len)
+		return false;
+	*field = buf + *at;
+	const char *semi = memchr(*field, ';', len - *at);
+	*field_len = semi ? (size_t)(semi - *field) : len - *at;
+	*at += *field_len + 1;
+	return true;
+}
+
+static long
+field_number(const char *field, size_t len)
+{
+	long value = 0;
+
+	if (len == 0)
+		return -1;
+	for (size_t i = 0; i < len; i++) {
+		if (field[i] < '0' || field[i] > '9')
+			return -1;
+		value = value * 10 + (field[i] - '0');
+	}
+	return value;
+}
+
+/*
+ * OSC 4 / 5 (pairs of index ; spec), 104 / 105 (reset listed or all),
+ * 10-19 (successive specs), 110-119 (reset). "?" queries.
+ */
+static void
+handle_colour_osc(struct term *term, int command, const char *buf, size_t len)
+{
+	const char *field, *spec;
+	size_t field_len, spec_len, at = 0;
+	uint8_t rgb[3];
+	char prefix[16];
+
+	switch (command) {
+	case 4:
+	case 5: {
+		/* OSC 4 indices 256..260 alias the five special colours, as in
+		 * xterm with a 256-colour palette. */
+		int limit = command == 4 ? 256 + 5 : 5;
+		while (next_field(buf, len, &at, &field, &field_len) &&
+		    next_field(buf, len, &at, &spec, &spec_len)) {
+			long index = field_number(field, field_len);
+			if (index < 0 || index >= limit)
+				continue;
+			bool special = command == 5 || index >= 256;
+			long slot = command == 5 ? index : index - 256;
+			if (spec_len == 1 && spec[0] == '?') {
+				if (!special)
+					palette_get(term, (int)index, rgb);
+				else
+					memcpy(rgb, term->special_colours[slot], 3);
+				snprintf(prefix, sizeof(prefix), "%d;%ld", command,
+				    index);
+				reply_colour(term, prefix, rgb);
+			} else if (parse_colour_spec(spec, spec_len, rgb)) {
+				if (!special)
+					palette_set(term, (int)index, rgb);
+				else
+					memcpy(term->special_colours[slot], rgb, 3);
+			}
+		}
+		break;
+	}
+	case 104:
+	case 105: {
+		int limit = command == 104 ? 256 : 5;	/* (104 ;256+ not handled) */
+		bool any = false;
+		while (next_field(buf, len, &at, &field, &field_len)) {
+			long index = field_number(field, field_len);
+			if (index < 0 || index >= limit)
+				continue;
+			any = true;
+			if (command == 104)
+				palette_set(term, (int)index,
+				    term->palette_initial[index]);
+			else
+				memcpy(term->special_colours[index],
+				    term->options.fg_rgb, 3);
+		}
+		for (int index = 0; !any && index < limit; index++) {
+			if (command == 104)
+				palette_set(term, index,
+				    term->palette_initial[index]);
+			else
+				memcpy(term->special_colours[index],
+				    term->options.fg_rgb, 3);
+		}
+		break;
+	}
+	default:
+		if (command >= 10 && command <= 19) {
+			for (int which = command - 10; which < 10 &&
+			    next_field(buf, len, &at, &spec, &spec_len); which++) {
+				if (spec_len == 1 && spec[0] == '?') {
+					snprintf(prefix, sizeof(prefix), "%d",
+					    10 + which);
+					reply_colour(term, prefix,
+					    term->dynamic_colours[which]);
+				} else if (parse_colour_spec(spec, spec_len, rgb)) {
+					memcpy(term->dynamic_colours[which], rgb, 3);
+				}
+			}
+			apply_default_colours(term);
+		} else if (command >= 110 && command <= 119) {
+			reset_dynamic_colour(term, (unsigned)(command - 110));
+			apply_default_colours(term);
+		}
+		break;
+	}
+}
+
+/* Initial colour state: palette snapshot, specials and dynamics. */
+static void
+init_colour_state(struct term *term)
+{
+	for (int index = 0; index < 256; index++)
+		palette_get(term, index, term->palette_initial[index]);
+	for (int index = 0; index < 5; index++)
+		memcpy(term->special_colours[index], term->options.fg_rgb, 3);
+	for (unsigned which = 0; which < 10; which++)
+		reset_dynamic_colour(term, which);
+}
+
+/* OSC 50 (xterm "set font") for the built-in fonts. */
+static void
+handle_font_osc(struct term *term, const char *arg)
+{
 	unsigned index = (unsigned)(term->font_source - font_builtins);
+
 	if (strcmp(arg, "?") == 0) {
 		term->output("\x1b]50;", 5, term->output_ctx);
 		term->output(term->font_source->name,
@@ -488,6 +761,40 @@ fb_osc(int command, VTermStringFragment frag, void *user)
 		if (found != nullptr)
 			term->pending_font = found;
 	}
+}
+
+/*
+ * OSC numbers libvterm doesn't handle (it does 0/1/2/52), via its
+ * fallback. The string can arrive in several fragments.
+ */
+static int
+fb_osc(int command, VTermStringFragment frag, void *user)
+{
+	struct term *term = user;
+	bool colour = command == 4 || command == 5 || command == 104 ||
+	    command == 105 || (command >= 10 && command <= 19) ||
+	    (command >= 110 && command <= 119);
+
+	if (command != 50 && !colour)
+		return 0;
+	if (frag.initial) {
+		term->osc_len = 0;
+		term->osc_overflow = false;
+	}
+	if (term->osc_len + frag.len >= sizeof(term->osc_buf))
+		term->osc_overflow = true;
+	else {
+		memcpy(term->osc_buf + term->osc_len, frag.str, frag.len);
+		term->osc_len += frag.len;
+	}
+	if (!frag.final || term->osc_overflow)
+		return 1;
+	term->osc_buf[term->osc_len] = '\0';
+
+	if (command == 50)
+		handle_font_osc(term, term->osc_buf);
+	else
+		handle_colour_osc(term, command, term->osc_buf, term->osc_len);
 	return 1;
 }
 
@@ -514,6 +821,194 @@ send_printf(struct term *term, const char *fmt, unsigned a, unsigned b,
 
 	if (len > 0)
 		term->output(reply, (size_t)len, term->output_ctx);
+}
+
+/*
+ * Modes we accept and report back (DECRQM) but that have no effect on
+ * this hardware (no keyboard autorepeat, no printer, no 132-column
+ * switch...). Remembering them is what xterm does for several, and it
+ * keeps applications that toggle and restore them consistent.
+ */
+static const struct {
+	uint16_t	num;
+	bool		dec;		/* DEC private (?) or ANSI */
+	uint8_t		initial;	/* DECRQM value: 1 set, 2 reset */
+} stored_mode_table[] = {
+	{2, false, 2},		/* KAM keyboard action */
+	{12, false, 1},		/* SRM send/receive (set: no local echo) */
+	{3, true, 2},		/* DECCOLM (accepted; size is fixed) */
+	{4, true, 2},		/* DECSCLM smooth scroll */
+	{8, true, 1},		/* DECARM autorepeat */
+	{18, true, 2},		/* DECPFF print form feed */
+	{19, true, 2},		/* DECPEX print extent */
+	{34, true, 2},		/* DECRLM right-to-left */
+	{35, true, 2},		/* DECHEBM Hebrew keyboard */
+	{36, true, 2},		/* DECHEM Hebrew encoding */
+	{42, true, 2},		/* DECNRCM national replacement charsets */
+	{57, true, 2},		/* DECNAKB Greek/N-A keyboard */
+	{61, true, 2},		/* DECVCCM vertical cursor coupling */
+	{64, true, 2},		/* DECPCCM page cursor coupling */
+	{66, true, 2},		/* DECNKM numeric keypad */
+	{67, true, 2},		/* DECBKM backarrow sends BS */
+	{68, true, 2},		/* DECKBUM keyboard usage */
+	{73, true, 2},		/* DECXRLM transmit rate limiting */
+	{81, true, 2},		/* DECKPM key position */
+	{95, true, 2},		/* DECNCSM no clear on column change */
+	{96, true, 2},		/* DECRLCM cursor right-to-left */
+	{97, true, 2},		/* DECCRTSM CRT save */
+	{98, true, 2},		/* DECARSM auto resize */
+	{99, true, 2},		/* DECMCM modem control */
+	{100, true, 2},		/* DECAAM auto answerback */
+	{101, true, 2},		/* DECCANSM conceal answerback */
+	{102, true, 2},		/* DECNULM ignore NUL */
+	{103, true, 2},		/* DECHDPXM half duplex */
+	{104, true, 2},		/* DECESKM secondary keyboard language */
+	{106, true, 2},		/* DECOSCNM overscan */
+};
+static_assert(sizeof(stored_mode_table) / sizeof(stored_mode_table[0]) <=
+    sizeof(((struct term *)0)->stored_modes));
+
+/* ANSI modes ECMA-48 defines that a terminal like this never has. */
+static bool
+ansi_mode_permanently_reset(long num)
+{
+	switch (num) {
+	case 1: case 5: case 7: case 10: case 11: case 13: case 14:
+	case 15: case 16: case 17: case 18: case 19:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static int
+stored_mode_index(long num, bool dec)
+{
+	for (size_t i = 0; i < sizeof(stored_mode_table) /
+	    sizeof(stored_mode_table[0]); i++)
+		if (stored_mode_table[i].num == num &&
+		    stored_mode_table[i].dec == dec)
+			return (int)i;
+	return -1;
+}
+
+static void
+init_stored_modes(struct term *term)
+{
+	for (size_t i = 0; i < sizeof(stored_mode_table) /
+	    sizeof(stored_mode_table[0]); i++)
+		term->stored_modes[i] = stored_mode_table[i].initial;
+}
+
+/*
+ * Resolve a VT420 rectangle (1-based Pt;Pl;Pb;Pr from args[first..]) to
+ * 0-based inclusive grid coordinates, honouring DECOM. False if empty.
+ */
+static bool
+rect_from_args(const struct term *term, const long args[], int argcount,
+    int first, long *top, long *left, long *bottom, long *right)
+{
+	const struct grid *grid = term->screen;
+	long p[4];
+
+	for (int i = 0; i < 4; i++) {
+		long v = first + i < argcount ? CSI_ARG(args[first + i]) :
+		    CSI_ARG_MISSING;
+		p[i] = v == CSI_ARG_MISSING || v == 0 ? -1 : v;
+	}
+	long row0 = 0, col0 = 0;
+	long max_row = grid->rows, max_col = grid->cols;
+	if (term->state->mode.origin) {
+		row0 = term->state->scrollregion_top;
+		col0 = SCROLLREGION_LEFT(term->state);
+		max_row = SCROLLREGION_BOTTOM(term->state);
+		max_col = SCROLLREGION_RIGHT(term->state);
+	}
+	*top = (p[0] < 0 ? 1 : p[0]) + row0 - 1;
+	*left = (p[1] < 0 ? 1 : p[1]) + col0 - 1;
+	*bottom = p[2] < 0 ? max_row - 1 : p[2] + row0 - 1;
+	*right = p[3] < 0 ? max_col - 1 : p[3] + col0 - 1;
+	if (*bottom > max_row - 1)
+		*bottom = max_row - 1;
+	if (*right > max_col - 1)
+		*right = max_col - 1;
+	return *top <= *bottom && *left <= *right;
+}
+
+/*
+ * DECFRA  CSI Pch;Pt;Pl;Pb;Pr $ x   fill with a character, current SGR
+ * DECERA  CSI Pt;Pl;Pb;Pr $ z       erase
+ * DECSERA CSI Pt;Pl;Pb;Pr $ {       selective erase (skip DECSCA cells)
+ * DECCRA  CSI Pts;Pls;Pbs;Prs;Pps;Ptd;Pld;Ppd $ v   copy (pages ignored)
+ * The cursor doesn't move.
+ */
+static void
+rect_operation(struct term *term, const long args[], int argcount,
+    char command)
+{
+	struct grid *grid = term->screen;
+	long top, left, bottom, right;
+	int first = command == 'x' ? 1 : 0;
+
+	if (!rect_from_args(term, args, argcount, first, &top, &left, &bottom,
+	    &right))
+		return;
+
+	if (command == 'x') {
+		long ch = argcount > 0 ? CSI_ARG(args[0]) : CSI_ARG_MISSING;
+		if (ch == CSI_ARG_MISSING || !((ch >= 32 && ch <= 126) ||
+		    (ch >= 160 && ch <= 255)))
+			return;
+		struct cell fill = pen_cell(term, font_glyph_for(&term->font,
+		    (uint32_t)ch));
+		for (long row = top; row <= bottom; row++) {
+			struct cell *cells = grid_row(grid, (unsigned)row);
+			for (long col = left; col <= right; col++)
+				cells[col] = fill;
+		}
+		return;
+	}
+	if (command == 'z' || command == '{') {
+		struct cell blank = erase_cell(term);
+		for (long row = top; row <= bottom; row++) {
+			struct cell *cells = grid_row(grid, (unsigned)row);
+			for (long col = left; col <= right; col++)
+				if (command == 'z' ||
+				    !(cells[col].attr & CELL_PROTECTED))
+					cells[col] = blank;
+		}
+		return;
+	}
+
+	/* DECCRA: destination top/left at args[5], args[6] (page args 4, 7). */
+	long dest_top_arg = argcount > 5 ? CSI_ARG(args[5]) : CSI_ARG_MISSING;
+	long dest_left_arg = argcount > 6 ? CSI_ARG(args[6]) : CSI_ARG_MISSING;
+	long row0 = term->state->mode.origin ? term->state->scrollregion_top : 0;
+	long col0 = term->state->mode.origin ? SCROLLREGION_LEFT(term->state) : 0;
+	long dest_top = (dest_top_arg == CSI_ARG_MISSING || dest_top_arg == 0 ?
+	    1 : dest_top_arg) + row0 - 1;
+	long dest_left = (dest_left_arg == CSI_ARG_MISSING || dest_left_arg == 0 ?
+	    1 : dest_left_arg) + col0 - 1;
+	long height = bottom - top + 1, width = right - left + 1;
+	if (dest_top + height > grid->rows)
+		height = grid->rows - dest_top;
+	if (dest_left + width > grid->cols)
+		width = grid->cols - dest_left;
+	if (height <= 0 || width <= 0)
+		return;
+
+	/* Through a temporary copy, so overlapping rectangles work. Not on
+	 * the scanline path; a transient allocation is fine here. */
+	struct cell *copy = malloc((size_t)(height * width) * sizeof(*copy));
+	if (copy == nullptr)
+		return;
+	for (long r = 0; r < height; r++)
+		memcpy(&copy[r * width], &grid_row(grid, (unsigned)(top + r))[left],
+		    (size_t)width * sizeof(*copy));
+	for (long r = 0; r < height; r++)
+		memcpy(&grid_row(grid, (unsigned)(dest_top + r))[dest_left],
+		    &copy[r * width], (size_t)width * sizeof(*copy));
+	free(copy);
 }
 
 /* In-band resize report (DECSET 2048): CSI 48 ; rows ; cols ; h ; w t. */
@@ -561,9 +1056,10 @@ fb_csi(const char *leader, const long args[], int argcount,
 	 * DECRQCRA, "CSI Pid ; Pp ; Pt ; Pl ; Pb ; Pr * y": 16-bit sum of the
 	 * characters in a rectangle (1-based, inclusive, defaults to the whole
 	 * screen; Pp, the page, is ignored). Reply DCS Pid ! ~ XXXX ST.
-	 * Written cells count their codepoint and erased cells 0, which is
-	 * what xterm (patch >= 279) reports for plain text and what esctest
-	 * relies on to read the screen back one cell at a time. Attributes
+	 * Written cells count their codepoint; erased cells count as a space,
+	 * as xterm does since patch 334 (we claim 390 in DA2; esctest's
+	 * empty() expects ' ' for xterm >= 334). esctest reads the screen
+	 * back one cell at a time this way. Attributes
 	 * aren't included. Origin mode isn't applied yet.
 	 */
 	if (no_leader && intermed != nullptr && intermed[0] == '*' &&
@@ -576,6 +1072,19 @@ fb_csi(const char *leader, const long args[], int argcount,
 		long left = param[3] == CSI_ARG_MISSING ? 1 : param[3];
 		long bottom = param[4] == CSI_ARG_MISSING ? grid->rows : param[4];
 		long right = param[5] == CSI_ARG_MISSING ? grid->cols : param[5];
+		/* DECOM: coordinates are relative to the margins. */
+		if (term->state->mode.origin) {
+			long row0 = term->state->scrollregion_top;
+			long col0 = SCROLLREGION_LEFT(term->state);
+			top += row0;
+			bottom += row0;
+			left += col0;
+			right += col0;
+			if (param[4] == CSI_ARG_MISSING)
+				bottom = SCROLLREGION_BOTTOM(term->state);
+			if (param[5] == CSI_ARG_MISSING)
+				right = SCROLLREGION_RIGHT(term->state);
+		}
 		if (top < 1)
 			top = 1;
 		if (left < 1)
@@ -590,9 +1099,9 @@ fb_csi(const char *leader, const long args[], int argcount,
 			const struct cell *cells = grid_row(term->screen,
 			    (unsigned)row - 1);
 			for (long col = left; col <= right; col++)
-				if (!(cells[col - 1].attr & CELL_ERASED))
-					sum += font_codepoint_for(&term->font,
-					    cells[col - 1].glyph);
+				sum += (cells[col - 1].attr & CELL_ERASED) ? 0x20 :
+				    font_codepoint_for(&term->font,
+				    cells[col - 1].glyph);
 		}
 		char reply[32];
 		int len = snprintf(reply, sizeof(reply), "\x1bP%ld!~%04X\x1b\\",
@@ -626,6 +1135,118 @@ fb_csi(const char *leader, const long args[], int argcount,
 		}
 	}
 
+	/* VT420 rectangle operations (libvterm has none). */
+	if (no_leader && intermed != nullptr && intermed[0] == '$' &&
+	    intermed[1] == '\0' &&
+	    (command == 'x' || command == 'z' || command == '{' ||
+	    command == 'v')) {
+		rect_operation(term, args, argcount, command);
+		return 1;
+	}
+
+	/*
+	 * REP, "CSI Ps b": repeat the last graphic character Ps times
+	 * (default 1). libvterm lacks it; feeding the character back through
+	 * libvterm gives exactly the wrapping/margin/insert behaviour of
+	 * printing it again. Capped so a huge count can't stall the system.
+	 */
+	if (no_leader && intermed == nullptr && command == 'b') {
+		long count = first == CSI_ARG_MISSING || first < 1 ? 1 : first;
+		uint32_t cp = term->last_char;
+		char utf8[4];
+		size_t len;
+
+		if (cp == 0)
+			return 1;
+		if (count > 65535)
+			count = 65535;
+		if (cp < 0x80) {
+			utf8[0] = (char)cp;
+			len = 1;
+		} else if (cp < 0x800) {
+			utf8[0] = (char)(0xc0 | cp >> 6);
+			utf8[1] = (char)(0x80 | (cp & 0x3f));
+			len = 2;
+		} else if (cp < 0x10000) {
+			utf8[0] = (char)(0xe0 | cp >> 12);
+			utf8[1] = (char)(0x80 | ((cp >> 6) & 0x3f));
+			utf8[2] = (char)(0x80 | (cp & 0x3f));
+			len = 3;
+		} else {
+			utf8[0] = (char)(0xf0 | cp >> 18);
+			utf8[1] = (char)(0x80 | ((cp >> 12) & 0x3f));
+			utf8[2] = (char)(0x80 | ((cp >> 6) & 0x3f));
+			utf8[3] = (char)(0x80 | (cp & 0x3f));
+			len = 4;
+		}
+		for (long i = 0; i < count; i++)
+			vterm_input_write(term->vt, utf8, len);
+		return 1;
+	}
+
+	/* Set/reset of stored modes (unknown to libvterm; patches 1, 4). */
+	if ((private || no_leader) && intermed == nullptr &&
+	    (command == 'h' || command == 'l')) {
+		int index = stored_mode_index(first, private);
+		if (index >= 0) {
+			term->stored_modes[index] = command == 'h' ? 1 : 2;
+			return 1;
+		}
+	}
+
+	/* DECRQM: "CSI [?] Ps $ p" -> "CSI [?] Ps ; Pm $ y". */
+	if (intermed != nullptr && intermed[0] == '$' && command == 'p' &&
+	    first != 2048) {
+		unsigned value = 0;	/* not recognised */
+		int index = stored_mode_index(first, private);
+		if (index >= 0)
+			value = term->stored_modes[index];
+		else if (!private && first == 4)
+			value = term->state->mode.insert ? 1 : 2;	/* IRM */
+		else if (!private && first == 20)
+			value = term->state->mode.newline ? 1 : 2;	/* LNM */
+		else if (!private && ansi_mode_permanently_reset(first))
+			value = 4;
+		else if (private && first == 60)
+			value = 4;	/* DECHCCM: permanently reset */
+		send_printf(term, private ? "\x1b[?%u;%u$y" : "\x1b[%u;%u$y",
+		    (unsigned)first, value, 0, 0);
+		return 1;
+	}
+
+	/* DECDSR reports libvterm doesn't answer (patch 4). */
+	if (private && intermed == nullptr && command == 'n') {
+		static const struct {
+			long		 request;
+			const char	*reply;
+		} reports[] = {
+			{15, "\x1b[?13n"},		/* printer: none */
+			{25, "\x1b[?20n"},		/* UDKs unlocked */
+			{26, "\x1b[?27;1;0;0n"},	/* keyboard: US, ready */
+			{53, "\x1b[?50n"},		/* locator: none */
+			{55, "\x1b[?50n"},
+			{56, "\x1b[?57;0n"},		/* locator type: none */
+			{62, "\x1b[0*{"},		/* macro space: 0 */
+			{75, "\x1b[?70n"},		/* data integrity: ok */
+			{85, "\x1b[?83n"},		/* multi-session: none */
+		};
+		for (size_t i = 0; i < sizeof(reports) / sizeof(reports[0]);
+		    i++) {
+			if (reports[i].request == first) {
+				term->output(reports[i].reply,
+				    strlen(reports[i].reply), term->output_ctx);
+				return 1;
+			}
+		}
+		if (first == 63) {	/* DECCKSR: memory checksum, none */
+			long id = argcount > 1 ? CSI_ARG(args[1]) : 0;
+			send_printf(term, "\x1bP%u!~0000\x1b\\",
+			    id == CSI_ARG_MISSING ? 0u : (unsigned)id, 0, 0, 0);
+			return 1;
+		}
+		return 0;
+	}
+
 	if (private && first == 2048) {
 		if (intermed == nullptr && (command == 'h' || command == 'l')) {
 			term->resize_reports = command == 'h';
@@ -642,7 +1263,90 @@ fb_csi(const char *leader, const long args[], int argcount,
 	return 0;
 }
 
+/*
+ * XTGETTCAP, "DCS + q <hex name> [; <hex name>...] ST": report termcap/
+ * terminfo capabilities. Reply per name "DCS 1 + r <hex name> = <hex
+ * value> ST", or "DCS 0 + r <hex name> ST" if unknown. Programs (and
+ * esctest) use "Co" to learn the palette size.
+ */
+static void
+xtgettcap_reply(struct term *term, const char *hex_name, size_t hex_len)
+{
+	char name[32];
+	size_t name_len = 0;
+	char value[32];
+	const struct term_emulation_info *info =
+	    &term_emulations[term->options.emulation % EMU_COUNT];
+
+	for (size_t i = 0; i + 1 < hex_len && name_len < sizeof(name) - 1; i += 2) {
+		int high = hex_value(hex_name[i]), low = hex_value(hex_name[i + 1]);
+		if (high < 0 || low < 0)
+			break;
+		name[name_len++] = (char)(high << 4 | low);
+	}
+	name[name_len] = '\0';
+
+	value[0] = '\0';
+	unsigned depth = term->options.colour_depth;
+	if (strcmp(name, "Co") == 0 || strcmp(name, "colors") == 0)
+		snprintf(value, sizeof(value), "%u", depth == DEPTH_MONO ? 8u :
+		    depth == DEPTH_16 ? 16u : 256u);
+	else if (strcmp(name, "TN") == 0 || strcmp(name, "name") == 0)
+		snprintf(value, sizeof(value), "%s", info->term_hint);
+	else if (strcmp(name, "RGB") == 0 && depth == DEPTH_TRUE)
+		snprintf(value, sizeof(value), "8/8/8");
+
+	char reply[128];
+	int len;
+	if (value[0] == '\0') {
+		len = snprintf(reply, sizeof(reply), "\x1bP0+r%.*s\x1b\\",
+		    (int)hex_len, hex_name);
+	} else {
+		len = snprintf(reply, sizeof(reply), "\x1bP1+r%.*s=",
+		    (int)hex_len, hex_name);
+		for (const char *c = value; *c && len < (int)sizeof(reply) - 4;
+		    c++)
+			len += snprintf(reply + len, sizeof(reply) - (size_t)len,
+			    "%02X", (unsigned char)*c);
+		len += snprintf(reply + len, sizeof(reply) - (size_t)len,
+		    "\x1b\\");
+	}
+	term->output(reply, (size_t)len, term->output_ctx);
+}
+
+static int
+fb_dcs(const char *command, size_t commandlen, VTermStringFragment frag,
+    void *user)
+{
+	struct term *term = user;
+
+	if (commandlen != 2 || command[0] != '+' || command[1] != 'q')
+		return 0;
+	if (frag.initial) {
+		term->osc_len = 0;
+		term->osc_overflow = false;
+	}
+	if (term->osc_len + frag.len >= sizeof(term->osc_buf))
+		term->osc_overflow = true;
+	else {
+		memcpy(term->osc_buf + term->osc_len, frag.str, frag.len);
+		term->osc_len += frag.len;
+	}
+	if (!frag.final || term->osc_overflow)
+		return 1;
+
+	size_t at = 0;
+	const char *field;
+	size_t field_len;
+	while (next_field(term->osc_buf, term->osc_len, &at, &field,
+	    &field_len))
+		if (field_len > 0)
+			xtgettcap_reply(term, field, field_len);
+	return 1;
+}
+
 static const VTermStateFallbacks state_fallbacks = {
+	.dcs = fb_dcs,
 	.control = fb_control,
 	.csi = fb_csi,
 	.osc = fb_osc,
@@ -749,6 +1453,8 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	vterm_state_set_default_colors(term->state, &fg, &bg);
 	vterm_state_set_bold_highbright(term->state, 1);
 	cache_palette16(term);
+	init_colour_state(term);
+	init_stored_modes(term);
 	vterm_state_set_callbacks(term->state, &state_callbacks, term);
 	vterm_state_set_unrecognised_fallbacks(term->state, &state_fallbacks,
 	    term);
@@ -832,6 +1538,8 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	vterm_color_rgb(&bg, options->bg_rgb[0], options->bg_rgb[1],
 	    options->bg_rgb[2]);
 	vterm_state_set_default_colors(term->state, &fg, &bg);
+	for (unsigned which = 0; which < 10; which++)
+		reset_dynamic_colour(term, which);
 	return term_set_font(term, builtin);
 }
 

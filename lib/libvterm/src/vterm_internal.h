@@ -118,6 +118,7 @@ struct VTermState
     unsigned int origin:1;
     unsigned int screen:1;
     unsigned int leftrightmargin:1;
+    unsigned int reverse_wrap:1; /* VeeTee patch 6: DECSET 45 */
     unsigned int bracketpaste:1;
     unsigned int report_focus:1;
   } mode;
@@ -144,7 +145,9 @@ struct VTermState
       unsigned int cursor_visible:1;
       unsigned int cursor_blink:1;
       unsigned int cursor_shape:2;
+      unsigned int origin:1;          /* VeeTee patch 7 */
     } mode;
+    unsigned int protected_cell:1;    /* VeeTee patch 7 */
   } saved;
 
   /* Temporary state for DECRQSS parsing */

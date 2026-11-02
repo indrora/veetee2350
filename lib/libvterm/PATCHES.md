@@ -36,3 +36,32 @@ the fallback returns 0. VeeTee answers according to its emulation level
 never reached `VTermStateFallbacks.csi`. Both early exits now offer the
 sequence to the fallback. VeeTee needs this for DECRQCRA (`CSI ... * y`),
 which esctest uses to read the screen back.
+
+## 4. ANSI modes and status reports (`src/state.c`)
+
+- `set_mode()` offers unknown ANSI modes to the CSI fallback as
+  `CSI num h` or `l`, with no leader. Before, they were logged and
+  dropped.
+- DSR/DECDSR (`CSI [?] Ps n`): values libvterm doesn't answer go to the
+  CSI fallback. VeeTee answers printer, UDK, keyboard, locator, macro
+  space, memory checksum, data integrity and multi-session reports.
+- DECXCPR (`CSI ? 6 n`) now includes the page number (`?row;col;1R`), as
+  DEC terminals and xterm do. Plain CPR is unchanged.
+
+## 5. SCOSC / SCORC (`src/state.c`)
+
+libvterm always treated `CSI s` as DECSLRM and ignored `CSI u`. As in
+xterm, `CSI s` now saves the cursor (SCOSC) unless DECLRMM is set, and
+`CSI u` restores it (SCORC). Both use libvterm's own `savecursor()`.
+
+## 6. Reverse wraparound, DECSET 45 (`src/state.c`, `src/vterm_internal.h`)
+
+There is a new `mode.reverse_wrap` bit, which can be set, reset and
+queried with DECRQM. With it and DECAWM both on, BS in the first column
+moves to the last column of the previous line, as xterm does.
+
+## 7. DECSC/DECRC save origin mode and DECSCA (`src/state.c`, `src/vterm_internal.h`)
+
+DEC STD 070 includes DECOM and the selective-erase attribute in the
+DECSC save. libvterm saved neither, so a protected character written
+after DECRC wasn't protected. Both are now saved and restored.
