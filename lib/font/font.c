@@ -252,6 +252,14 @@ font_builtin_find(const char *name)
 	return nullptr;
 }
 
+void
+font_builtin_cell(const struct font_builtin *builtin, unsigned *width,
+    unsigned *height)
+{
+	*height = read_le32(builtin->data + 24);
+	*width = read_le32(builtin->data + 28);
+}
+
 uint16_t
 font_glyph_for(const struct font *font, uint32_t codepoint)
 {

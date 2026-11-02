@@ -60,6 +60,13 @@ extern const unsigned int font_builtin_count;
 const struct font_builtin *font_builtin_find(const char *name);
 
 /*
+ * Cell size of a built-in font straight from its PSF2 header, without
+ * loading it (SET-UP lists every font with the grid size it gives).
+ */
+void	font_builtin_cell(const struct font_builtin *builtin, unsigned *width,
+	    unsigned *height);
+
+/*
  * Parse a PSF2 image into `font`, copying everything it needs (the image
  * may be freed afterwards). On failure `font` is left zeroed.
  */

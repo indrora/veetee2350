@@ -13,6 +13,7 @@
  */
 #include "term.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* xterm's default colours: light grey on black. */
@@ -389,9 +390,45 @@ fb_osc(int command, VTermStringFragment frag, void *user)
 	return 1;
 }
 
+/* ENQ (0x05): reply with the answerback message, as VT terminals do. */
+static int
+fb_control(unsigned char control, void *user)
+{
+	struct term *term = user;
+
+	if (control != 0x05)
+		return 0;
+	term->output(term->options.answerback,
+	    strnlen(term->options.answerback, sizeof(term->options.answerback)),
+	    term->output_ctx);
+	return 1;
+}
+
 static const VTermStateFallbacks state_fallbacks = {
+	.control = fb_control,
 	.osc = fb_osc,
 };
+
+/*
+ * Apply the mode-type options by feeding the terminal the escape
+ * sequences a host would send: DECAWM (?7), LNM (20) and DECSCUSR. This
+ * keeps libvterm the single owner of terminal state.
+ */
+static void
+apply_modes(struct term *term)
+{
+	static const char shape_codes[] = {'1', '3', '5'};  /* blinking */
+	const struct term_options *options = &term->options;
+	char sequence[32];
+	char shape = shape_codes[options->cursor_shape % 3];
+
+	if (!options->cursor_blink)
+		shape++;		/* steady variant is the next code */
+	int len = snprintf(sequence, sizeof(sequence),
+	    "\x1b[?7%c\x1b[20%c\x1b[%c q", options->autowrap ? 'h' : 'l',
+	    options->newline_mode ? 'h' : 'l', shape);
+	vterm_input_write(term->vt, sequence, (size_t)len);
+}
 
 static void
 vterm_output(const char *bytes, size_t len, void *user)
@@ -408,6 +445,8 @@ static bool
 build_screens(struct term *term, unsigned *cols, unsigned *rows)
 {
 	render_grid_size(&term->font, cols, rows);
+	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
+		*rows = term->options.max_rows;
 	term->space_glyph = font_glyph_for(&term->font, ' ');
 	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
 	    term->default_bg, 0);
@@ -426,6 +465,13 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	term->render = render;
 	term->output = output;
 	term->output_ctx = output_ctx;
+	term->options = (struct term_options){
+		.fg_rgb = {DEFAULT_FG_RGB},
+		.bg_rgb = {DEFAULT_BG_RGB},
+		.cursor_shape = CURSOR_BLOCK,
+		.cursor_blink = true,
+		.autowrap = true,
+	};
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
 	term->cursor_visible = true;
@@ -496,8 +542,46 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 	 */
 	vterm_set_size(term->vt, (int)rows, (int)cols);
 	vterm_state_reset(term->state, 1);
+	apply_modes(term);
 	sync_presentation(term);
 	return true;
+}
+
+bool
+term_configure(struct term *term, const struct font_builtin *builtin,
+    const struct term_options *options)
+{
+	bool rebuild = builtin != term->font_source ||
+	    options->max_rows != term->options.max_rows ||
+	    memcmp(options->fg_rgb, term->options.fg_rgb, 3) != 0 ||
+	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0;
+
+	term->options = *options;
+	term->options.answerback[sizeof(term->options.answerback) - 1] = '\0';
+	if (!rebuild) {
+		apply_modes(term);
+		return true;
+	}
+
+	VTermColor fg, bg;
+	term->default_fg = grid_rgb565(options->fg_rgb[0], options->fg_rgb[1],
+	    options->fg_rgb[2]);
+	term->default_bg = grid_rgb565(options->bg_rgb[0], options->bg_rgb[1],
+	    options->bg_rgb[2]);
+	vterm_color_rgb(&fg, options->fg_rgb[0], options->fg_rgb[1],
+	    options->fg_rgb[2]);
+	vterm_color_rgb(&bg, options->bg_rgb[0], options->bg_rgb[1],
+	    options->bg_rgb[2]);
+	vterm_state_set_default_colors(term->state, &fg, &bg);
+	return term_set_font(term, builtin);
+}
+
+void
+term_reset(struct term *term)
+{
+	vterm_state_reset(term->state, 1);
+	apply_modes(term);
+	sync_presentation(term);
 }
 
 void

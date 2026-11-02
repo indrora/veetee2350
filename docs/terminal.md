@@ -30,6 +30,26 @@ To see what a command *should* look like, run
 `uv run refscreen.py -- <command>`. It renders the command's output with
 pyte, an independent emulator, at the same size.
 
+## Keyboard port and SET-UP
+
+The device presents two CDC ports: **VeeTee line** (the terminal's line,
+which ends in `1` on macOS) and **VeeTee keyboard** (ends in `3`). Bytes
+written to the keyboard port are keys. They go to the host over the
+line, with new-line mode and local echo applied, except **F3**
+(`ESC O R` or `ESC [ 13 ~`), which opens **SET-UP**. The BOOTSEL button
+opens it too. Inside SET-UP: Up/Down to select, Left/Right/Enter/Space
+to change, `S` save, `R` recall, `D` factory defaults, F3/Esc to leave.
+
+    python3 tools/hostshell.py /dev/cu.usbmodem*1 --keyboard /dev/cu.usbmodem*3
+
+routes your keys through the device, so F3 opens SET-UP.
+`tools/sendkeys.py` scripts keystrokes for tests.
+
+Settings live in the last flash sector (`hal/flashcfg`), CRC-checked.
+They're applied at power-up and when leaving SET-UP. Font, rows and
+colour changes reset the terminal. ENQ is answered with the answerback
+string.
+
 ## Switching fonts
 
 The terminal implements xterm's OSC 50 for its built-in fonts:
@@ -89,4 +109,4 @@ and UTF-8 split across writes.
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |
 | DECCOLM (132 columns) ignored | The grid size is fixed by the font. A narrow font could provide it. |
-| Second CDC "keyboard" port (Goal 1) | Not done yet. hostshell.py covers the keyboard role for now. |
+| A host RIS (`ESC c`) resets modes to libvterm defaults, not to the saved settings | libvterm doesn't signal RIS. SET-UP's settings are applied at boot, on exit, and by its "Reset terminal" action. |

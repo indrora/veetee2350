@@ -66,7 +66,8 @@ parallel one.
 | File-local            | `static`, no prefix needed     | `static void emit_row()`   |
 
 Every public symbol starts with its module's prefix (`video_`, `usbio_`,
-`term_`, `render_`, `font_`, `kbd_`, `cfg_`).
+`flashcfg_`, `board_`, `term_`, `render_`, `grid_`, `font_`, `keys_`,
+`settings_`, `setup_`).
 
 ## 4. Project layout and layering
 
@@ -77,7 +78,8 @@ lib/hal/        hardware abstraction: video (DVI), usbio (CDC), clocks, flash
 lib/term/       escape-sequence handling (libvterm state) -> cell grid model
 lib/render/     cell grid + font -> scanlines (pure, host-testable)
 lib/font/       font formats (PSF2) and the embedded default font
-lib/input/      keystrokes -> VT byte sequences (pure, host-testable)
+lib/input/      keyboard byte stream -> key events (pure, host-testable)
+lib/setup/      settings record + SET-UP screen (pure, host-testable)
 lib/PicoDVI/    vendored libdvi (BSD-3), see its PATCHES.md
 lib/libvterm/   vendored libvterm (MIT)
 test/           Unity tests, run on the host (native env)
@@ -118,6 +120,12 @@ The rule is **"show your work"**:
   memory barrier).
 - Code that runs in the scanline path is marked `__not_in_flash_func` or
   placed in RAM, and its per-line cycle budget is noted in a comment.
+  Small helpers it calls must be `HOT_INLINE` (always_inline): the core
+  builds at -Os, which out-lines `static inline` functions into flash.
+- **Core 1 must never execute from flash.** BOOTSEL reads and settings
+  writes take XIP away. `python3 tools/core1_audit.py
+  .pio/build/pizero/firmware.elf` checks this. Run it after touching
+  anything core 1 can reach.
 - Use fixed-width types (`uint8_t`, `uint32_t`) for hardware and
   wire-format data, and `int`/`size_t` for counts and indices.
 - `static_assert` every layout assumption (struct sizes, table lengths).

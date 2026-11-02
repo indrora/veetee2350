@@ -42,6 +42,22 @@
 /* Sink for bytes the terminal sends to the host (DA/DSR replies, ...). */
 typedef void (*term_output_fn)(const char *bytes, size_t len, void *ctx);
 
+/*
+ * User-configurable behaviour (from SET-UP). Geometry and colours need a
+ * screen rebuild + reset to apply; the rest are terminal modes applied in
+ * place.
+ */
+struct term_options {
+	uint8_t		fg_rgb[3];	/* default foreground */
+	uint8_t		bg_rgb[3];	/* default background */
+	unsigned	max_rows;	/* 0 = as many as the font fits */
+	uint8_t		cursor_shape;	/* enum cursor_shape */
+	bool		cursor_blink;
+	bool		autowrap;	/* DECAWM */
+	bool		newline_mode;	/* LNM */
+	char		answerback[32];	/* sent in reply to ENQ */
+};
+
 /* Current SGR state, as libvterm reports it through setpenattr. */
 struct term_pen {
 	VTermColor	fg;
@@ -66,6 +82,7 @@ struct term {
 	struct grid	 alternate;
 	struct grid	*screen;	/* the grid being written and shown */
 	struct term_pen	 pen;
+	struct term_options options;
 	uint16_t	 default_fg;	/* RGB565 */
 	uint16_t	 default_bg;
 	uint16_t	 space_glyph;
@@ -103,6 +120,19 @@ struct term {
  */
 [[nodiscard]] bool term_set_font(struct term *term,
 	    const struct font_builtin *builtin);
+
+/*
+ * Apply a font + options together (SET-UP exit/recall). Rebuilds and
+ * resets only if the font, row limit or default colours changed;
+ * otherwise just applies the modes. Same failure contract as
+ * term_set_font.
+ */
+[[nodiscard]] bool term_configure(struct term *term,
+	    const struct font_builtin *builtin,
+	    const struct term_options *options);
+
+/* Hard reset (like RIS), then re-apply the configured modes. */
+void	term_reset(struct term *term);
 void	term_free(struct term *term);
 
 /* Feed bytes received from the host. Any amount, any split. */
