@@ -3,3 +3,6 @@
 *.uf2
 captures/
 .venv/
+
+# Generated SD card contents (tools/sd_card.py)
+/sd/

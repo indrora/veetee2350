@@ -31,9 +31,18 @@ setup_grid_for(const struct font_builtin *builtin, unsigned size,
     unsigned width, unsigned height, unsigned *cols, unsigned *rows)
 {
 	unsigned cell_w, cell_h;
-	const struct settings_size *want = &settings_sizes[size % SIZE_COUNT];
 
 	font_builtin_cell(builtin, &cell_w, &cell_h);
+	return setup_grid_for_cell(cell_w, cell_h, size, width, height, cols,
+	    rows);
+}
+
+bool
+setup_grid_for_cell(unsigned cell_w, unsigned cell_h, unsigned size,
+    unsigned width, unsigned height, unsigned *cols, unsigned *rows)
+{
+	const struct settings_size *want = &settings_sizes[size % SIZE_COUNT];
+
 	*cols = width / cell_w;
 	*rows = height / cell_h;
 	if (*cols > GRID_MAX_COLS)
@@ -50,13 +59,56 @@ setup_grid_for(const struct font_builtin *builtin, unsigned size,
 	return clamped;
 }
 
-static const struct font_builtin *
-work_font(const struct setup *setup)
+/*
+ * The font being edited, as an index into built-ins followed by card
+ * fonts; -1 for a card font that isn't on this card (or no card).
+ */
+static int
+work_font_index(const struct setup *setup)
 {
-	const struct font_builtin *builtin =
-	    font_builtin_find(setup->work.font);
+	const char *name = setup->work.font;
+	const struct font_builtin *builtin = font_builtin_find(name);
+	size_t prefix = strlen(SETTINGS_CARD_PREFIX);
 
-	return builtin != nullptr ? builtin : &font_builtins[0];
+	if (builtin != nullptr)
+		return (int)(builtin - font_builtins);
+	if (strncmp(name, SETTINGS_CARD_PREFIX, prefix) != 0)
+		return 0;	/* unknown built-in: the default is used */
+	for (unsigned i = 0; i < setup->card.font_count; i++)
+		if (strcmp(setup->card.fonts[i].name, name + prefix) == 0)
+			return (int)(font_builtin_count + i);
+	return -1;
+}
+
+/* Cell size of the font being edited (the default's if unavailable). */
+static void
+work_cell(const struct setup *setup, unsigned *width, unsigned *height)
+{
+	int index = work_font_index(setup);
+
+	if (index >= (int)font_builtin_count) {
+		const struct setup_card_font *card =
+		    &setup->card.fonts[index - (int)font_builtin_count];
+		*width = card->width;
+		*height = card->height;
+	} else {
+		font_builtin_cell(&font_builtins[index < 0 ? 0 : index], width,
+		    height);
+	}
+}
+
+/* Index into built-in schemes followed by card schemes; -1: missing. */
+static int
+work_scheme_index(const struct setup *setup)
+{
+	const char *file = setup->work.scheme_file;
+
+	if (file[0] == '\0')
+		return setup->work.scheme % SCHEME_COUNT;
+	for (unsigned i = 0; i < setup->card.scheme_count; i++)
+		if (strcmp(setup->card.schemes[i], file) == 0)
+			return (int)(SCHEME_COUNT + i);
+	return -1;
 }
 
 /* --- drawing ---------------------------------------------------------- */
@@ -87,7 +139,6 @@ static void
 format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 {
 	const struct settings *work = &setup->work;
-	const struct font_builtin *builtin = work_font(setup);
 	const struct video_mode *mode = &video_modes[work->resolution %
 	    VIDEO_MODE_COUNT];
 	unsigned width, height;
@@ -100,17 +151,26 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		break;
 	case ITEM_FONT: {
 		unsigned cols, rows;
-		font_builtin_cell(builtin, &width, &height);
-		setup_grid_for(builtin, SIZE_FULL, mode->width, mode->height,
-		    &cols, &rows);
+		int index = work_font_index(setup);
+		if (index < 0) {
+			snprintf(out, len, "%s  (not on this card)",
+			    work->font);
+			break;
+		}
+		work_cell(setup, &width, &height);
+		setup_grid_for_cell(width, height, SIZE_FULL, mode->width,
+		    mode->height, &cols, &rows);
 		snprintf(out, len, "%s  (%ux%u cell, up to %ux%u)",
-		    builtin->name, width, height, cols, rows);
+		    index < (int)font_builtin_count ?
+		    font_builtins[index].name : work->font, width, height, cols,
+		    rows);
 		break;
 	}
 	case ITEM_SIZE: {
 		unsigned cols, rows;
-		bool clamped = setup_grid_for(builtin, work->term_size, mode->width,
-		    mode->height, &cols, &rows);
+		work_cell(setup, &width, &height);
+		bool clamped = setup_grid_for_cell(width, height,
+		    work->term_size, mode->width, mode->height, &cols, &rows);
 		const struct settings_size *want =
 		    &settings_sizes[work->term_size % SIZE_COUNT];
 		if (want->cols == 0)
@@ -150,7 +210,13 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "%s", work->sixel ? "on" : "off");
 		break;
 	case ITEM_SCHEME:
-		snprintf(out, len, "%s", settings_scheme_name(work->scheme));
+		if (work->scheme_file[0] == '\0')
+			snprintf(out, len, "%s",
+			    settings_scheme_name(work->scheme));
+		else
+			snprintf(out, len, "%s  (base16, %s)", work->scheme_file,
+			    work_scheme_index(setup) < 0 ? "not on this card" :
+			    "card");
 		break;
 	case ITEM_CURSOR:
 		snprintf(out, len, "%s", cursor_names[work->cursor_shape % 3]);
@@ -256,6 +322,13 @@ setup_draw(struct setup *setup)
 }
 
 void
+setup_catalogue(struct setup *setup, const struct setup_catalogue *card)
+{
+	setup->card = *card;
+	setup_draw(setup);
+}
+
+void
 setup_storage(struct setup *setup, const char *text)
 {
 	snprintf(setup->storage, sizeof(setup->storage), "%s", text);
@@ -311,10 +384,17 @@ change_value(struct setup *setup, int step)
 		    VIDEO_MODE_COUNT, step);
 		break;
 	case ITEM_FONT: {
-		unsigned index = (unsigned)(work_font(setup) - font_builtins);
-		index = cycle(index, font_builtin_count, step);
-		snprintf(work->font, sizeof(work->font), "%s",
-		    font_builtins[index].name);
+		unsigned total = font_builtin_count + setup->card.font_count;
+		int current = work_font_index(setup);
+		unsigned index = current < 0 ? 0 :
+		    cycle((unsigned)current, total, step);
+		if (index < font_builtin_count)
+			snprintf(work->font, sizeof(work->font), "%s",
+			    font_builtins[index].name);
+		else
+			snprintf(work->font, sizeof(work->font), "%s%s",
+			    SETTINGS_CARD_PREFIX,
+			    setup->card.fonts[index - font_builtin_count].name);
 		break;
 	}
 	case ITEM_SIZE:
@@ -345,9 +425,20 @@ change_value(struct setup *setup, int step)
 	case ITEM_SIXEL:
 		work->sixel = !work->sixel;
 		break;
-	case ITEM_SCHEME:
-		work->scheme = (uint8_t)cycle(work->scheme, SCHEME_COUNT, step);
+	case ITEM_SCHEME: {
+		unsigned total = SCHEME_COUNT + setup->card.scheme_count;
+		int current = work_scheme_index(setup);
+		unsigned index = current < 0 ? 0 :
+		    cycle((unsigned)current, total, step);
+		if (index < SCHEME_COUNT) {
+			work->scheme = (uint8_t)index;
+			work->scheme_file[0] = '\0';
+		} else {
+			snprintf(work->scheme_file, sizeof(work->scheme_file),
+			    "%s", setup->card.schemes[index - SCHEME_COUNT]);
+		}
 		break;
+	}
 	case ITEM_CURSOR:
 		work->cursor_shape = (uint8_t)cycle(work->cursor_shape, 3, step);
 		break;

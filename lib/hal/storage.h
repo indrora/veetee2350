@@ -70,9 +70,18 @@ bool	storage_mkdir(const char *path);	/* true if it exists after */
  * Call `entry` for each file and directory in `dir` (not recursive, in
  * directory order). `entry` returns false to stop early. Returns false
  * if `dir` can't be read.
+ *
+ * With `peek` > 0, each file's first `peek` bytes (fewer if it's
+ * shorter) are passed as `head`/`head_len`, read through the directory
+ * iterator's own open file. That matters: opening files by name one by
+ * one searches the directory from the top each time, which for a few
+ * hundred files on SPI took longer than the 8 s watchdog.
  */
+#define STORAGE_PEEK_MAX	64
+
 typedef bool (*storage_entry_fn)(const char *name, uint32_t size,
-    bool is_dir, void *ctx);
-bool	storage_list(const char *dir, storage_entry_fn entry, void *ctx);
+    bool is_dir, const uint8_t *head, size_t head_len, void *ctx);
+bool	storage_list(const char *dir, size_t peek, storage_entry_fn entry,
+	    void *ctx);
 
 #endif /* HAL_STORAGE_H */

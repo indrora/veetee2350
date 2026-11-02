@@ -742,7 +742,11 @@ init_colour_state(struct term *term)
 static void
 handle_font_osc(struct term *term, const char *arg)
 {
-	unsigned index = (unsigned)(term->font_source - font_builtins);
+	/* A card font isn't in the built-in list: step from the first. */
+	bool builtin = term->font_source >= font_builtins &&
+	    term->font_source < font_builtins + font_builtin_count;
+	unsigned index = builtin ?
+	    (unsigned)(term->font_source - font_builtins) : 0;
 
 	if (strcmp(arg, "?") == 0) {
 		term->output("\x1b]50;", 5, term->output_ctx);
@@ -1687,6 +1691,7 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	vterm_state_set_default_colors(term->state, &fg, &bg);
 	vterm_state_set_bold_highbright(term->state, 1);
 	cache_palette16(term);
+	memcpy(term->ansi_default, term->palette16, sizeof(term->ansi_default));
 	init_colour_state(term);
 	init_stored_modes(term);
 	vterm_state_set_callbacks(term->state, &state_callbacks, term);
@@ -1750,7 +1755,10 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	    options->emulation != term->options.emulation ||
 	    options->colour_depth != term->options.colour_depth ||
 	    memcmp(options->fg_rgb, term->options.fg_rgb, 3) != 0 ||
-	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0;
+	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0 ||
+	    options->ansi_set != term->options.ansi_set ||
+	    (options->ansi_set && memcmp(options->ansi, term->options.ansi,
+	    sizeof(options->ansi)) != 0);
 
 	term->options = *options;
 	term->options.answerback[sizeof(term->options.answerback) - 1] = '\0';
@@ -1775,6 +1783,16 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	vterm_color_rgb(&bg, options->bg_rgb[0], options->bg_rgb[1],
 	    options->bg_rgb[2]);
 	vterm_state_set_default_colors(term->state, &fg, &bg);
+	/* ANSI 0-15: the scheme's, or back to libvterm's (xterm's) own. */
+	for (int index = 0; index < 16; index++) {
+		const uint8_t *rgb = options->ansi_set ? options->ansi[index] :
+		    term->ansi_default[index];
+		VTermColor colour;
+		vterm_color_rgb(&colour, rgb[0], rgb[1], rgb[2]);
+		vterm_state_set_palette_color(term->state, index, &colour);
+	}
+	cache_palette16(term);
+	init_colour_state(term);	/* OSC 104 etc. reset to these */
 	for (unsigned which = 0; which < 10; which++)
 		reset_dynamic_colour(term, which);
 	return term_set_font(term, builtin);

@@ -1,10 +1,12 @@
 /*
  * test_setup — settings record, SET-UP navigation, and applying options.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include <unity.h>
 
+#include "base16.h"
 #include "font.h"
 #include "grid.h"
 #include "keys.h"
@@ -211,6 +213,102 @@ test_term_configure(void)
 	term_free(&term);
 }
 
+static void
+test_base16(void)
+{
+	/* tinted-theming layout: nested palette, '#', quotes, comments. */
+	static const char current[] =
+	    "system: \"base16\"\nname: \"3024\"\nauthor: \"x\" # who\n"
+	    "variant: \"dark\"\npalette:\n"
+	    "  base00: \"#090300\"\n  base01: \"#3a3432\"\n"
+	    "  base02: \"#4a4543\"\n  base03: \"#5c5855\"\n"
+	    "  base04: \"#807d7c\"\n  base05: \"#a5a2a2\"\n"
+	    "  base06: \"#d6d5d4\"\n  base07: \"#f7f7f7\"\n"
+	    "  base08: \"#db2d20\"\n  base09: \"#e8bbd0\"\n"
+	    "  base0A: \"#fded02\"\n  base0B: \"#01a252\"\n"
+	    "  base0C: \"#b5e4f4\"\n  base0D: \"#01a0e4\"\n"
+	    "  base0E: \"#a16a94\"   # purple\n  base0F: \"#cdab53\"\n";
+	struct base16 scheme;
+	struct base16_terminal colours;
+	const char *error = nullptr;
+
+	TEST_ASSERT_TRUE(base16_parse(current, sizeof(current) - 1, &scheme,
+	    &error));
+	TEST_ASSERT_EQUAL_STRING("3024", scheme.name);
+	base16_to_terminal(&scheme, &colours);
+	TEST_ASSERT_EQUAL_HEX8(0xdb, colours.ansi[1][0]);	/* red = 08 */
+	TEST_ASSERT_EQUAL_HEX8(0x01, colours.ansi[4][0]);	/* blue = 0D */
+	TEST_ASSERT_EQUAL_HEX8(0x5c, colours.ansi[8][0]);	/* = 03 */
+	TEST_ASSERT_EQUAL_HEX8(0xf7, colours.ansi[15][0]);	/* = 07 */
+	TEST_ASSERT_EQUAL_HEX8(0xa5, colours.fg[0]);
+	TEST_ASSERT_EQUAL_HEX8(0x09, colours.bg[0]);
+
+	/* Older layout: flat keys, bare hex, CRLF. */
+	static const char older[] =
+	    "scheme: \"Old\"\r\nbase00: \"000000\"\r\nbase01: 111111\r\n"
+	    "base02: '222222'\r\nbase03: \"333333\"\r\nbase04: 444444\r\n"
+	    "base05: 555555\r\nbase06: 666666\r\nbase07: 777777\r\n"
+	    "base08: 888888\r\nbase09: 999999\r\nbase0a: aaaaaa\r\n"
+	    "base0B: bbbbbb\r\nbase0C: cccccc\r\nbase0D: dddddd\r\n"
+	    "base0E: eeeeee\r\nbase0F: ffffff\r\n";
+	TEST_ASSERT_TRUE(base16_parse(older, sizeof(older) - 1, &scheme,
+	    &error));
+	TEST_ASSERT_EQUAL_STRING("Old", scheme.name);
+	TEST_ASSERT_EQUAL_HEX8(0xaa, scheme.base[10][0]);
+
+	/* Errors name the culprit. */
+	TEST_ASSERT_FALSE(base16_parse("base00: 000000\n", 15, &scheme,
+	    &error));
+	TEST_ASSERT_EQUAL_STRING("base01 missing", error);
+	TEST_ASSERT_FALSE(base16_parse("base00: zz0000\n", 15, &scheme,
+	    &error));
+	TEST_ASSERT_EQUAL_STRING("base00: not a colour", error);
+	TEST_ASSERT_FALSE(base16_parse("hello\n", 6, &scheme, &error));
+	TEST_ASSERT_EQUAL_STRING("no base16 colours in file", error);
+}
+
+static void
+test_card_lists(void)
+{
+	static const struct setup_card_font fonts[] = {
+		{"Bm437_IBM_VGA_8x16", 8, 16},
+	};
+	static const char schemes[][SETTINGS_SCHEME_MAX] = {"dracula",
+	    "nord"};
+	struct setup_catalogue card = {
+		.font_count = 1, .fonts = fonts,
+		.scheme_count = 2, .schemes = schemes,
+	};
+
+	setup_catalogue(&setup, &card);
+	/* Font: Left from the first built-in wraps to the card font. */
+	while (setup.selected != ITEM_FONT)
+		press(KEY_DOWN, 0);
+	snprintf(setup.work.font, sizeof(setup.work.font), "%s",
+	    font_builtins[0].name);
+	press(KEY_LEFT, 0);
+	TEST_ASSERT_EQUAL_STRING("sd:Bm437_IBM_VGA_8x16", setup.work.font);
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL_STRING(font_builtins[0].name, setup.work.font);
+
+	/* Scheme: after the built-ins come the card's. */
+	while (setup.selected != ITEM_SCHEME)
+		press(KEY_DOWN, 0);
+	for (unsigned i = 0; i < SCHEME_COUNT; i++)
+		press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL_STRING("dracula", setup.work.scheme_file);
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL_STRING("nord", setup.work.scheme_file);
+	press(KEY_RIGHT, 0);	/* wraps to the first built-in */
+	TEST_ASSERT_EQUAL_STRING("", setup.work.scheme_file);
+	TEST_ASSERT_EQUAL(0, setup.work.scheme);
+
+	/* A card font that isn't on this card still shows, marked. */
+	snprintf(setup.work.font, sizeof(setup.work.font), "sd:gone");
+	setup_draw(&setup);
+	press(KEY_RIGHT, 0);	/* from "missing": back to the first */
+}
+
 int
 main(void)
 {
@@ -222,5 +320,7 @@ main(void)
 	RUN_TEST(test_answerback_editing);
 	RUN_TEST(test_size_resolution);
 	RUN_TEST(test_term_configure);
+	RUN_TEST(test_base16);
+	RUN_TEST(test_card_lists);
 	return UNITY_END();
 }

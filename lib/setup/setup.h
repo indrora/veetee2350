@@ -54,6 +54,28 @@ enum setup_item {
 	ITEM_COUNT
 };
 
+/*
+ * What's on the SD card, scanned by the app when SET-UP opens: fonts
+ * from /fonts (name without ".psf", with the cell size from its PSF2
+ * header) and base16 schemes from /schemes (name without ".yaml"). They
+ * follow the built-in fonts and schemes in their SET-UP lists, and are
+ * stored in the settings as "sd:name" / the scheme name.
+ */
+#define SETUP_CARD_NAME_MAX	(SETTINGS_FONT_MAX - 3)	/* minus "sd:" */
+
+struct setup_card_font {
+	char		name[SETUP_CARD_NAME_MAX];
+	uint8_t		width;
+	uint8_t		height;
+};
+
+struct setup_catalogue {
+	unsigned	font_count;
+	const struct setup_card_font *fonts;
+	unsigned	scheme_count;
+	const char	(*schemes)[SETTINGS_SCHEME_MAX];
+};
+
 struct setup {
 	struct settings	 work;		/* the settings being edited */
 	struct grid	*grid;
@@ -63,6 +85,7 @@ struct setup {
 	bool		 editing;	/* typing into the answerback field */
 	char		 message[64];
 	char		 storage[36];	/* SD card status, title row */
+	struct setup_catalogue card;	/* empty without a card */
 };
 
 /*
@@ -77,6 +100,9 @@ void	setup_begin(struct setup *setup, const struct settings *current,
 /* Handle one key; redraws as needed. */
 enum setup_action setup_key(struct setup *setup, const struct key_event *key);
 
+/* Offer the card's fonts and schemes (the arrays must outlive SET-UP). */
+void	setup_catalogue(struct setup *setup,
+	    const struct setup_catalogue *card);
 /* Set the SD card status shown in the title row ("SD: 7.4 GB FAT32"). */
 void	setup_storage(struct setup *setup, const char *text);
 /* Show a status line message (e.g. "Saved.") and redraw. */
@@ -90,6 +116,9 @@ void	setup_draw(struct setup *setup);
  * what fits. Returns true if the fixed size had to be clamped.
  */
 bool	setup_grid_for(const struct font_builtin *builtin, unsigned size,
+	    unsigned width, unsigned height, unsigned *cols, unsigned *rows);
+/* The same, from a cell size (for fonts on the card). */
+bool	setup_grid_for_cell(unsigned cell_w, unsigned cell_h, unsigned size,
 	    unsigned width, unsigned height, unsigned *cols, unsigned *rows);
 
 #endif /* SETUP_H */

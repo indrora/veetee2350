@@ -14,8 +14,11 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	5	/* 2 resolution, 3 size, 4 emulation, 5 sixel */
-#define SETTINGS_FONT_MAX	24
+#define SETTINGS_VERSION	6	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+				   6 card fonts and schemes */
+#define SETTINGS_FONT_MAX	32	/* built-in name, or "sd:" + card file */
+#define SETTINGS_SCHEME_MAX	32	/* card scheme file name, no ".yaml" */
+#define SETTINGS_CARD_PREFIX	"sd:"
 #define SETTINGS_ANSWERBACK_MAX	32
 
 enum colour_scheme {
@@ -54,9 +57,12 @@ struct settings {
 	uint16_t	version;
 	uint16_t	size;		/* sizeof(struct settings) when sealed */
 	uint8_t		resolution;	/* enum video_mode_id (video_modes.h) */
-	char		font[SETTINGS_FONT_MAX];	/* built-in font name */
+	char		font[SETTINGS_FONT_MAX];	/* built-in or "sd:name" */
 	uint8_t		term_size;	/* enum terminal_size */
 	uint8_t		scheme;		/* enum colour_scheme */
+	/* A base16 scheme from the card's /schemes, overriding `scheme`
+	 * when not empty. */
+	char		scheme_file[SETTINGS_SCHEME_MAX];
 	uint8_t		cursor_shape;	/* enum cursor_shape (grid.h) */
 	uint8_t		cursor_blink;
 	uint8_t		autowrap;	/* DECAWM */

@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "card.h"
 #include "flashcfg.h"
 #include "font.h"
 #include "keys.h"
@@ -51,6 +52,11 @@ static bool in_setup;
 static struct setup setup;
 static struct grid setup_grid;
 
+/* Configuration Error screen: problems collected while applying. */
+static char problems[512];
+static size_t problems_len;
+static bool in_config_error;
+
 static uint32_t bells_seen;
 static absolute_time_t bell_until;
 static bool bell_flashing;
@@ -68,12 +74,112 @@ now_ms(void)
 	return to_ms_since_boot(get_absolute_time());
 }
 
-static const struct font_builtin *
-settings_font(const struct settings *from)
-{
-	const struct font_builtin *builtin = font_builtin_find(from->font);
+/* --- Configuration Error ---------------------------------------------- */
 
-	return builtin != nullptr ? builtin : &font_builtins[0];
+/* Note a problem ("/fonts/x.psf", "not a PSF2 font") for the screen. */
+static void
+config_problem(const char *what, const char *why)
+{
+	int len = snprintf(problems + problems_len,
+	    sizeof(problems) - problems_len, "  \x1b[1m%s\x1b[22m\r\n    %s\r\n",
+	    what, why);
+
+	if (len > 0 && problems_len + (size_t)len < sizeof(problems))
+		problems_len += (size_t)len;
+}
+
+/*
+ * If anything went wrong, take over the screen: white on red, a
+ * double-height "Configuration Error", each problem and its reason.
+ * Host output is held (not read) until a key or BOOTSEL dismisses it,
+ * so nothing scribbles over the message.
+ */
+static void
+show_config_problems(void)
+{
+	static const char head[] =
+	    "\x1b[?25l\x1b[0;1;97;41m\x1b[2J\x1b[H\r\n"
+	    "\x1b#3  Configuration Error\r\n"
+	    "\x1b#4  Configuration Error\r\n\x1b[22m\r\n";
+	static const char tail[] =
+	    "\r\n  Using the defaults for these instead. Saved settings are\r\n"
+	    "  unchanged until you save in SET-UP.\r\n\r\n"
+	    "  \x1b[1mPress any key to continue.\x1b[22m";
+
+	if (problems_len == 0)
+		return;
+	term_feed(&term, (const uint8_t *)head, sizeof(head) - 1);
+	term_feed(&term, (const uint8_t *)problems, problems_len);
+	term_feed(&term, (const uint8_t *)tail, sizeof(tail) - 1);
+	problems_len = 0;
+	in_config_error = true;
+}
+
+static void
+dismiss_config_error(void)
+{
+	static const char clear[] = "\x1b[0m\x1b[2J\x1b[H\x1b[?25h";
+
+	in_config_error = false;
+	term_feed(&term, (const uint8_t *)clear, sizeof(clear) - 1);
+}
+
+/* --- settings --------------------------------------------------------- */
+
+/*
+ * The font `settings` asks for. A card font ("sd:name") is read from
+ * /fonts; if that fails, the problem is noted, the setting reverts to
+ * the default for this session, and the default font is used.
+ */
+static const struct font_builtin *
+settings_font(void)
+{
+	const struct font_builtin *builtin = font_builtin_find(settings.font);
+	size_t prefix = strlen(SETTINGS_CARD_PREFIX);
+	char error[64], what[96];
+
+	if (builtin != nullptr)
+		return builtin;
+	if (strncmp(settings.font, SETTINGS_CARD_PREFIX, prefix) == 0) {
+		builtin = card_font(settings.font + prefix, term.font_source,
+		    error, sizeof(error));
+		if (builtin != nullptr)
+			return builtin;
+		snprintf(what, sizeof(what), "Font /fonts/%.32s.psf",
+		    settings.font + prefix);
+		config_problem(what, error);
+	} else {
+		config_problem("Font", "unknown built-in font name");
+	}
+	snprintf(settings.font, sizeof(settings.font), "%s",
+	    font_builtins[0].name);
+	return &font_builtins[0];
+}
+
+/* Colours from the scheme setting; a card scheme falls back the same way. */
+static void
+settings_colours(struct term_options *options)
+{
+	struct base16_terminal colours;
+	char error[64], what[96];
+
+	if (settings.scheme_file[0] != '\0') {
+		if (card_scheme(settings.scheme_file, &colours, error,
+		    sizeof(error))) {
+			memcpy(options->fg_rgb, colours.fg, 3);
+			memcpy(options->bg_rgb, colours.bg, 3);
+			memcpy(options->ansi, colours.ansi, sizeof(options->ansi));
+			options->ansi_set = true;
+			return;
+		}
+		snprintf(what, sizeof(what), "Colour scheme /schemes/%s.yaml",
+		    settings.scheme_file);
+		config_problem(what, error);
+		settings.scheme_file[0] = '\0';
+		settings.scheme = SCHEME_XTERM;
+	}
+	settings_scheme_rgb(settings.scheme, options->fg_rgb, options->bg_rgb);
+	options->ansi_set = false;
 }
 
 /* Make the terminal match `settings` (resets it if geometry changed). */
@@ -96,10 +202,10 @@ apply_settings(void)
 	options.utf8 = settings.utf8;
 	options.alt_screen = settings.alt_screen;
 	options.sixel = settings.sixel;
-	settings_scheme_rgb(settings.scheme, options.fg_rgb, options.bg_rgb);
+	settings_colours(&options);
 	memcpy(options.answerback, settings.answerback,
 	    sizeof(options.answerback));
-	if (!term_configure(&term, settings_font(&settings), &options))
+	if (!term_configure(&term, settings_font(), &options))
 		panic("term: cannot apply settings (memory)");
 }
 
@@ -138,6 +244,14 @@ show_storage_status(void)
 	setup_storage(&setup, text);
 }
 
+/* card_scan progress -> SET-UP's message line, redrawn at once. */
+static void
+scan_progress(const char *text, void *ctx)
+{
+	(void)ctx;
+	setup_message(&setup, text);
+}
+
 static void
 enter_setup(void)
 {
@@ -150,9 +264,13 @@ enter_setup(void)
 	setup_grid.border2 = grid_dup565(grid_rgb565(16, 40, 120));
 	setup_begin(&setup, &settings, &setup_grid, &term.font,
 	    running_resolution);
-	show_storage_status();
+	/* Shown first, so the card scan's progress is visible. */
 	render_set_grid(&render, &setup_grid);
 	in_setup = true;
+	show_storage_status();
+	struct setup_catalogue catalogue;
+	(void)card_scan(&catalogue, scan_progress, nullptr);
+	setup_catalogue(&setup, &catalogue);
 }
 
 static void
@@ -182,8 +300,10 @@ leave_setup(void)
 	 */
 	render_pause(&render);
 	grid_free(&setup_grid);
+	card_release();		/* SET-UP's lists: memory for a card font */
 	apply_settings();
 	render_init(&render, &term.font, term.screen);
+	show_config_problems();
 }
 
 static void
@@ -244,7 +364,9 @@ forward_key(const struct key_event *key)
 static void
 handle_key(const struct key_event *key)
 {
-	if (in_setup)
+	if (in_config_error)
+		dismiss_config_error();
+	else if (in_setup)
 		setup_handle(key);
 	else if (key->code == KEY_F3)
 		enter_setup();
@@ -277,7 +399,9 @@ poll_bootsel(void)
 	next_poll = make_timeout_time_ms(BOOTSEL_POLL_MS);
 	bool pressed = board_bootsel_pressed();
 	if (pressed && !was_pressed) {
-		if (in_setup)
+		if (in_config_error)
+			dismiss_config_error();
+		else if (in_setup)
 			leave_setup();
 		else
 			enter_setup();
@@ -357,14 +481,22 @@ app_init(void)
 	running_resolution = settings.resolution;
 	const struct video_mode *mode = &video_modes[running_resolution];
 	render_set_screen(&render, mode->width, mode->height);
-	if (!term_init(&term, settings_font(&settings), &render, send_to_host,
-	    nullptr))
+	/*
+	 * Video first, SD card second. Start on a built-in font, bring the
+	 * picture up, and only then apply the saved settings, which may name
+	 * fonts and schemes on the card (a second rebuild at boot, cheap).
+	 * A missing or slow card then can't delay or interfere with the
+	 * first picture, and its Configuration Error has a screen to go on.
+	 */
+	const struct font_builtin *boot_font = font_builtin_find(settings.font);
+	if (!term_init(&term, boot_font != nullptr ? boot_font :
+	    &font_builtins[0], &render, send_to_host, nullptr))
 		panic("term: cannot start (font or memory)");
-	apply_settings();
 	video_init(running_resolution, render_scanline, &render);
 	render.live = true;	/* from now on, render_pause must wait */
 	/* After video_init: its TMDS buffers come off the heap first. */
 	term_set_graphics_budget(&term, GRAPHICS_BUDGET, board_free_heap);
+	apply_settings();	/* may read the card */
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. F3 or BOOTSEL: SET-UP\r\n";
@@ -391,12 +523,10 @@ app_init(void)
 		term_feed(&term, (const uint8_t *)detail, (size_t)len);
 		usbio_write(USBIO_LINE, detail, (size_t)len);
 	}
-	if (fell_back) {
-		static const char warning[] = "\x1b[1;31mRecovered from "
-		    "repeated crashes: running on factory defaults. Saved "
-		    "settings are untouched (F3, S to replace them).\x1b[0m\r\n";
-		term_feed(&term, (const uint8_t *)warning, sizeof(warning) - 1);
-	}
+	if (fell_back)
+		config_problem("Startup", "the last boots crashed or hung "
+		    "repeatedly: running on factory defaults");
+	show_config_problems();
 }
 
 void
@@ -424,7 +554,9 @@ app_poll(void)
 		board_boot_ok();
 		boot_marked_ok = true;
 	}
-	size_t count = usbio_read(USBIO_LINE, buffer, sizeof(buffer));
+	/* Host output waits while the Configuration Error is showing. */
+	size_t count = in_config_error ? 0 :
+	    usbio_read(USBIO_LINE, buffer, sizeof(buffer));
 
 	if (count > 0)
 		term_feed(&term, (const uint8_t *)buffer, count);

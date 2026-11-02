@@ -10,10 +10,10 @@ fonts, base16 schemes ready to copy onto a card, and a loud
 
 | | Choice | Why |
 |---|---|---|
-| Library | arduino-pico's bundled `SD` (SdFat 2.x), SPI mode | The framework's standard, FAT32 + exFAT. No PIO or DMA, unaffected by our per-mode sysclk. |
+| Library | SdFat 2.x (bundled with arduino-pico), used directly, SPI mode | The standard; FAT32 + exFAT. Not the SD/SDFS wrapper: its directory listing is quadratic. No PIO, unaffected by our per-mode sysclk. |
 | Wiring | SPI1: SCK GP30, MOSI GP31, MISO GP40, CS GP43 (GPIO) | The PiZero's TF slot (SDIO CLK/CMD/D0/D3 nets). GP41/42 unused in SPI mode. |
-| Fonts on card | PSF2 only, `/fonts/*.psf` | Already our format; `tools/ttf2psf.py` converts on the host. |
-| Schemes on card | base16 YAML, `/schemes/*.yaml` | Parsed on the device (flat `baseXX: "rrggbb"` keys), copied as-is from tinted-theming/schemes (MIT). |
+| Fonts on card | PSF2 only, `/fonts/*.psf`, first 64 | Already our format; `tools/sd_card.py` converts TUOPFP. |
+| Schemes on card | base16 YAML, `/schemes/*.yaml`, first 64 | Parsed on the device (flat `baseXX: "rrggbb"` keys), copied as-is from tinted-theming/schemes (MIT). |
 | Screenshots | F12 on the keyboard port -> `/screens/NNNN.bmp` | 16-bit BMP (RGB565 bitfields), rendered line by line by the real renderer. |
 | Firmware update | Last, after the rest works | A/B flash images via the RP2350 boot ROM; designed once the SD layer is proven. |
 
@@ -58,3 +58,12 @@ is a failed mount.
 
 Settings grow a scheme name and a printer setting (`SETTINGS_VERSION`
 6); fonts already store a name.
+
+## Progress
+
+- Steps 1-5 done (devlogs 015, 016). Card lists cached in
+  /veetee/catalog.bin. Boot is video first, then card.
+- Next: 6 screenshots (F12), 7 printer, 8 firmware update.
+- Proposed phase G (from the user): lower colour depths -- Sixel tiles at
+  8/4/2/1 bpp (2-8x the cells), and 6-byte palette-indexed text cells
+  when <= 256 colours (halves the grids; matters most at 720p).

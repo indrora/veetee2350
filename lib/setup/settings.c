@@ -82,6 +82,7 @@ settings_seal(struct settings *settings)
 	settings->size = sizeof(*settings);
 	/* Keep strings terminated whatever was edited into them. */
 	settings->font[SETTINGS_FONT_MAX - 1] = '\0';
+	settings->scheme_file[SETTINGS_SCHEME_MAX - 1] = '\0';
 	settings->answerback[SETTINGS_ANSWERBACK_MAX - 1] = '\0';
 	settings->crc = crc32(settings, offsetof(struct settings, crc));
 }

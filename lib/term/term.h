@@ -102,6 +102,8 @@ struct term_options {
 	bool		utf8;		/* off: 8-bit bytes, C1 + Latin-1 GR */
 	bool		alt_screen;	/* off: ignore DECSET 47/1047/1049 */
 	bool		sixel;		/* off: DCS q ignored, no ;4 in DA1 */
+	bool		ansi_set;	/* use `ansi`, not xterm's 16 colours */
+	uint8_t		ansi[16][3];	/* ANSI colours 0-15 (base16 schemes) */
 };
 
 /* Current SGR state, as libvterm reports it through setpenattr. */
@@ -130,6 +132,7 @@ struct term {
 	struct term_pen	 pen;
 	struct term_options options;
 	uint8_t		 palette16[16][3];	/* for DEPTH_16 mapping */
+	uint8_t		 ansi_default[16][3];	/* libvterm's own, from init */
 	uint16_t	 default_fg;	/* RGB565 */
 	uint16_t	 default_bg;
 	uint16_t	 space_glyph;
