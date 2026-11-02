@@ -373,12 +373,63 @@ test_hotkey_matching(void)
 	TEST_ASSERT_FALSE(hotkey_matches(&none, &f3));
 }
 
+static void
+test_hotkeys_page(void)
+{
+	struct key_event ctrl_f3 = {.code = KEY_F3, .mods = KEY_MOD_CTRL};
+
+	setup.selected = ITEM_HOTKEYS;
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ENTER, 0));
+	TEST_ASSERT_TRUE(setup.hotkeys_page);
+	/* The list: Tools menu, Set-Up, Screenshot, ... Bind Ctrl+F3 to
+	 * Screenshot: the Tools menu loses it. */
+	press(KEY_DOWN, 0);
+	press(KEY_DOWN, 0);
+	press(KEY_ENTER, 0);
+	TEST_ASSERT_TRUE(setup.capturing);
+	setup_key(&setup, &ctrl_f3);
+	TEST_ASSERT_FALSE(setup.capturing);
+	TEST_ASSERT_EQUAL(KEY_F3, setup.work.hotkeys[TOOL_SCREENSHOT].code);
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL,
+	    setup.work.hotkeys[TOOL_SCREENSHOT].mods);
+	TEST_ASSERT_EQUAL(KEY_NONE, setup.work.hotkeys[TOOL_MENU].code);
+	TEST_ASSERT_NOT_NULL(strstr(setup.message, "taken from Tools menu"));
+	/* Esc while capturing cancels; Delete unbinds; Esc leaves. */
+	press(KEY_ENTER, 0);
+	press(KEY_ESCAPE, 0);
+	TEST_ASSERT_EQUAL(KEY_F3, setup.work.hotkeys[TOOL_SCREENSHOT].code);
+	press(KEY_DELETE, 0);
+	TEST_ASSERT_EQUAL(KEY_NONE, setup.work.hotkeys[TOOL_SCREENSHOT].code);
+	press(KEY_ESCAPE, 0);
+	TEST_ASSERT_FALSE(setup.hotkeys_page);
+	/* Nothing was saved: the stored settings still have Ctrl+F3. */
+	TEST_ASSERT_EQUAL(KEY_F3, settings.hotkeys[TOOL_MENU].code);
+}
+
+static void
+test_short_screen_scrolls(void)
+{
+	struct grid small;
+
+	TEST_ASSERT_TRUE(grid_init(&small, 80, 24, grid_make_cell(0, 0, 0,
+	    0)));
+	setup_begin(&setup, &settings, &small, &font, VIDEO_MODE_640x480);
+	press(KEY_UP, 0);		/* wraps to Exit, the last item */
+	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
+	TEST_ASSERT_TRUE(setup.scroll > 0);
+	/* Exit is on screen: the list ends at row 24 - 3. */
+	TEST_ASSERT_EQUAL(1 + ITEM_EXIT - setup.scroll, 24 - 3);
+	grid_free(&small);
+}
+
 int
 main(void)
 {
 	UNITY_BEGIN();
 	RUN_TEST(test_tools_menu);
 	RUN_TEST(test_hotkey_matching);
+	RUN_TEST(test_hotkeys_page);
+	RUN_TEST(test_short_screen_scrolls);
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);

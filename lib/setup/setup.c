@@ -6,6 +6,8 @@
  */
 #include "setup.h"
 
+#include "menu.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -269,7 +271,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_ALTSCREEN] = "Alternate screen",
 	[ITEM_SIXEL] = "Sixel graphics",
 	[ITEM_SCHEME] = "Colour scheme",
-	[ITEM_SCREENSHOT] = "Screenshot (F12)",
+	[ITEM_SCREENSHOT] = "Screenshot format",
 	[ITEM_PRINTER] = "Printer",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
@@ -278,6 +280,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_ECHO] = "Local echo",
 	[ITEM_BELL] = "Visual bell",
 	[ITEM_ANSWERBACK] = "Answerback",
+	[ITEM_HOTKEYS] = "Hotkeys...",
 	[ITEM_SAVE] = "Save settings          (S)",
 	[ITEM_RECALL] = "Recall saved settings  (R)",
 	[ITEM_DEFAULTS] = "Factory defaults       (D)",
@@ -286,76 +289,153 @@ static const char *const item_labels[ITEM_COUNT] = {
 };
 
 /*
- * Screen row of each item. Everything (title, note, 20 items, help,
- * message) fits exactly in 24 rows, so SET-UP works on an 80x24 terminal.
+ * Layout: title on row 0, a note on row 1 when there's room (28+ rows),
+ * then the items, then a help line and a message line at the bottom.
+ * Items that don't fit scroll: the window follows the selection, and
+ * '^' / 'v' in column 1 say there's more above or below. (SET-UP used
+ * to lay every item out at once and assumed 24 rows were enough; at 23
+ * items the help line had already fallen off an 80x24 screen.)
  */
-/*
- * Room for the note on row 1 and a separate message line? On a short
- * screen (24 rows: the Rainbow font, or a fixed 80x24) the items start
- * on row 1 and the message, when there is one, replaces the help line.
- */
-static bool
-roomy(const struct setup *setup)
+static unsigned
+list_top(const struct setup *setup)
 {
-	return setup->grid->rows >= FIRST_ROW + ITEM_COUNT + 2;
+	return setup->grid->rows >= 28 ? FIRST_ROW : 1;
 }
 
 static unsigned
-item_row(const struct setup *setup, unsigned item)
+list_rows(const struct setup *setup)
 {
-	return (roomy(setup) ? FIRST_ROW : 1) + item;
+	return setup->grid->rows - list_top(setup) - 2;
+}
+
+/* Keep `selected` inside the window [*scroll, *scroll + rows). */
+static void
+follow(unsigned selected, unsigned count, unsigned rows, unsigned *scroll)
+{
+	if (count <= rows)
+		*scroll = 0;
+	else if (selected < *scroll)
+		*scroll = selected;
+	else if (selected >= *scroll + rows)
+		*scroll = selected - rows + 1;
+}
+
+static void
+draw_more_marks(struct setup *setup, unsigned scroll, unsigned count)
+{
+	unsigned top = list_top(setup), rows = list_rows(setup);
+
+	if (scroll > 0)
+		put(setup, top, 1, "^", DIM_FG, MENU_BG);
+	if (scroll + rows < count)
+		put(setup, top + rows - 1, 1, "v", DIM_FG, MENU_BG);
+}
+
+/*
+ * Tools listed on the Hotkeys page (the Tools menu's, in its order, for
+ * those that exist yet).
+ */
+static unsigned
+hotkey_tools(uint8_t tools[TOOL_COUNT])
+{
+	unsigned count = 0;
+
+	for (unsigned tool = 0; tool < TOOL_COUNT; tool++)
+		if (tool_ready((enum tool)tool))
+			tools[count++] = (uint8_t)tool;
+	return count;
+}
+
+static void
+draw_hotkeys(struct setup *setup)
+{
+	uint8_t tools[TOOL_COUNT];
+	unsigned count = hotkey_tools(tools);
+	unsigned top = list_top(setup), rows = list_rows(setup);
+	char name[24];
+
+	follow(setup->hotkey_selected, count, rows, &setup->scroll);
+	for (unsigned i = setup->scroll; i < count && i < setup->scroll + rows;
+	    i++) {
+		const struct hotkey *hotkey = &setup->work.hotkeys[tools[i]];
+		bool selected = i == setup->hotkey_selected;
+		uint16_t fg = selected ? MENU_BG : MENU_FG;
+		uint16_t bg = selected ? MENU_FG : MENU_BG;
+		unsigned row = top + i - setup->scroll;
+
+		if (selected)
+			grid_clear_span(setup->grid, row, LABEL_COL - 1,
+			    setup->grid->cols - 2, grid_make_cell(
+			    font_glyph_for(setup->font, ' '), fg, bg, 0));
+		put(setup, row, LABEL_COL, tool_name((enum tool)tools[i]), fg,
+		    bg);
+		if (selected && setup->capturing)
+			snprintf(name, sizeof(name), "press a key...");
+		else
+			keys_name((enum key_code)hotkey->code, hotkey->byte,
+			    hotkey->mods, name, sizeof(name));
+		put(setup, row, VALUE_COL, name, fg, bg);
+	}
+	draw_more_marks(setup, setup->scroll, count);
 }
 
 void
 setup_draw(struct setup *setup)
 {
 	struct grid *grid = setup->grid;
+	unsigned top = list_top(setup), rows = list_rows(setup);
 	char value[64];
 
 	for (unsigned row = 0; row < grid->rows; row++)
 		fill_row(setup, row, MENU_FG, MENU_BG);
 
 	fill_row(setup, 0, TITLE_FG, TITLE_BG);
-	put(setup, 0, 1, "VeeTee 2350 SET-UP", TITLE_FG, TITLE_BG);
-	/*
-	 * Short screens (24 rows) have no row to spare for messages: the
-	 * title row carries the message, or the card status, instead of the
-	 * BOOTSEL/F3 hint (the Exit item says F3 / Esc).
-	 */
-	if (roomy(setup)) {
+	put(setup, 0, 1, setup->hotkeys_page ? "VeeTee 2350 SET-UP: Hotkeys" :
+	    "VeeTee 2350 SET-UP", TITLE_FG, TITLE_BG);
+	put(setup, 0, 30, setup->storage, TITLE_FG, TITLE_BG);
+	if (grid->cols >= 80)
 		put(setup, 0, grid->cols - 21, "BOOTSEL / F3: leave",
 		    TITLE_FG, TITLE_BG);
-		put(setup, 0, 22, setup->storage, TITLE_FG, TITLE_BG);
+	if (top > 1)
+		put(setup, 1, LABEL_COL, setup->hotkeys_page ?
+		    "Keys that run a tool from the terminal. Inside SET-UP "
+		    "they don't apply." :
+		    "Font, size, emulation, colours: reset the terminal.  "
+		    "Resolution: restarts.", DIM_FG, MENU_BG);
+
+	if (setup->hotkeys_page) {
+		draw_hotkeys(setup);
 	} else {
-		put(setup, 0, 22, setup->message[0] != '\0' ?
-		    setup->message : setup->storage, TITLE_FG, TITLE_BG);
-	}
+		follow(setup->selected, ITEM_COUNT, rows, &setup->scroll);
+		for (unsigned item = setup->scroll;
+		    item < ITEM_COUNT && item < setup->scroll + rows; item++) {
+			bool selected = item == setup->selected;
+			uint16_t fg = selected ? MENU_BG : MENU_FG;
+			uint16_t bg = selected ? MENU_FG : MENU_BG;
+			unsigned row = top + item - setup->scroll;
 
-	for (unsigned item = 0; item < ITEM_COUNT; item++) {
-		bool selected = item == setup->selected;
-		uint16_t fg = selected ? MENU_BG : MENU_FG;
-		uint16_t bg = selected ? MENU_FG : MENU_BG;
-		unsigned row = item_row(setup, item);
-
-		if (selected) {
-			grid_clear_span(grid, row, LABEL_COL - 1,
-			    grid->cols - 2, grid_make_cell(font_glyph_for(
-			    setup->font, ' '), fg, bg, 0));
+			if (selected) {
+				grid_clear_span(grid, row, LABEL_COL - 1,
+				    grid->cols - 2, grid_make_cell(
+				    font_glyph_for(setup->font, ' '), fg, bg,
+				    0));
+			}
+			put(setup, row, LABEL_COL, item_labels[item], fg, bg);
+			format_value(setup, item, value, sizeof(value));
+			put(setup, row, VALUE_COL, value, fg, bg);
 		}
-		put(setup, row, LABEL_COL, item_labels[item], fg, bg);
-		format_value(setup, item, value, sizeof(value));
-		put(setup, row, VALUE_COL, value, fg, bg);
+		draw_more_marks(setup, setup->scroll, ITEM_COUNT);
 	}
 
-	unsigned help_row = item_row(setup, ITEM_EXIT) + 1;
-	if (roomy(setup))
-		put(setup, 1, LABEL_COL, "Font, size, emulation, colours: "
-		    "reset the terminal.  Resolution: restarts.", DIM_FG,
-		    MENU_BG);
-	put(setup, help_row, LABEL_COL, setup->editing ?
+	unsigned help_row = grid->rows - 2;
+	const char *help = setup->editing ?
 	    "Type the answerback; Enter or Esc to finish." :
-	    "Up/Down select   Left/Right/Enter change   S save   F3 leave",
-	    DIM_FG, MENU_BG);
+	    setup->capturing ?
+	    "Press the new key.  Esc: cancel" :
+	    setup->hotkeys_page ?
+	    "Up/Down select   Enter: new key   Delete: none   Esc: back" :
+	    "Up/Down select   Left/Right/Enter change   S save   F3 leave";
+	put(setup, help_row, LABEL_COL, help, DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
 }
@@ -551,6 +631,11 @@ activate(struct setup *setup)
 	case ITEM_ANSWERBACK:
 		setup->editing = true;
 		return SETUP_NONE;
+	case ITEM_HOTKEYS:
+		setup->hotkeys_page = true;
+		setup->hotkey_selected = 0;
+		setup->scroll = 0;
+		return SETUP_NONE;
 	case ITEM_SAVE:
 		return SETUP_SAVE;
 	case ITEM_RECALL:
@@ -567,6 +652,78 @@ activate(struct setup *setup)
 	}
 }
 
+/*
+ * Bind the key just pressed to the selected tool. A key runs one tool:
+ * if another had it, that one loses it (and the message says so).
+ */
+static void
+bind_hotkey(struct setup *setup, enum tool tool, const struct key_event *key)
+{
+	struct hotkey bound = {
+		.code = (uint8_t)key->code,
+		.byte = key->code == KEY_CHAR ? key->byte : 0,
+		.mods = key->mods,
+	};
+	char name[24];
+
+	keys_name(key->code, bound.byte, bound.mods, name, sizeof(name));
+	snprintf(setup->message, sizeof(setup->message), "%s: %s", name,
+	    tool_name(tool));
+	for (unsigned other = 0; other < TOOL_COUNT; other++) {
+		if (other == tool ||
+		    !hotkey_matches(&setup->work.hotkeys[other], key))
+			continue;
+		setup->work.hotkeys[other] = (struct hotkey){0};
+		snprintf(setup->message, sizeof(setup->message),
+		    "%s: %s (taken from %s)", name, tool_name(tool),
+		    tool_name((enum tool)other));
+	}
+	setup->work.hotkeys[tool] = bound;
+}
+
+static void
+hotkeys_key(struct setup *setup, const struct key_event *key)
+{
+	uint8_t tools[TOOL_COUNT];
+	unsigned count = hotkey_tools(tools);
+	enum tool tool = (enum tool)tools[setup->hotkey_selected];
+
+	setup->message[0] = '\0';
+	if (setup->capturing) {
+		setup->capturing = false;
+		if (key->code == KEY_ESCAPE || key->code == KEY_UNKNOWN)
+			return;		/* Esc can't be a hotkey: it cancels */
+		bind_hotkey(setup, tool, key);
+		return;
+	}
+	switch (key->code) {
+	case KEY_UP:
+		setup->hotkey_selected = cycle(setup->hotkey_selected, count,
+		    -1);
+		break;
+	case KEY_DOWN:
+	case KEY_TAB:
+		setup->hotkey_selected = cycle(setup->hotkey_selected, count,
+		    +1);
+		break;
+	case KEY_ENTER:
+		setup->capturing = true;
+		break;
+	case KEY_DELETE:
+	case KEY_BACKSPACE:
+		setup->work.hotkeys[tool] = (struct hotkey){0};
+		break;
+	case KEY_ESCAPE:
+	case KEY_LEFT:
+	case KEY_F3:
+		setup->hotkeys_page = false;
+		setup->scroll = 0;
+		break;
+	default:
+		break;
+	}
+}
+
 enum setup_action
 setup_key(struct setup *setup, const struct key_event *key)
 {
@@ -574,6 +731,11 @@ setup_key(struct setup *setup, const struct key_event *key)
 
 	if (setup->editing)
 		return edit_answerback(setup, key);
+	if (setup->hotkeys_page) {
+		hotkeys_key(setup, key);
+		setup_draw(setup);
+		return SETUP_NONE;
+	}
 
 	setup->message[0] = '\0';
 	switch (key->code) {

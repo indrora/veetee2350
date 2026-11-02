@@ -33,6 +33,20 @@ static const char *const tool_names[TOOL_COUNT] = {
 	[TOOL_HARD_RESET] = "Hard reset",
 };
 
+bool
+tool_ready(enum tool tool)
+{
+	switch (tool) {
+	case TOOL_CAPTURE:
+	case TOOL_REPLAY:
+	case TOOL_SEND:
+	case TOOL_RECEIVE:
+		return false;	/* phase H steps still to come */
+	default:
+		return (unsigned)tool < TOOL_COUNT;
+	}
+}
+
 const char *
 tool_name(enum tool tool)
 {

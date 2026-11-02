@@ -48,6 +48,7 @@ enum setup_item {
 	ITEM_SCREENSHOT,
 	ITEM_PRINTER,
 	ITEM_ANSWERBACK,
+	ITEM_HOTKEYS,		/* opens the Hotkeys page */
 	ITEM_SAVE,
 	ITEM_RECALL,
 	ITEM_DEFAULTS,
@@ -85,6 +86,11 @@ struct setup {
 	unsigned	 selected;	/* enum setup_item */
 	unsigned	 running_resolution;	/* mode the hardware is in now */
 	bool		 editing;	/* typing into the answerback field */
+	unsigned	 scroll;	/* first item shown (short screens) */
+	/* The Hotkeys page: a list of tools, Enter to press a new key. */
+	bool		 hotkeys_page;
+	unsigned	 hotkey_selected;	/* index into the page's list */
+	bool		 capturing;	/* waiting for the key to bind */
 	char		 message[64];
 	char		 storage[36];	/* SD card status, title row */
 	struct setup_catalogue card;	/* empty without a card */
