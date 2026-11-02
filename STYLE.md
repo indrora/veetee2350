@@ -127,6 +127,16 @@ The rule is **"show your work"**:
   placed in RAM, and its per-line cycle budget is noted in a comment.
   Small helpers it calls must be `HOT_INLINE` (always_inline): the core
   builds at -Os, which out-lines `static inline` functions into flash.
+- **Hot path changes are measured, not guessed.** Before and after,
+  run the profile build (`env:pizero-profile`, `VEETEE_RENDER_PROFILE`)
+  on the same screens and compare the numbers; keep the instrumentation
+  in the code behind its `#define`, off by default. Estimates have been
+  off by 3x (devlog 021, 024).
+- **Per-frame decisions belong in the frame plan** (`render_plan`, main
+  loop), not in the scanline: what each row is made of, which loop
+  draws it, what to preload. Keep rare cases out of the hot loops --
+  their state alone costs the common case its registers (devlog 024)
+  -- and let a stale plan cost speed, never pixels.
 - **Core 1 must never execute from flash.** BOOTSEL reads and settings
   writes take XIP away. `python3 tools/core1_audit.py
   .pio/build/pizero/firmware.elf` checks this. Run it after touching
