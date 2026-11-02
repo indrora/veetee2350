@@ -130,7 +130,8 @@ erase_cell(const struct term *term)
 	    resolve_colour(term, term->pen.fg, true) :
 	    resolve_colour(term, term->pen.bg, false);
 
-	return grid_make_cell(term->space_glyph, term->default_fg, bg, 0);
+	return grid_make_cell(term->space_glyph, term->default_fg, bg,
+	    CELL_ERASED);
 }
 
 /* Push cursor/mode presentation state into the grid being shown. */
@@ -183,6 +184,8 @@ cb_putglyph(VTermGlyphInfo *info, VTermPos pos, void *user)
 	struct cell *cells = grid_row(grid, pos.row);
 
 	cells[pos.col] = pen_cell(term, glyph);
+	if (info->protected_cell)
+		cells[pos.col].attr |= CELL_PROTECTED;
 	/*
 	 * A double-width character covers two cells. Until wide glyphs are
 	 * supported (Unicode stretch goal), show the glyph in the first cell
@@ -265,14 +268,21 @@ cb_erase(VTermRect rect, int selective, void *user)
 	struct term *term = user;
 	struct cell blank = erase_cell(term);
 
-	/* DECSCA protection isn't tracked, so selective erase (DECSED/
-	 * DECSEL) erases everything. Rarely used; see docs/terminal.md. */
-	(void)selective;
 	if (!clamp_rect(term->screen, &rect))
 		return 1;
-	for (int row = rect.start_row; row < rect.end_row; row++)
-		grid_clear_span(term->screen, (unsigned)row,
-		    (unsigned)rect.start_col, (unsigned)rect.end_col, blank);
+	for (int row = rect.start_row; row < rect.end_row; row++) {
+		if (!selective) {
+			grid_clear_span(term->screen, (unsigned)row,
+			    (unsigned)rect.start_col, (unsigned)rect.end_col,
+			    blank);
+			continue;
+		}
+		/* DECSED/DECSEL: leave DECSCA-protected cells alone. */
+		struct cell *cells = grid_row(term->screen, (unsigned)row);
+		for (int col = rect.start_col; col < rect.end_col; col++)
+			if (!(cells[col].attr & CELL_PROTECTED))
+				cells[col] = blank;
+	}
 	return 1;
 }
 
@@ -388,6 +398,27 @@ cb_bell(void *user)
 	return 1;
 }
 
+/* DECSWL/DECDWL/DECDHL: remember the line size for the renderer. */
+static int
+cb_setlineinfo(int row, const VTermLineInfo *newinfo,
+    const VTermLineInfo *oldinfo, void *user)
+{
+	struct term *term = user;
+	uint8_t attr = ROW_NORMAL;
+
+	(void)oldinfo;
+	if (row < 0 || row >= term->screen->rows)
+		return 1;
+	if (newinfo->doubleheight == 1)
+		attr = ROW_DOUBLE_TOP;
+	else if (newinfo->doubleheight == 2)
+		attr = ROW_DOUBLE_BOTTOM;
+	else if (newinfo->doublewidth)
+		attr = ROW_DOUBLE_WIDTH;
+	*grid_row_attr(term->screen, (unsigned)row) = attr;
+	return 1;
+}
+
 static int
 cb_resize(int rows, int cols, VTermStateFields *fields, void *user)
 {
@@ -410,6 +441,7 @@ static const VTermStateCallbacks state_callbacks = {
 	.settermprop = cb_settermprop,
 	.bell = cb_bell,
 	.resize = cb_resize,
+	.setlineinfo = cb_setlineinfo,
 };
 
 /*
@@ -525,6 +557,51 @@ fb_csi(const char *leader, const long args[], int argcount,
 		}
 	}
 
+	/*
+	 * DECRQCRA, "CSI Pid ; Pp ; Pt ; Pl ; Pb ; Pr * y": 16-bit sum of the
+	 * characters in a rectangle (1-based, inclusive, defaults to the whole
+	 * screen; Pp, the page, is ignored). Reply DCS Pid ! ~ XXXX ST.
+	 * Written cells count their codepoint and erased cells 0, which is
+	 * what xterm (patch >= 279) reports for plain text and what esctest
+	 * relies on to read the screen back one cell at a time. Attributes
+	 * aren't included. Origin mode isn't applied yet.
+	 */
+	if (no_leader && intermed != nullptr && intermed[0] == '*' &&
+	    command == 'y') {
+		long param[6];
+		for (int i = 0; i < 6; i++)
+			param[i] = i < argcount ? CSI_ARG(args[i]) :
+			    CSI_ARG_MISSING;
+		long top = param[2] == CSI_ARG_MISSING ? 1 : param[2];
+		long left = param[3] == CSI_ARG_MISSING ? 1 : param[3];
+		long bottom = param[4] == CSI_ARG_MISSING ? grid->rows : param[4];
+		long right = param[5] == CSI_ARG_MISSING ? grid->cols : param[5];
+		if (top < 1)
+			top = 1;
+		if (left < 1)
+			left = 1;
+		if (bottom > grid->rows)
+			bottom = grid->rows;
+		if (right > grid->cols)
+			right = grid->cols;
+
+		uint32_t sum = 0;
+		for (long row = top; row <= bottom; row++) {
+			const struct cell *cells = grid_row(term->screen,
+			    (unsigned)row - 1);
+			for (long col = left; col <= right; col++)
+				if (!(cells[col - 1].attr & CELL_ERASED))
+					sum += font_codepoint_for(&term->font,
+					    cells[col - 1].glyph);
+		}
+		char reply[32];
+		int len = snprintf(reply, sizeof(reply), "\x1bP%ld!~%04X\x1b\\",
+		    param[0] == CSI_ARG_MISSING ? 0L : param[0],
+		    (unsigned)(sum & 0xffff));
+		term->output(reply, (size_t)len, term->output_ctx);
+		return 1;
+	}
+
 	/* xterm window ops: size queries only. */
 	if (no_leader && intermed == nullptr && command == 't') {
 		switch (first) {
@@ -614,7 +691,7 @@ build_screens(struct term *term, unsigned *cols, unsigned *rows)
 		*cols = term->options.max_cols;
 	term->space_glyph = font_glyph_for(&term->font, ' ');
 	struct cell blank = grid_make_cell(term->space_glyph, term->default_fg,
-	    term->default_bg, 0);
+	    term->default_bg, CELL_ERASED);
 	return grid_init(&term->primary, *cols, *rows, blank) &&
 	    grid_init(&term->alternate, *cols, *rows, blank);
 }

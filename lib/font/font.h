@@ -37,6 +37,7 @@ struct font {
 	uint32_t	 map_count;
 	uint32_t	*map_codepoints;/* sorted ascending */
 	uint16_t	*map_glyphs;	/* parallel to map_codepoints */
+	uint32_t	*glyph_codepoints;/* glyph -> lowest codepoint (0: none) */
 };
 
 enum font_error {
@@ -81,6 +82,16 @@ void	font_free(struct font *font);
  * the map: call it when a character is written, never per scanline.
  */
 uint16_t font_glyph_for(const struct font *font, uint32_t codepoint);
+
+/*
+ * A codepoint that maps to `glyph` (the lowest, so ASCII wins when
+ * bitmaps are shared), or 0. For reading the screen back (DECRQCRA).
+ */
+static inline uint32_t
+font_codepoint_for(const struct font *font, uint16_t glyph)
+{
+	return glyph < font->glyph_count ? font->glyph_codepoints[glyph] : 0;
+}
 
 /* Pointer to row `row` of glyph `glyph` (no bounds checks). */
 static inline const uint8_t *

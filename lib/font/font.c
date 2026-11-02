@@ -226,6 +226,18 @@ font_load_psf2(struct font *font, const uint8_t *data, size_t len)
 	}
 	font->map_count = kept;
 	free(pairs);
+
+	/* Reverse table; map is sorted, so the first (lowest) codepoint
+	 * written for a glyph is kept. */
+	font->glyph_codepoints = calloc(glyph_count,
+	    sizeof(*font->glyph_codepoints));
+	if (font->glyph_codepoints == nullptr)
+		goto nomem;
+	for (uint32_t i = 0; i < kept; i++) {
+		uint16_t glyph = font->map_glyphs[i];
+		if (font->glyph_codepoints[glyph] == 0)
+			font->glyph_codepoints[glyph] = font->map_codepoints[i];
+	}
 	return FONT_OK;
 
 nomem:
@@ -240,6 +252,7 @@ font_free(struct font *font)
 	free(font->glyphs);
 	free(font->map_codepoints);
 	free(font->map_glyphs);
+	free(font->glyph_codepoints);
 	memset(font, 0, sizeof(*font));
 }
 

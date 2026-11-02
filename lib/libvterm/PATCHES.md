@@ -28,3 +28,11 @@ libvterm always answered `CSI c` with `?1;2c` (VT100 with AVO) and
 `VTermStateFallbacks.csi` first, and the built-in reply is only used if
 the fallback returns 0. VeeTee answers according to its emulation level
 (VT100 / VT220 / VT340 / xterm), and adds Sixel (`;4`) when enabled.
+
+## 3. CSI with unhandled intermediates reaches the fallback (`src/state.c`)
+
+`on_csi()` returned 0 early for any intermediate other than
+`space ! " $ '`, and for multi-byte intermediates, so those sequences
+never reached `VTermStateFallbacks.csi`. Both early exits now offer the
+sequence to the fallback. VeeTee needs this for DECRQCRA (`CSI ... * y`),
+which esctest uses to read the screen back.

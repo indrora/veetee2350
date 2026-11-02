@@ -960,8 +960,12 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   }
 
   if(intermed && intermed[0]) {
+    /* VeeTee patch: sequences with intermediates libvterm doesn't parse
+     * (e.g. '*' in DECRQCRA "CSI ... * y") go to the CSI fallback instead
+     * of being dropped. See PATCHES.md. */
     if(intermed[1]) // longer than 1 char
-      return 0;
+      return state->fallbacks && state->fallbacks->csi &&
+             (*state->fallbacks->csi)(leader, args, argcount, intermed, command, state->fbdata);
 
     switch(intermed[0]) {
     case ' ':
@@ -972,7 +976,8 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
       intermed_byte = intermed[0];
       break;
     default:
-      return 0;
+      return state->fallbacks && state->fallbacks->csi &&
+             (*state->fallbacks->csi)(leader, args, argcount, intermed, command, state->fbdata);
     }
   }
 

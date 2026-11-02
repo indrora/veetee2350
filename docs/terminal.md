@@ -134,7 +134,6 @@ and UTF-8 split across writes.
 |-----|------------|
 | Palette changes (OSC 4) recolour new text only | Cells store resolved RGB565. To fix, store the palette index alongside and re-resolve on change. |
 | Italic renders upright, bold is colour-only | No italic or bold font faces. Could synthesize bold with a 1 px smear. |
-| DECSED/DECSEL erase protected cells too | DECSCA protection isn't tracked in cells. |
 | Double-width/height lines (DECDWL/DECDHL) not drawn | Needs a per-row attribute and a 2× render path. vttest exercises it. |
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |

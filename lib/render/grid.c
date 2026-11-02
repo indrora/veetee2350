@@ -73,8 +73,10 @@ grid_scroll_up(struct grid *grid, unsigned top, unsigned bottom,
 	memmove(&grid->row_map[top], &grid->row_map[top + count],
 	    height - count);
 	memcpy(&grid->row_map[bottom - count], spill, count);
-	for (unsigned row = bottom - count; row < bottom; row++)
+	for (unsigned row = bottom - count; row < bottom; row++) {
 		grid_clear_span(grid, row, 0, grid->cols, blank);
+		*grid_row_attr(grid, row) = ROW_NORMAL;
+	}
 }
 
 void
@@ -96,6 +98,8 @@ grid_scroll_down(struct grid *grid, unsigned top, unsigned bottom,
 	memmove(&grid->row_map[top + count], &grid->row_map[top],
 	    height - count);
 	memcpy(&grid->row_map[top], spill, count);
-	for (unsigned row = top; row < top + count; row++)
+	for (unsigned row = top; row < top + count; row++) {
 		grid_clear_span(grid, row, 0, grid->cols, blank);
+		*grid_row_attr(grid, row) = ROW_NORMAL;
+	}
 }

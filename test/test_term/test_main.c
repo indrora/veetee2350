@@ -392,6 +392,69 @@ test_utf8_off_and_alt_screen_off(void)
 	TEST_ASSERT_EQUAL(glyph(0xe9), cell_at(0, 0)->glyph);
 }
 
+static void
+test_decrqcra_checksums(void)
+{
+	feed("AB\x1b[3;1H ");			/* a written space at 3,1 */
+	feed("\x1b[1;1;1;1;1;1*y");		/* 'A' */
+	TEST_ASSERT_EQUAL_STRING("\x1bP1!~0041\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[2;;1;1;1;2*y");		/* "AB" */
+	TEST_ASSERT_EQUAL_STRING("\x1bP2!~0083\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[3;;2;1;2;1*y");		/* erased cell: 0 */
+	TEST_ASSERT_EQUAL_STRING("\x1bP3!~0000\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[4;;3;1;3;1*y");		/* written space: 0x20 */
+	TEST_ASSERT_EQUAL_STRING("\x1bP4!~0020\x1b\\", reply);
+	reply_len = 0;
+	feed("\x1b[1;1H\x1b[K\x1b[5;;1;1;1;1*y");	/* EL erases */
+	TEST_ASSERT_EQUAL_STRING("\x1bP5!~0000\x1b\\", reply);
+}
+
+static void
+test_selective_erase_keeps_protected(void)
+{
+	feed("A\x1b[1\"qB\x1b[0\"qC");		/* DECSCA around 'B' */
+	feed("\x1b[?2J");				/* DECSED: selective */
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 0)->glyph);
+	TEST_ASSERT_EQUAL(glyph('B'), cell_at(0, 1)->glyph);
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 2)->glyph);
+	feed("\x1b[2J");				/* ED: everything */
+	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 1)->glyph);
+}
+
+static void
+test_double_width_and_height_lines(void)
+{
+	feed("\x1b#6AB");			/* DECDWL */
+	TEST_ASSERT_EQUAL(ROW_DOUBLE_WIDTH, *grid_row_attr(term.screen, 0));
+	feed("\x1b[2;1H\x1b#3X\x1b[3;1H\x1b#4X");	/* DECDHL top/bottom */
+	TEST_ASSERT_EQUAL(ROW_DOUBLE_TOP, *grid_row_attr(term.screen, 1));
+	TEST_ASSERT_EQUAL(ROW_DOUBLE_BOTTOM, *grid_row_attr(term.screen, 2));
+
+	/* Rendered: 'A' at 2x width, so pixel pairs repeat. */
+	static uint16_t pixels[RENDER_MAX_WIDTH] __attribute__((aligned(4)));
+	render.grid->cursor_visible = false;
+	render_scanline(pixels, 8, &render);
+	uint8_t bits = *font_glyph_row(&term.font, glyph('A'), 8);
+	for (unsigned x = 0; x < 8; x++) {
+		bool ink = (bits >> (7 - x)) & 1;
+		uint16_t want = ink ? term.default_fg : term.default_bg;
+		TEST_ASSERT_EQUAL_HEX16(want, pixels[2 * x]);
+		TEST_ASSERT_EQUAL_HEX16(want, pixels[2 * x + 1]);
+	}
+
+	/* Scrolling carries the line size with the line; new lines are
+	 * normal. */
+	feed("\x1b[30;1H\n");
+	TEST_ASSERT_EQUAL(ROW_DOUBLE_TOP, *grid_row_attr(term.screen, 0));
+	TEST_ASSERT_EQUAL(ROW_NORMAL, *grid_row_attr(term.screen, 29));
+	/* ED clears line sizes (libvterm forces them off). */
+	feed("\x1b[2J");
+	TEST_ASSERT_EQUAL(ROW_NORMAL, *grid_row_attr(term.screen, 0));
+}
+
 int
 main(void)
 {
@@ -416,5 +479,8 @@ main(void)
 	RUN_TEST(test_device_attributes_per_level);
 	RUN_TEST(test_colour_depths);
 	RUN_TEST(test_utf8_off_and_alt_screen_off);
+	RUN_TEST(test_decrqcra_checksums);
+	RUN_TEST(test_selective_erase_keeps_protected);
+	RUN_TEST(test_double_width_and_height_lines);
 	return UNITY_END();
 }

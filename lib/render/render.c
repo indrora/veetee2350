@@ -34,9 +34,23 @@
  */
 static uint32_t byte_masks[2][256][4] __attribute__((aligned(16)));
 
+/*
+ * Pixel-doubling table for double-width lines: byte b -> 16 bits where
+ * each bit of b is repeated (b7 b7 b6 b6 ...). Built once at init.
+ */
+static uint16_t double_bits[256];
+
 static void
 build_mask_tables(void)
 {
+	for (unsigned byte = 0; byte < 256; byte++) {
+		uint16_t wide = 0;
+		for (unsigned bit = 0; bit < 8; bit++)
+			if (byte & (1u << bit))
+				wide |= (uint16_t)(3u << (bit * 2));
+		double_bits[byte] = wide;
+	}
+
 	for (unsigned invert = 0; invert < 2; invert++) {
 		for (unsigned byte = 0; byte < 256; byte++) {
 			unsigned bits = invert ? ~byte & 0xff : byte;
@@ -235,6 +249,54 @@ HOT_FUNC(draw_cell)(const struct render *render, uint16_t *out,
 	}
 }
 
+static void
+HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
+    const struct cell *cells, unsigned sub, uint8_t line_size, bool invert,
+    unsigned attr_mask, unsigned text_row, bool blink_off)
+{
+	const struct font *font = render->font;
+	struct grid *grid = render->grid;
+	const unsigned half = grid->cols / 2;
+	unsigned glyph_sub = sub;
+
+	if (line_size == ROW_DOUBLE_TOP)
+		glyph_sub = sub / 2;
+	else if (line_size == ROW_DOUBLE_BOTTOM)
+		glyph_sub = (sub + font->height) / 2;
+	const uint8_t *glyph_rows = font->glyphs + glyph_sub;
+
+	bool cursor_here = grid->cursor_visible &&
+	    grid->cursor_row == text_row && grid->cursor_col < half &&
+	    !(grid->cursor_blink && blink_off);
+
+	for (unsigned col = 0; col < half; col++) {
+		const struct cell *cell = &cells[col];
+		uint32_t bits = glyph_rows[cell->glyph * font->glyph_bytes];
+		bool cell_invert = invert;
+
+		if (cell->attr & CELL_ATTR_ALL)
+			bits = attr_bits(render, bits, cell->attr, glyph_sub,
+			    attr_mask);
+		if (cursor_here && col == grid->cursor_col) {
+			if (grid->cursor_shape == CURSOR_UNDERLINE)
+				bits = sub >= font->height - 2u ? 0xff : bits;
+			else if (grid->cursor_shape == CURSOR_BAR)
+				bits |= 0x80;
+			else
+				cell_invert = !invert;
+		}
+		uint16_t wide = double_bits[bits & 0xff];
+		const uint32_t (*masks)[4] = byte_masks[cell_invert];
+		emit8((uint32_t *)(out + col * 16), wide >> 8, cell->bg2,
+		    cell->diff2, masks);
+		emit8((uint32_t *)(out + col * 16 + 8), wide & 0xff,
+		    cell->bg2, cell->diff2, masks);
+	}
+	/* Odd column count: the last 8 px have no cell; use the border. */
+	for (unsigned x = half * 16; x < grid->cols * 8u; x++)
+		out[x] = (uint16_t)grid->border2;
+}
+
 void
 HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 {
@@ -270,6 +332,19 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	for (unsigned x = right; x < render->width; x++)
 		pixels[x] = (uint16_t)grid->border2;
 
+	/*
+	 * Double-width / double-height lines (DECDWL/DECDHL): only the first
+	 * cols/2 cells exist, each drawn 16 px wide; double-height halves
+	 * stretch glyph rows 0..h/2-1 (top) or h/2..h-1 (bottom) over the
+	 * whole cell. Slow path, 8-px fonts only (all built-ins).
+	 */
+	uint8_t line_size = grid->row_attr[grid->row_map[text_row]];
+	if (line_size != ROW_NORMAL && width == 8) {
+		render_double_line(render, out, cells, sub, line_size, invert,
+		    attr_mask, text_row, blink_off);
+		return;
+	}
+
 	if (width == 8) {
 		/*
 		 * Hot loop for the common case. Kept free of calls unless
@@ -286,7 +361,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 			memcpy(&glyph_attr, cell, sizeof(glyph_attr));
 			uint32_t bits = glyph_rows[(glyph_attr & 0xffff) *
 			    glyph_bytes];
-			if (glyph_attr >> 16)
+			if (glyph_attr & (CELL_ATTR_ALL << 16))
 				bits = attr_bits(render, bits, glyph_attr >> 16,
 				    sub, attr_mask);
 			emit8(words, bits, cell->bg2, cell->diff2, masks);
@@ -297,7 +372,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 			uint32_t bits = read_bits(glyph_rows +
 			    cell->glyph * glyph_bytes, row_bytes);
 
-			if (cell->attr != 0)
+			if (cell->attr & CELL_ATTR_ALL)
 				bits = attr_bits(render, bits, cell->attr, sub,
 				    attr_mask);
 			draw_cell(render, out + col * width, cell, bits, invert);

@@ -36,6 +36,15 @@ enum cell_attr {
 	CELL_STRIKE	= 1 << 3,
 	CELL_OVERLINE	= 1 << 4,
 	CELL_ATTR_ALL	= (1 << 5) - 1,	/* render.c tables: 32 combos */
+	/*
+	 * Not a visual attribute: the cell was erased rather than written
+	 * (a written space and an erased cell look alike but read back
+	 * differently, e.g. DECRQCRA checksums treat erased as 0). The
+	 * renderer masks it off with CELL_ATTR_ALL.
+	 */
+	CELL_ERASED	= 1 << 15,
+	/* Not visual either: DECSCA-protected, skipped by DECSED/DECSEL. */
+	CELL_PROTECTED	= 1 << 14,
 };
 
 struct cell {
@@ -49,6 +58,14 @@ static_assert(sizeof(struct cell) == 12);
 static_assert(__builtin_offsetof(struct cell, glyph) == 0);
 static_assert(__builtin_offsetof(struct cell, attr) == 2);
 
+/* Line size (DECSWL / DECDWL / DECDHL), per physical row. */
+enum row_attr {
+	ROW_NORMAL,
+	ROW_DOUBLE_WIDTH,	/* DECDWL */
+	ROW_DOUBLE_TOP,		/* DECDHL top half (also double width) */
+	ROW_DOUBLE_BOTTOM,	/* DECDHL bottom half */
+};
+
 enum cursor_shape {
 	CURSOR_BLOCK,
 	CURSOR_UNDERLINE,
@@ -60,6 +77,9 @@ struct grid {
 	uint16_t	 rows;
 	struct cell	*cells;			/* rows * cols, physical order */
 	uint8_t		 row_map[GRID_MAX_ROWS];/* logical -> physical row */
+	/* enum row_attr, indexed by PHYSICAL row so it moves with row_map
+	 * on scroll, exactly as libvterm moves its own line info. */
+	uint8_t		 row_attr[GRID_MAX_ROWS];
 
 	/* Presentation state, written by core 0, read per line by core 1. */
 	volatile uint16_t cursor_row;
@@ -104,6 +124,12 @@ static inline struct cell *
 grid_row(struct grid *grid, unsigned row)
 {
 	return grid->cells + (unsigned)grid->row_map[row] * grid->cols;
+}
+
+static inline uint8_t *
+grid_row_attr(struct grid *grid, unsigned row)
+{
+	return &grid->row_attr[grid->row_map[row]];
 }
 
 /* Fill columns [col_start, col_end) of logical row `row` with `blank`. */
