@@ -78,6 +78,15 @@ SET-UP's **Hotkeys...** page rebinds any tool to any key (with
 modifiers); **Profiler bar** shows the last frame's per-line cycle counts
 at the top of the screen (devlog 021).
 
+**Capture and replay** (devlog 023): the Tools menu's **Capture**
+records host output to `/capture/NNNN.rec` as ttyrec (also a SET-UP
+item, to start at boot); **Replay file...** opens a file picker and
+plays a ttyrec file with its timing, anything else as raw bytes at
+9600 baud. While it plays: Space pauses, Up/Down change speed (1/4x to
+16x, max), `n` turns LF -> CR LF on or off, Esc stops. SET-UP's
+**Replay newlines** sets that default (off, raw files, all files).
+Host output waits until it's over.
+
 **Status line** (SET-UP, devlog 022): Hidden, Bottom or Top (a row of
 its own; the terminal is a row shorter if the screen has no spare row),
 or Peek bottom / Peek top (it slides in over the edge row when something

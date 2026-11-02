@@ -43,10 +43,12 @@ Apache- or BSD-licensed code is vendored.
    DECSSDT 0/1 from the host; DECRQSS reports it.
 3. **Host-writable status line.** DECSSDT 2, DECSASD routing, the
    second libvterm drawing into the status row.
-4. **Capture.** `src/capture_sd.c` after `printer_sd.c`: a ttyrec
+4. **Capture.** *Done, devlog 023.* `src/capture_sd.c` after `printer_sd.c`: a ttyrec
    header (sec, usec, length) per chunk of host bytes; closed after a
    quiet second; on/off in SET-UP, shown in the indicator.
-5. **File picker and replay.** A SET-UP list over a card directory
+5. **File picker and replay.** *Done, devlog 023: the picker is an
+   overlay over the screen (lib/setup/picker.c), not a SET-UP list;
+   "Replay newlines" (onlcr) is a setting, off by default.* A SET-UP list over a card directory
    (first 64 entries, like fonts and schemes); replay feeds
    `term_feed` from the main loop, paced, watchdog fed.
 6. **XMODEM / YMODEM.** Checksum and CRC, 128 and 1K blocks, YMODEM

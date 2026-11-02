@@ -26,6 +26,7 @@ was learned.
 20. [A night with esctest](020-conformance-night.md)
 21. [A Tools menu, hotkeys, and a profiler bar](021-tools-menu.md)
 22. [User lights and a status line that peeks](022-status-line.md)
+23. [Capture and replay](023-capture-replay.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`
