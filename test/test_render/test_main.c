@@ -1,0 +1,163 @@
+/*
+ * test_render — grid scrolling and pixel-exact scanline output, on host.
+ */
+#include <string.h>
+
+#include <unity.h>
+
+#include "font.h"
+#include "grid.h"
+#include "render.h"
+
+#define WHITE	0xffff
+#define BLUE	0x001f
+#define BLACK	0x0000
+
+static struct font font;
+static struct grid grid;
+static struct render render;
+static uint16_t pixels[RENDER_WIDTH] __attribute__((aligned(4)));
+
+static struct cell
+blank_cell(void)
+{
+	return grid_make_cell(font_glyph_for(&font, ' '), WHITE, BLACK, 0);
+}
+
+void
+setUp(void)
+{
+	unsigned cols, rows;
+
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font, font_builtins[0].data,
+	    font_builtins[0].len));
+	render_grid_size(&font, &cols, &rows);
+	TEST_ASSERT_TRUE(grid_init(&grid, cols, rows, blank_cell()));
+	render_init(&render, &font, &grid);
+	grid.cursor_visible = false;
+}
+
+void
+tearDown(void)
+{
+	grid_free(&grid);
+	font_free(&font);
+}
+
+/* Expected pixel for column x of glyph row `sub` of `codepoint`. */
+static uint16_t
+expected(uint32_t codepoint, unsigned sub, unsigned x, uint16_t fg,
+    uint16_t bg)
+{
+	uint8_t bits = *font_glyph_row(&font, font_glyph_for(&font, codepoint),
+	    sub);
+	return (bits >> (7 - x)) & 1 ? fg : bg;
+}
+
+static void
+test_grid_size_default_font(void)
+{
+	TEST_ASSERT_EQUAL(80, grid.cols);
+	TEST_ASSERT_EQUAL(30, grid.rows);
+	TEST_ASSERT_EQUAL(0, render.x_offset);
+	TEST_ASSERT_EQUAL(0, render.y_offset);
+}
+
+static void
+test_glyph_pixels(void)
+{
+	grid_row(&grid, 0)[0] = grid_make_cell(font_glyph_for(&font, 'A'),
+	    WHITE, BLUE, 0);
+	for (unsigned sub = 0; sub < font.height; sub++) {
+		render_scanline(pixels, sub, &render);
+		for (unsigned x = 0; x < 8; x++)
+			TEST_ASSERT_EQUAL_HEX16(expected('A', sub, x, WHITE,
+			    BLUE), pixels[x]);
+		/* Neighbouring blank cell is all background. */
+		for (unsigned x = 8; x < 16; x++)
+			TEST_ASSERT_EQUAL_HEX16(BLACK, pixels[x]);
+	}
+}
+
+static void
+test_reverse_video_and_underline(void)
+{
+	grid_row(&grid, 0)[1] = grid_make_cell(font_glyph_for(&font, 'g'),
+	    WHITE, BLUE, CELL_UNDERLINE);
+	grid.reverse_video = true;
+	render_scanline(pixels, 5, &render);
+	for (unsigned x = 0; x < 8; x++)
+		TEST_ASSERT_EQUAL_HEX16(expected('g', 5, x, BLUE, WHITE),
+		    pixels[8 + x]);
+	/* Underline row: solid "foreground", which reverse makes bg. */
+	render_scanline(pixels, font.underline_row, &render);
+	for (unsigned x = 0; x < 8; x++)
+		TEST_ASSERT_EQUAL_HEX16(BLUE, pixels[8 + x]);
+}
+
+static void
+test_block_cursor(void)
+{
+	grid.cursor_visible = true;
+	grid.cursor_blink = false;
+	grid.cursor_row = 0;
+	grid.cursor_col = 2;
+	render_scanline(pixels, 3, &render);
+	/* Cursor on a blank cell: solid foreground block. */
+	for (unsigned x = 16; x < 24; x++)
+		TEST_ASSERT_EQUAL_HEX16(WHITE, pixels[x]);
+	TEST_ASSERT_EQUAL_HEX16(BLACK, pixels[24]);
+}
+
+static void
+test_scroll_up_reuses_rows(void)
+{
+	grid_row(&grid, 1)[0] = grid_make_cell(font_glyph_for(&font, 'X'),
+	    WHITE, BLUE, 0);
+	grid_scroll_up(&grid, 0, grid.rows, 1, blank_cell());
+	TEST_ASSERT_EQUAL(font_glyph_for(&font, 'X'), grid_row(&grid, 0)[0].glyph);
+	TEST_ASSERT_EQUAL(font_glyph_for(&font, ' '),
+	    grid_row(&grid, grid.rows - 1)[0].glyph);
+
+	grid_scroll_down(&grid, 0, grid.rows, 2, blank_cell());
+	TEST_ASSERT_EQUAL(font_glyph_for(&font, 'X'), grid_row(&grid, 2)[0].glyph);
+	TEST_ASSERT_EQUAL(font_glyph_for(&font, ' '), grid_row(&grid, 0)[0].glyph);
+}
+
+static void
+test_border_for_uneven_font(void)
+{
+	/* Clean 13: 480 / 13 = 36 rows = 468 lines, 6 border lines on top. */
+	struct font font13;
+	struct grid grid13;
+	struct render render13;
+	unsigned cols, rows;
+
+	TEST_ASSERT_EQUAL(FONT_OK, font_load_psf2(&font13, font_builtins[1].data,
+	    font_builtins[1].len));
+	render_grid_size(&font13, &cols, &rows);
+	TEST_ASSERT_EQUAL(36, rows);
+	TEST_ASSERT_TRUE(grid_init(&grid13, cols, rows,
+	    grid_make_cell(0, WHITE, BLUE, 0)));
+	render_init(&render13, &font13, &grid13);
+	TEST_ASSERT_EQUAL(6, render13.y_offset);
+	render_scanline(pixels, 0, &render13);
+	TEST_ASSERT_EQUAL_HEX16(BLUE, pixels[0]);
+	TEST_ASSERT_EQUAL(RENDER_LINE_BORDER, render13.line_row[5]);
+	TEST_ASSERT_EQUAL(0, render13.line_row[6]);
+	grid_free(&grid13);
+	font_free(&font13);
+}
+
+int
+main(void)
+{
+	UNITY_BEGIN();
+	RUN_TEST(test_grid_size_default_font);
+	RUN_TEST(test_glyph_pixels);
+	RUN_TEST(test_reverse_video_and_underline);
+	RUN_TEST(test_block_cursor);
+	RUN_TEST(test_scroll_up_reuses_rows);
+	RUN_TEST(test_border_for_uneven_font);
+	return UNITY_END();
+}

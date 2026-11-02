@@ -1,0 +1,106 @@
+# Font build recipes for tools/ttf2psf.py.
+#
+# Every font is a pixel font drawn on a fixed grid. FreeType renders it
+# monochrome at `ppem` (the size where one design pixel = one screen pixel)
+# and each glyph is dropped into a cell_w x cell_h box, with the baseline
+# `baseline` rows from the top.
+#
+#   ppem       pixels per em. For yal.cc pixelfont exports this is the
+#              number in the font name; for others it is em / grid unit.
+#   cell_w/h   output cell in pixels (sets the terminal grid: 640/w x 480/h)
+#   baseline   rows from the top of the cell to the baseline
+#   align      "origin": put the pen origin at x=0 (monospace fonts)
+#              "center": centre each glyph's advance in the cell
+#                        (proportional fonts squeezed into a terminal)
+#   synth      list of generated glyph groups for codepoints the font
+#              lacks: "box" (U+2500-257F), "block" (U+2580-259F),
+#              "dec" (DEC special graphics extras: scan lines 1/3/7/9,
+#              checkerboard, and the HT/FF/CR/LF/NL/VT control pictures)
+#   license    copied into the generated C header so attribution travels
+#              with the binary
+#
+# `default = true` marks the font that is compiled into the firmware.
+
+[[font]]
+name = "notjam-clean-16"
+source = "../fonts/NotJamMonoClean13/Not Jam Mono Clean 16.ttf"
+ppem = 16
+cell_w = 8
+cell_h = 16
+baseline = 13
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Clean by Not Jam, CC0 1.0"
+default = true
+
+[[font]]
+name = "notjam-clean-13"
+source = "../fonts/NotJamMonoClean13/Not Jam Mono Clean 13.ttf"
+ppem = 13
+cell_w = 8
+cell_h = 13
+baseline = 10
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Clean by Not Jam, CC0 1.0"
+
+[[font]]
+name = "notjam-casual-10"
+source = "../fonts/NotJamMonoCasual10/Not Jam Mono Casual 10.ttf"
+ppem = 10
+cell_w = 8
+cell_h = 10
+baseline = 8
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Casual by Not Jam, CC0 1.0"
+# This export's cmap rotates three drawings (checked against glyphs.png):
+# '@' shows a caret, '^' an underscore, '_' an at-sign.
+remap = { "@" = "_", "^" = "@", "_" = "^" }
+
+[[font]]
+name = "notjam-casual-13"
+source = "../fonts/NotJamMonoCasual10/Not Jam Mono Casual 13.ttf"
+ppem = 13
+cell_w = 8
+cell_h = 13
+baseline = 11
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Casual by Not Jam, CC0 1.0"
+
+[[font]]
+name = "notjam-prophet-8"
+source = "../fonts/NotJamMonoProphet8/Not Jam Mono Prophet 8.ttf"
+ppem = 8
+cell_w = 8
+cell_h = 8
+baseline = 8
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Prophet by Not Jam, CC0 1.0"
+
+[[font]]
+name = "notjam-prophet-11"
+source = "../fonts/NotJamMonoProphet8/Not Jam Mono Prophet 11.ttf"
+ppem = 11
+cell_w = 8
+cell_h = 11
+baseline = 11
+align = "origin"
+synth = ["box", "block", "dec"]
+license = "Not Jam Mono Prophet by Not Jam, CC0 1.0"
+
+[[font]]
+name = "arbata-compact"
+source = "../fonts/arbata-compact/Arbata Compact.ttf"
+ppem = 16
+# Proportional: average glyph ~5 px, but '%' is 8 px wide and accented
+# capitals rise 10 px above the baseline. 8x13 (80x36 grid) keeps all of
+# ASCII/Latin-1 and nearly all Cyrillic/Greek; 6 px lost even '%' and '@'.
+cell_w = 8
+cell_h = 13
+baseline = 10
+align = "center"
+synth = ["box", "block", "dec"]
+license = "Arbata Compact by Olga Yakovleva, CC BY 4.0 (modified: rasterized, re-celled)"
