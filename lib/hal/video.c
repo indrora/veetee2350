@@ -27,6 +27,7 @@
 #include "tmds_encode.h"
 
 #include "hardware/clocks.h"
+#include "hardware/structs/busctrl.h"
 #include "hardware/irq.h"
 #include "hardware/structs/systick.h"
 #include "hardware/sync.h"
@@ -41,7 +42,7 @@
  */
 static_assert(NUM_BANK0_GPIOS == 48, "RP2350B (48 GPIO) build required");
 static_assert(PICO_PIO_USE_GPIO_BASE, "PIO GPIO base support required");
-static_assert(DVI_SYMBOLS_PER_WORD == 1, "encoder below assumes 1 sym/word");
+static_assert(DVI_SYMBOLS_PER_WORD == 2, "lane stride below assumes 2 sym/word");
 static_assert(DVI_VERTICAL_REPEAT == 1, "full-res rendering assumes no repeat");
 
 static const struct dvi_serialiser_cfg pizero_dvi_cfg = {
@@ -86,16 +87,24 @@ cycle_counter_now(void)
  * Encode the RGB565 line into three TMDS lanes. Channel bit ranges match
  * RGB565: blue 4:0, green 10:5, red 15:11. Lane order follows the
  * serialiser config (lane 0 = D0 = blue).
+ *
+ * Two 10-bit symbols are packed per FIFO word (DVI_SYMBOLS_PER_WORD=2), so
+ * each lane is VIDEO_WIDTH/2 words. This matters for speed: the SIO TMDS
+ * encoder can pop both symbols of a pixel pair in one read. Measured on
+ * hardware with one symbol per word, encode alone cost ~9.2k cycles/line,
+ * over the 8k budget.
  */
+#define LANE_WORDS	(VIDEO_WIDTH / DVI_SYMBOLS_PER_WORD)
+
 static void __not_in_flash_func(encode_line)(uint32_t *tmds)
 {
 	const uint32_t *pix = (const uint32_t *)line_pixels;
 
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 0 * VIDEO_WIDTH,
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 0 * LANE_WORDS,
 	    VIDEO_WIDTH, 4, 0);
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 1 * VIDEO_WIDTH,
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 1 * LANE_WORDS,
 	    VIDEO_WIDTH, 10, 5);
-	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 2 * VIDEO_WIDTH,
+	tmds_encode_data_channel_fullres_16bpp(pix, tmds + 2 * LANE_WORDS,
 	    VIDEO_WIDTH, 15, 11);
 }
 
@@ -115,6 +124,7 @@ static void __not_in_flash_func(core1_scanout)(void)
 	for (;;) {
 		uint32_t frame_max = 0;
 		uint32_t frame_total = 0;
+		uint32_t frame_encode = 0;
 
 		for (unsigned line = 0; line < VIDEO_HEIGHT; line++) {
 			uint32_t *tmds;
@@ -123,6 +133,7 @@ static void __not_in_flash_func(core1_scanout)(void)
 
 			uint32_t start = cycle_counter_now();
 			scanline_fn(line_pixels, line, scanline_ctx);
+			uint32_t rendered = cycle_counter_now();
 			encode_line(tmds);
 			uint32_t spent = (start - cycle_counter_now()) &
 			    0x00ffffff;
@@ -130,12 +141,15 @@ static void __not_in_flash_func(core1_scanout)(void)
 			queue_add_blocking_u32(&dvi0.q_tmds_valid, &tmds);
 
 			frame_total += spent;
+			frame_encode += (rendered - cycle_counter_now()) &
+			    0x00ffffff;
 			if (spent > frame_max)
 				frame_max = spent;
 		}
 
 		live_stats.max_line_cycles = frame_max;
 		live_stats.avg_line_cycles = frame_total / VIDEO_HEIGHT;
+		live_stats.avg_encode_cycles = frame_encode / VIDEO_HEIGHT;
 		__dmb();
 		live_stats.frames = live_stats.frames + 1;
 	}
@@ -166,6 +180,12 @@ video_init(video_scanline_fn scanline, void *ctx)
 	dvi_init(&dvi0, next_striped_spin_lock_num(),
 	    next_striped_spin_lock_num());
 
+	/*
+	 * Core 1's loads/stores race the three DVI DMA channels for SRAM. Give
+	 * the processor priority on the bus fabric (as PicoDVI's own full-res
+	 * demos do); DMA has plenty of slack within a line.
+	 */
+	hw_set_bits(&busctrl_hw->priority, BUSCTRL_BUS_PRIORITY_PROC1_BITS);
 	multicore_launch_core1(core1_scanout);
 }
 
@@ -180,6 +200,7 @@ video_get_stats(struct video_stats *out)
 		__dmb();
 		out->max_line_cycles = live_stats.max_line_cycles;
 		out->avg_line_cycles = live_stats.avg_line_cycles;
+		out->avg_encode_cycles = live_stats.avg_encode_cycles;
 		__dmb();
 	} while (frames != live_stats.frames);
 	out->frames = frames;

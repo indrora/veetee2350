@@ -39,6 +39,7 @@ struct video_stats {
 	uint32_t	frames;		/* frames completed since start */
 	uint32_t	max_line_cycles;/* worst render+encode, last frame */
 	uint32_t	avg_line_cycles;/* mean render+encode, last frame */
+	uint32_t	avg_encode_cycles;/* mean TMDS encode only, last frame */
 };
 
 /*
