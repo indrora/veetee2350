@@ -66,9 +66,27 @@ Checked on the board, from a log of what came up the serial line:
   its hotkey.
 - Print Screen and Pause sending nothing, so they're free for hotkeys.
 - Auto-repeat at 30 a second.
+- The arrows, and Ctrl+F3 for the Tools menu (below).
 
-This keyboard has no Caps Lock, keypad or arrows, so those paths (and
-the lock LEDs) are host-tested only.
+Every key this keyboard has worked. It has no Caps Lock or keypad, so
+those paths (and the lock LEDs) are host-tested only.
+
+## The whole thing, on tape
+
+Afterwards the user recorded a run off the grabber (47 seconds, too big
+for the repo). With the session above still on screen, Ctrl+F3 on the
+USB keyboard opens the Tools menu, and the arrow keys walk it down
+towards *Replay file…*:
+
+![The Tools menu over fastfetch, opened with Ctrl+F3 and walked with the arrows](img/027-menu.jpg)
+
+Enter starts the replay of that session's capture file (devlog 023),
+and the whole thing plays back off the SD card in about half a minute:
+`ls`, `top`'s full screen and its redraw on quitting, the
+`IT WORKSpwdpwd` gag, and fastfetch drawn again, matching what was
+typed. Frames sampled every 3 seconds show nothing out of place.
+
+![The capture replaying: top, as it was typed](img/027-replay.jpg)
 
 ## Things that broke
 
