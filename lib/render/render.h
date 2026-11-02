@@ -36,6 +36,26 @@
  */
 #define RENDER_TRANSPARENT	255	/* at 8 bits per pixel */
 
+/*
+ * A rectangle of cells drawn over the grid: the Tools menu, the user
+ * lights. The screen underneath is untouched; the renderer composes the
+ * covered rows on the fly (render.c, compose_row) and leaves out the
+ * cursor where an overlay hides it. Slots draw in order, later on top.
+ */
+enum render_overlay_slot {
+	RENDER_OVERLAY_LIGHTS,
+	RENDER_OVERLAY_MENU,
+	RENDER_OVERLAYS
+};
+
+struct render_overlay {
+	uint8_t		 row;		/* first text row covered */
+	uint8_t		 rows;
+	uint16_t	 col;		/* first column covered */
+	uint16_t	 cols;
+	const struct cell *cells;	/* rows x cols, row-major */
+};
+
 struct render {
 	const struct font *font;
 	struct grid * volatile grid;	/* swapped by render_set_grid */
@@ -61,6 +81,20 @@ struct render {
 	uint16_t	 tile_bytes;	/* tile_row_bytes x font height */
 	uint8_t		 tile_row_bytes;
 	uint8_t		 tile_bpp;	/* 8, 4, 2 or 1 */
+	/*
+	 * Overlays, or nullptr. Set and cleared by core 0's main loop; the
+	 * scanline runs in core 0's IRQ (or the main loop, for screenshots),
+	 * so one pointer store is atomic for it. The cells must stay put
+	 * while the pointer is set.
+	 */
+	const struct render_overlay *volatile overlay[RENDER_OVERLAYS];
+	/*
+	 * VEETEE_RENDER_PROFILE (hot.h): cycles spent composing overlay rows
+	 * and how many lines needed it, summed until the stats report reads
+	 * and clears them. Always present, so the layout doesn't change.
+	 */
+	volatile uint32_t profile_compose_cycles;
+	volatile uint32_t profile_compose_lines;
 	/* Per glyph row and attr combination: or-bits << 16 | and-bits. */
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };

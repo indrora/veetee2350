@@ -273,6 +273,8 @@ void	term_free(struct term *term);
 
 /* Feed bytes received from the host. Any amount, any split. */
 void	term_feed(struct term *term, const uint8_t *bytes, size_t len);
+/* Media Copy print screen (CSI i), for the Tools menu; needs a printer. */
+void	printer_print_screen(struct term *term);
 
 /* Send keyboard input towards the host (encoded by the caller). */
 static inline void

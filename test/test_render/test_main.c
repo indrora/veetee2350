@@ -177,6 +177,40 @@ test_720p_geometry(void)
 	grid_free(&wide);
 }
 
+static void
+test_overlay_covers_cells_and_cursor(void)
+{
+	struct cell box[2] = {
+		grid_make_cell(font_glyph_for(&font, 'X'), BLUE, BLACK, 0),
+		grid_make_cell(font_glyph_for(&font, 'Y'), BLUE, BLACK, 0),
+	};
+	struct render_overlay over = {.row = 0, .rows = 1, .col = 2,
+	    .cols = 2, .cells = box};
+
+	grid_row(&grid, 0)[0] = grid_make_cell(font_glyph_for(&font, 'a'),
+	    WHITE, BLACK, 0);
+	grid.cursor_visible = true;
+	grid.cursor_blink = false;
+	grid.cursor_row = 0;
+	grid.cursor_col = 2;
+	render.overlay[RENDER_OVERLAY_MENU] = &over;
+	render_scanline(pixels, 3, &render);
+	render.overlay[RENDER_OVERLAY_MENU] = nullptr;
+	for (unsigned x = 0; x < 8; x++) {
+		/* The grid shows through beside it... */
+		TEST_ASSERT_EQUAL_HEX16(expected('a', 3, x, WHITE, BLACK),
+		    pixels[x]);
+		/* ...the overlay covers columns 2-3, cursor and all. */
+		TEST_ASSERT_EQUAL_HEX16(expected('X', 3, x, BLUE, BLACK),
+		    pixels[16 + x]);
+		TEST_ASSERT_EQUAL_HEX16(expected('Y', 3, x, BLUE, BLACK),
+		    pixels[24 + x]);
+	}
+	/* The grid itself is untouched. */
+	TEST_ASSERT_EQUAL(font_glyph_for(&font, ' '),
+	    grid_row(&grid, 0)[2].glyph);
+}
+
 int
 main(void)
 {
@@ -185,6 +219,7 @@ main(void)
 	RUN_TEST(test_glyph_pixels);
 	RUN_TEST(test_reverse_video_and_underline);
 	RUN_TEST(test_block_cursor);
+	RUN_TEST(test_overlay_covers_cells_and_cursor);
 	RUN_TEST(test_scroll_up_reuses_rows);
 	RUN_TEST(test_border_for_uneven_font);
 	RUN_TEST(test_720p_geometry);

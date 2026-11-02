@@ -65,14 +65,22 @@ Changing level or depth resets the terminal.
 The device presents two CDC ports: **VeeTee line** (the terminal's line,
 which ends in `1` on macOS) and **VeeTee keyboard** (ends in `3`). Bytes
 written to the keyboard port are keys. They go to the host over the
-line, with new-line mode and local echo applied, except **F3**
-(`ESC O R` or `ESC [ 13 ~`), which opens **SET-UP**. The BOOTSEL button
-opens it too. Inside SET-UP: Up/Down to select, Left/Right/Enter/Space
-to change, `S` save, `R` recall, `D` factory defaults, F3/Esc to leave.
+line, with new-line mode and local echo applied, except **hotkeys**.
+**Ctrl+F3** (`ESC [ 1 ; 5 R`, `ESC [ 13 ; 5 ~` or `ESC O 5 R`) opens the
+**Tools menu**: Set-Up, Screenshot, Print screen, Printer on/off, Clear
+screen, Soft reset (DECSTR), Hard reset (RIS); Up/Down, Enter, Esc. F12
+takes a screenshot. Plain F3 goes to the host like any other key. The
+BOOTSEL button opens SET-UP. Inside SET-UP: Up/Down to select,
+Left/Right/Enter/Space to change, `S` save, `R` recall, `D` factory
+defaults, F3/Esc to leave.
+
+Keys carry xterm's modifier parameter (`; m`, m - 1 = Shift 1, Alt 2,
+Ctrl 4, Meta 8) and ESC + a printable byte is Alt plus that key, so
+hotkeys can use modifiers.
 
     python3 tools/hostshell.py /dev/cu.usbmodem*1 --keyboard /dev/cu.usbmodem*3
 
-routes your keys through the device, so F3 opens SET-UP.
+routes your keys through the device, so Ctrl+F3 opens the Tools menu.
 `tools/sendkeys.py` scripts keystrokes for tests.
 
 Settings live in the last flash sector (`hal/flashcfg`), CRC-checked.

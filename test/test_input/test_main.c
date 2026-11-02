@@ -77,10 +77,50 @@ test_unknown_sequences_pass_through(void)
 {
 	struct key_event event;
 
-	TEST_ASSERT_EQUAL(KEY_UNKNOWN, feed("\x1bx", 0, &event));  /* Alt-x */
-	TEST_ASSERT_EQUAL_MEMORY("\x1bx", event.raw, 2);
+	TEST_ASSERT_EQUAL(KEY_UNKNOWN, feed("\x1b\x01", 0, &event));
+	TEST_ASSERT_EQUAL_MEMORY("\x1b\x01", event.raw, 2);
 	TEST_ASSERT_EQUAL(KEY_UNKNOWN, feed("\x1b[99~", 0, &event));
 	TEST_ASSERT_EQUAL(5, event.raw_len);
+}
+
+static void
+test_modifiers(void)
+{
+	struct key_event event;
+
+	/* Alt-x: ESC x, raw kept for the host. */
+	TEST_ASSERT_EQUAL(KEY_CHAR, feed("\x1bx", 0, &event));
+	TEST_ASSERT_EQUAL('x', event.byte);
+	TEST_ASSERT_EQUAL(KEY_MOD_ALT, event.mods);
+	TEST_ASSERT_EQUAL_MEMORY("\x1bx", event.raw, 2);
+	/* Ctrl+F3, the three ways xterm has sent it. */
+	TEST_ASSERT_EQUAL(KEY_F3, feed("\x1b[1;5R", 0, &event));
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL, event.mods);
+	TEST_ASSERT_EQUAL(KEY_F3, feed("\x1b[13;5~", 0, &event));
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL, event.mods);
+	TEST_ASSERT_EQUAL(KEY_F3, feed("\x1bO5R", 0, &event));
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL, event.mods);
+	TEST_ASSERT_EQUAL(4, event.raw_len);
+	/* Shift+Ctrl+Up; plain F3 has none. */
+	TEST_ASSERT_EQUAL(KEY_UP, feed("\x1b[1;6A", 0, &event));
+	TEST_ASSERT_EQUAL(KEY_MOD_SHIFT | KEY_MOD_CTRL, event.mods);
+	TEST_ASSERT_EQUAL(KEY_F3, feed("\x1bOR", 0, &event));
+	TEST_ASSERT_EQUAL(0, event.mods);
+}
+
+static void
+test_key_names(void)
+{
+	char name[24];
+
+	keys_name(KEY_F3, 0, KEY_MOD_CTRL, name, sizeof(name));
+	TEST_ASSERT_EQUAL_STRING("Ctrl+F3", name);
+	keys_name(KEY_CHAR, 0x1d, 0, name, sizeof(name));
+	TEST_ASSERT_EQUAL_STRING("Ctrl+]", name);
+	keys_name(KEY_CHAR, 'x', KEY_MOD_ALT, name, sizeof(name));
+	TEST_ASSERT_EQUAL_STRING("Alt+x", name);
+	keys_name(KEY_NONE, 0, 0, name, sizeof(name));
+	TEST_ASSERT_EQUAL_STRING("(none)", name);
 }
 
 int
@@ -91,5 +131,7 @@ main(void)
 	RUN_TEST(test_cursor_and_function_keys);
 	RUN_TEST(test_lone_escape_needs_timeout);
 	RUN_TEST(test_unknown_sequences_pass_through);
+	RUN_TEST(test_modifiers);
+	RUN_TEST(test_key_names);
 	return UNITY_END();
 }

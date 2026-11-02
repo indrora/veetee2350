@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "grid.h"
+#include "keys.h"
 #include "term.h"
 #include "video_modes.h"
 
@@ -33,6 +34,8 @@ const struct settings_size settings_sizes[SIZE_COUNT] = {
 	[SIZE_132x43] = {132, 43},
 };
 
+const uint8_t settings_peek_seconds[SETTINGS_PEEK_TIMES] = {3, 5, 7, 10};
+
 void
 settings_defaults(struct settings *settings)
 {
@@ -53,6 +56,13 @@ settings_defaults(struct settings *settings)
 	settings->utf8 = term_emulations[EMU_XTERM].utf8;
 	settings->alt_screen = term_emulations[EMU_XTERM].alt_screen;
 	settings->sixel = term_emulations[EMU_XTERM].sixel;
+	settings->status_line = STATUS_HIDDEN;
+	settings->peek_time = 1;		/* 5 seconds */
+	/* Ctrl+F3 opens the Tools menu (plain F3, SET-UP on a VT220, goes
+	 * to the host now); F12 keeps taking screenshots. The rest are
+	 * unbound (KEY_NONE is 0). */
+	settings->hotkeys[TOOL_MENU] = (struct hotkey){KEY_F3, 0, KEY_MOD_CTRL};
+	settings->hotkeys[TOOL_SCREENSHOT] = (struct hotkey){KEY_F12, 0, 0};
 	settings_seal(settings);
 }
 

@@ -14,13 +14,59 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	9	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+#define SETTINGS_VERSION	10	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
 				   6 card fonts and schemes, 7 screenshots,
-				   8 printer, 9 sixel depth */
+				   8 printer, 9 sixel depth, 10 hotkeys,
+				   status line, capture */
 #define SETTINGS_FONT_MAX	32	/* built-in name, or "sd:" + card file */
 #define SETTINGS_SCHEME_MAX	32	/* card scheme file name, no ".yaml" */
 #define SETTINGS_CARD_PREFIX	"sd:"
 #define SETTINGS_ANSWERBACK_MAX	32
+
+/*
+ * Things a hotkey (or the Tools menu) can do. The order is the Tools
+ * menu's; the values are stored in settings, so only ever append.
+ */
+enum tool {
+	TOOL_MENU,		/* open the Tools menu itself */
+	TOOL_SETUP,
+	TOOL_SCREENSHOT,
+	TOOL_PRINT_SCREEN,
+	TOOL_PRINTER,		/* printer on/off */
+	TOOL_CAPTURE,		/* capture to the card on/off */
+	TOOL_REPLAY,
+	TOOL_SEND,
+	TOOL_RECEIVE,
+	TOOL_CLEAR,		/* clear the screen, home the cursor */
+	TOOL_SOFT_RESET,	/* DECSTR */
+	TOOL_HARD_RESET,	/* RIS */
+	TOOL_COUNT
+};
+
+/*
+ * A key that runs a tool: enum key_code (keys.h, KEY_NONE = unbound),
+ * the byte for KEY_CHAR keys (Ctrl+] is KEY_CHAR 0x1d), and enum key_mod
+ * bits.
+ */
+struct hotkey {
+	uint8_t		code;
+	uint8_t		byte;
+	uint8_t		mods;
+};
+
+/* Where the status line goes; peeking ones show only after a change. */
+enum status_line_mode {
+	STATUS_HIDDEN,
+	STATUS_BOTTOM,
+	STATUS_TOP,
+	STATUS_PEEK_BOTTOM,
+	STATUS_PEEK_TOP,
+	STATUS_MODE_COUNT
+};
+
+/* How long a peeking status line stays up: 3, 5, 7 or 10 seconds. */
+#define SETTINGS_PEEK_TIMES	4
+extern const uint8_t settings_peek_seconds[SETTINGS_PEEK_TIMES];
 
 /* F12 saves the screen to /screens on the card in this format. */
 enum screenshot_format {
@@ -85,6 +131,10 @@ struct settings {
 	uint8_t		sixel;		/* 0 off, else bits per pixel: 8/4/2/1 */
 	uint8_t		screenshot_format;	/* enum screenshot_format */
 	uint8_t		printer;	/* Media Copy to /print on the card */
+	uint8_t		status_line;	/* enum status_line_mode */
+	uint8_t		peek_time;	/* index into settings_peek_seconds */
+	uint8_t		capture;	/* host output to /capture on the card */
+	struct hotkey	hotkeys[TOOL_COUNT];
 	uint32_t	crc;
 };
 

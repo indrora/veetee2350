@@ -407,6 +407,107 @@ HOT_FUNC(render_double_line)(struct render *render, uint16_t *out,
 		out[x] = (uint16_t)grid->border2;
 }
 
+/*
+ * Overlays (render.h): two scratch rows, one for the render IRQ and one
+ * for the main loop -- screenshots call render_scanline too, and the IRQ
+ * may interrupt them in the middle of a row.
+ */
+alignas(8) static struct cell overlay_scratch[2][GRID_MAX_COLS];
+/*
+ * What each scratch row holds. Composing costs about 2100 cycles a line
+ * at 80 columns (measured with VEETEE_RENDER_PROFILE), so a row is
+ * composed once per frame and reused for its other glyph lines. A cell
+ * that changes mid-row shows a frame late, as in any scanline race.
+ */
+static const struct cell *overlay_scratch_row[2];
+static uint32_t overlay_scratch_frame[2];
+
+HOT_INLINE bool
+in_interrupt(void)
+{
+#if defined(__arm__)
+	uint32_t ipsr;
+	__asm__ volatile ("mrs %0, ipsr" : "=r" (ipsr));
+	return (ipsr & 0x1ff) != 0;
+#else
+	return false;
+#endif
+}
+
+/* Cells are two words; memcpy may live in flash, so copy by hand. */
+HOT_INLINE void
+copy_cells(struct cell *to, const struct cell *from, unsigned count)
+{
+	uint32_t *dst = (uint32_t *)to;
+	const uint32_t *src = (const uint32_t *)from;
+
+	for (unsigned i = 0; i < count * 2; i++)
+		dst[i] = src[i];
+}
+
+/* Columns of `over` on screen, clipped to the grid (0 if off it). */
+HOT_INLINE unsigned
+overlay_span(const struct render_overlay *over, const struct grid *grid)
+{
+	if (over->col >= grid->cols)
+		return 0;
+	unsigned room = (unsigned)grid->cols - over->col;
+	return over->cols < room ? over->cols : room;
+}
+
+/*
+ * The cells to draw for `text_row`: the grid's own row, or -- if an
+ * overlay covers it -- a copy with the overlays' cells laid over, later
+ * slots on top. *cursor_covered says whether the cursor's cell is under
+ * one. Off the overlays' rows this costs a compare per slot.
+ */
+HOT_INLINE const struct cell *
+compose_row(struct render *render, struct grid *grid,
+    unsigned text_row, bool *cursor_covered)
+{
+	const struct cell *row = grid_row(grid, text_row);
+	uint32_t started = HOT_CYCLES();
+	bool covered = false;
+
+	for (unsigned slot = 0; slot < RENDER_OVERLAYS; slot++) {
+		const struct render_overlay *over = render->overlay[slot];
+		if (over == nullptr ||
+		    text_row - over->row >= (unsigned)over->rows)
+			continue;
+		covered = true;
+		if (grid->cursor_row == text_row &&
+		    (unsigned)(grid->cursor_col - over->col) <
+		    overlay_span(over, grid))
+			*cursor_covered = true;
+	}
+	if (!covered)
+		return row;
+
+	unsigned which = in_interrupt() ? 0 : 1;
+	struct cell *scratch = overlay_scratch[which];
+	if (overlay_scratch_row[which] != row ||
+	    overlay_scratch_frame[which] != render->frame) {
+		copy_cells(scratch, row, grid->cols);
+		for (unsigned slot = 0; slot < RENDER_OVERLAYS; slot++) {
+			const struct render_overlay *over =
+			    render->overlay[slot];
+			if (over == nullptr ||
+			    text_row - over->row >= (unsigned)over->rows)
+				continue;
+			copy_cells(scratch + over->col, over->cells +
+			    (text_row - over->row) * over->cols,
+			    overlay_span(over, grid));
+		}
+		overlay_scratch_row[which] = row;
+		overlay_scratch_frame[which] = render->frame;
+	}
+	if (HOT_PROFILE) {
+		render->profile_compose_cycles += HOT_CYCLES() - started;
+		render->profile_compose_lines++;
+	}
+	return scratch;
+}
+
 void
 HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 {
@@ -429,8 +530,10 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	const unsigned row_bytes = font->row_bytes;
 	const unsigned glyph_bytes = font->glyph_bytes;
 	const uint8_t *glyph_rows = font->glyphs + sub * row_bytes;
-	const struct cell *cells = grid_row(grid, text_row);
 	const unsigned cols = grid->cols;
+	bool cursor_covered = false;	/* under an overlay (render.h) */
+	const struct cell *cells = compose_row(render, grid, text_row,
+	    &cursor_covered);
 	const bool invert = grid->reverse_video;
 	const bool blink_off = (render->frame >> 5) & 1;
 	const unsigned attr_mask = attr_mask_for(render);
@@ -533,6 +636,7 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	 */
 	unsigned cursor_col = grid->cursor_col;
 	if (grid->cursor_visible && grid->cursor_row == text_row &&
+	    !cursor_covered &&
 	    cursor_col < cols && !(grid->cursor_blink && blink_off)) {
 		const struct cell *cell = &cells[cursor_col];
 		uint32_t bits = (cell->attr & CELL_GRAPHIC) ? 0 :

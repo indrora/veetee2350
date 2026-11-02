@@ -6,8 +6,9 @@
  * The keyboard port delivers what a terminal keyboard would send: plain
  * bytes, plus escape sequences for cursor and function keys (ECMA-48 CSI
  * "ESC [ ... final" and SS3 "ESC O x"). The device needs to recognise a few
- * of them (F3 = SET-UP; arrows and Enter inside SET-UP) and pass the rest
- * to the host unchanged, so every event carries its raw bytes.
+ * of them (hotkeys such as Ctrl+F3 for the Tools menu; arrows and Enter
+ * inside SET-UP) and pass the rest to the host unchanged, so every event
+ * carries its raw bytes.
  *
  * A lone ESC is ambiguous until more bytes arrive or nothing does: keys_poll
  * reports it as KEY_ESCAPE after KEYS_ESC_TIMEOUT_MS of silence, the same
@@ -54,9 +55,22 @@ enum key_code {
 	KEY_UNKNOWN,	/* well-formed but unrecognised sequence */
 };
 
+/*
+ * Modifier bits, as xterm encodes them: its parameter is 1 + these
+ * ("CSI 1 ; 5 R" is Ctrl+F3). The USB HID keyboard will fill them in
+ * directly.
+ */
+enum key_mod {
+	KEY_MOD_SHIFT	= 1,
+	KEY_MOD_ALT	= 2,
+	KEY_MOD_CTRL	= 4,
+	KEY_MOD_META	= 8,
+};
+
 struct key_event {
 	enum key_code	code;
 	uint8_t		byte;		/* for KEY_CHAR */
+	uint8_t		mods;		/* enum key_mod bits */
 	uint8_t		raw_len;
 	uint8_t		raw[KEYS_RAW_MAX];
 };
@@ -72,6 +86,13 @@ void	keys_init(struct keys *keys);
 /* Feed one byte. Returns true and fills *event when a key is complete. */
 bool	keys_feed(struct keys *keys, uint8_t byte, uint32_t now_ms,
 	    struct key_event *event);
+
+/*
+ * A key's name for menus: "Ctrl+F3", "Alt+x", "Ctrl+]", "(none)" for
+ * KEY_NONE. `byte` matters for KEY_CHAR only. Always NUL-terminates.
+ */
+void	keys_name(enum key_code code, uint8_t byte, uint8_t mods, char *out,
+	    unsigned size);
 
 /* Call regularly: completes a pending lone ESC (or a stalled sequence). */
 bool	keys_poll(struct keys *keys, uint32_t now_ms, struct key_event *event);

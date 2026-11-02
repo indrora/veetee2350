@@ -18,7 +18,6 @@
 
 /* printer.c (Media Copy). */
 void	mc_feed(struct term *term, const uint8_t *bytes, size_t len);
-void	printer_print_screen(struct term *term);
 void	printer_print_line(struct term *term);
 void	term_feed_through(struct term *term, const uint8_t *bytes,
 	    size_t len);

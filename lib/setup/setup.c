@@ -531,7 +531,7 @@ edit_answerback(struct setup *setup, const struct key_event *key)
 			text[len - 1] = '\0';
 		break;
 	case KEY_CHAR:
-		if (key->byte >= 0x20 && key->byte < 0x7f &&
+		if (key->mods == 0 && key->byte >= 0x20 && key->byte < 0x7f &&
 		    len + 1 < SETTINGS_ANSWERBACK_MAX) {
 			text[len] = (char)key->byte;
 			text[len + 1] = '\0';
@@ -598,6 +598,8 @@ setup_key(struct setup *setup, const struct key_event *key)
 		action = SETUP_EXIT;
 		break;
 	case KEY_CHAR:
+		if (key->mods != 0)
+			break;		/* Alt+s isn't "save" */
 		switch (key->byte) {
 		case ' ':
 			if (setup->selected < ITEM_ANSWERBACK)

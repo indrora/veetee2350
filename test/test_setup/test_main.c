@@ -10,6 +10,7 @@
 #include "font.h"
 #include "grid.h"
 #include "keys.h"
+#include "menu.h"
 #include "render.h"
 #include "settings.h"
 #include "setup.h"
@@ -309,10 +310,75 @@ test_card_lists(void)
 	press(KEY_RIGHT, 0);	/* from "missing": back to the first */
 }
 
+static struct menu menu;
+
+static int
+menu_press(enum key_code code, uint8_t mods)
+{
+	struct key_event key = {.code = code, .mods = mods};
+
+	return menu_key(&menu, &key);
+}
+
+static void
+test_tools_menu(void)
+{
+	bool available[TOOL_COUNT] = {false};
+	const char *state[TOOL_COUNT] = {nullptr};
+
+	settings_defaults(&settings);
+	available[TOOL_MENU] = true;		/* never listed */
+	available[TOOL_SETUP] = true;
+	available[TOOL_PRINTER] = true;
+	available[TOOL_HARD_RESET] = true;
+	state[TOOL_PRINTER] = "off";
+	menu_open(&menu, &font, 0xffff, 0x0000, 80, 30, available, state,
+	    settings.hotkeys);
+	TEST_ASSERT_EQUAL(3, menu.count);
+	TEST_ASSERT_EQUAL(3 + 3, menu.overlay.rows);
+	TEST_ASSERT_EQUAL((80 - MENU_COLS) / 2, menu.overlay.col);
+
+	/* Up from the top wraps to Hard reset; Enter picks it. */
+	TEST_ASSERT_EQUAL(MENU_STAY, menu_press(KEY_UP, 0));
+	TEST_ASSERT_EQUAL(TOOL_HARD_RESET, menu_press(KEY_ENTER, 0));
+	TEST_ASSERT_EQUAL(MENU_STAY, menu_press(KEY_DOWN, 0));
+	TEST_ASSERT_EQUAL(TOOL_SETUP, menu_press(KEY_ENTER, 0));
+	/* Esc, or the menu's own hotkey (Ctrl+F3), close it; F3 alone
+	 * doesn't. */
+	TEST_ASSERT_EQUAL(MENU_STAY, menu_press(KEY_F3, 0));
+	TEST_ASSERT_EQUAL(MENU_CLOSE, menu_press(KEY_F3, KEY_MOD_CTRL));
+	TEST_ASSERT_EQUAL(MENU_CLOSE, menu_press(KEY_ESCAPE, 0));
+
+	/* The selected row is drawn in the theme's own colours (fg white),
+	 * the others swapped (fg black). */
+	const struct cell *first = &menu.cells[2 * MENU_COLS + 2];
+	TEST_ASSERT_EQUAL_HEX16(0xffff, first->fg);
+	TEST_ASSERT_EQUAL_HEX16(0x0000, menu.cells[3 * MENU_COLS + 2].fg);
+}
+
+static void
+test_hotkey_matching(void)
+{
+	struct key_event ctrl_f3 = {.code = KEY_F3, .mods = KEY_MOD_CTRL};
+	struct key_event f3 = {.code = KEY_F3};
+	struct key_event ctrl_bracket = {.code = KEY_CHAR, .byte = 0x1d};
+	struct hotkey bracket = {KEY_CHAR, 0x1d, 0};
+	struct hotkey none = {KEY_NONE, 0, 0};
+
+	settings_defaults(&settings);
+	TEST_ASSERT_TRUE(hotkey_matches(&settings.hotkeys[TOOL_MENU],
+	    &ctrl_f3));
+	TEST_ASSERT_FALSE(hotkey_matches(&settings.hotkeys[TOOL_MENU], &f3));
+	TEST_ASSERT_TRUE(hotkey_matches(&bracket, &ctrl_bracket));
+	TEST_ASSERT_FALSE(hotkey_matches(&none, &f3));
+}
+
 int
 main(void)
 {
 	UNITY_BEGIN();
+	RUN_TEST(test_tools_menu);
+	RUN_TEST(test_hotkey_matching);
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);

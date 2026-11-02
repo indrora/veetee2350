@@ -34,4 +34,18 @@
 
 #define HOT_INLINE	static inline __attribute__((always_inline))
 
+/*
+ * Profiling (-DVEETEE_RENDER_PROFILE, env:pizero-profile): HOT_CYCLES()
+ * reads core 0's DWT cycle counter (CYCCNT, 0xE0001004 on the M33;
+ * hal/video.c enables it), so hot code can time its own pieces. Without
+ * the define, or on the host, it's 0 and the timing code drops out.
+ */
+#if defined(VEETEE_RENDER_PROFILE) && defined(PICO_RP2350)
+#define HOT_CYCLES()	(*(volatile uint32_t *)0xE0001004u)
+#define HOT_PROFILE	1
+#else
+#define HOT_CYCLES()	0u
+#define HOT_PROFILE	0
+#endif
+
 #endif /* HOT_H */

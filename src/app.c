@@ -7,8 +7,9 @@
  *
  * Keys arrive on the keyboard port and pass through a decoder (lib/input):
  * normally they're forwarded to the host unchanged (with LNM and local
- * echo applied), except F3, which opens SET-UP like a VT220's Set-Up key.
- * The BOOTSEL button does the same. While SET-UP is open, keys drive the
+ * echo applied), except hotkeys (settings.hotkeys): Ctrl+F3 opens the
+ * Tools menu (lib/setup/menu.h), F12 takes a screenshot. The BOOTSEL
+ * button opens SET-UP. The Tools menu is an overlay over the live screen. While SET-UP is open, keys drive the
  * menu instead, and its own grid replaces the terminal's on screen; the
  * terminal keeps processing host output underneath.
  */
@@ -24,6 +25,7 @@
 #include "font.h"
 #include "keys.h"
 #include "render.h"
+#include "menu.h"
 #include "printer_sd.h"
 #include "screenshot.h"
 #include "settings.h"
@@ -402,19 +404,115 @@ take_screenshot(void)
 	}
 }
 
+/* --- the Tools menu and hotkeys (lib/setup/menu.h) -------------------- */
+
+static struct menu menu;
+static bool in_menu;
+
+static void
+close_menu(void)
+{
+	render.overlay[RENDER_OVERLAY_MENU] = nullptr;
+	in_menu = false;
+}
+
+static void
+open_menu(void)
+{
+	bool available[TOOL_COUNT] = {false};
+	const char *state[TOOL_COUNT] = {nullptr};
+	const uint8_t *fg = term.options.fg_rgb, *bg = term.options.bg_rgb;
+
+	available[TOOL_SETUP] = true;
+	available[TOOL_SCREENSHOT] = true;
+	available[TOOL_PRINT_SCREEN] = settings.printer;
+	available[TOOL_PRINTER] = true;
+	available[TOOL_CLEAR] = true;
+	available[TOOL_SOFT_RESET] = true;
+	available[TOOL_HARD_RESET] = true;
+	/* Capture, replay and transfers join as they're built. */
+	state[TOOL_PRINTER] = settings.printer ? "on" : "off";
+	menu_open(&menu, &term.font, grid_rgb565(fg[0], fg[1], fg[2]),
+	    grid_rgb565(bg[0], bg[1], bg[2]), term.screen->cols,
+	    term.screen->rows, available, state, settings.hotkeys);
+	render.overlay[RENDER_OVERLAY_MENU] = &menu.overlay;
+	in_menu = true;
+}
+
+/*
+ * Run a tool, from the menu or its hotkey. Local only: none of these
+ * send anything to the host. Settings changed here (the printer) last
+ * for the session; SET-UP's Save makes them stick.
+ */
+static void
+run_tool(enum tool tool)
+{
+	static const char clear[] = "\x1b[H\x1b[2J";
+	static const char soft_reset[] = "\x1b[!p";
+
+	switch (tool) {
+	case TOOL_MENU:
+		open_menu();
+		break;
+	case TOOL_SETUP:
+		enter_setup();
+		break;
+	case TOOL_SCREENSHOT:
+		take_screenshot();
+		break;
+	case TOOL_PRINT_SCREEN:
+		printer_print_screen(&term);
+		break;
+	case TOOL_PRINTER:
+		settings.printer = !settings.printer;
+		printer_sd_enable(&term, settings.printer);
+		break;
+	case TOOL_CLEAR:
+		term_feed(&term, (const uint8_t *)clear, sizeof(clear) - 1);
+		break;
+	case TOOL_SOFT_RESET:
+		term_feed(&term, (const uint8_t *)soft_reset,
+		    sizeof(soft_reset) - 1);
+		break;
+	case TOOL_HARD_RESET:
+		term_reset(&term);
+		break;
+	default:
+		break;		/* not built yet */
+	}
+}
+
+/* The tool bound to `key`, or -1. */
+static int
+hotkey_tool(const struct key_event *key)
+{
+	for (unsigned tool = 0; tool < TOOL_COUNT; tool++)
+		if (hotkey_matches(&settings.hotkeys[tool], key))
+			return (int)tool;
+	return -1;
+}
+
 static void
 handle_key(const struct key_event *key)
 {
-	if (in_config_error)
+	if (in_config_error) {
 		dismiss_config_error();
-	else if (key->code == KEY_F12)
-		take_screenshot();
-	else if (in_setup)
+	} else if (in_setup) {
 		setup_handle(key);
-	else if (key->code == KEY_F3)
-		enter_setup();
-	else
-		forward_key(key);
+	} else if (in_menu) {
+		int picked = menu_key(&menu, key);
+		if (picked == MENU_STAY)
+			return;
+		close_menu();		/* before the tool: not in screenshots */
+		if (picked != MENU_CLOSE)
+			run_tool((enum tool)picked);
+	} else {
+		int tool = hotkey_tool(key);
+		if (tool >= 0)
+			run_tool((enum tool)tool);
+		else
+			forward_key(key);
+	}
 }
 
 static void
@@ -504,6 +602,15 @@ report_stats(void)
 	    (unsigned long)stats.max_render_cycles,
 	    (unsigned long)stats.starved, (unsigned long)stats.yields,
 	    video_line_budget());
+#ifdef VEETEE_RENDER_PROFILE
+	/* Overlay composition (Tools menu, user lights), per composed line. */
+	uint32_t lines = render.profile_compose_lines;
+	uint32_t cycles = render.profile_compose_cycles;
+	render.profile_compose_lines = 0;
+	render.profile_compose_cycles = 0;
+	usbio_printf("[profile] overlay lines=%lu compose avg=%lu cycles\r\n",
+	    (unsigned long)lines, (unsigned long)(lines ? cycles / lines : 0));
+#endif
 }
 #endif
 
@@ -545,7 +652,8 @@ app_init(void)
 	apply_settings();	/* may read the card */
 
 	static const char banner[] =
-	    "\x1b[1mVeeTee 2350\x1b[0m ready. F3 or BOOTSEL: SET-UP\r\n";
+	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
+	    "SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
 	char detail[96];
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
