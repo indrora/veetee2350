@@ -78,6 +78,17 @@ SET-UP's **Hotkeys...** page rebinds any tool to any key (with
 modifiers); **Profiler bar** shows the last frame's per-line cycle counts
 at the top of the screen (devlog 021).
 
+**Status line** (SET-UP, devlog 022): Hidden, Bottom or Top (a row of
+its own; the terminal is a row shorter if the screen has no spare row),
+or Peek bottom / Peek top (it slides in over the edge row when something
+changes and away after **Peek time**: 3, 5, 7 or 10 s). It shows the
+VT100 user lights, the printer, Insert mode, messages ("Saved
+/screens/0004.bmp") and the cursor, in the theme's colours swapped. The
+host sets the lights with DECLL (`CSI Ps q`: 0 all off, 1-4 on, 21-24
+off); while the indicator isn't on screen, lit lights show in the top
+right corner. DECSSDT (`CSI Ps $ ~`) 0 blanks the status line and 1
+brings the indicator back; 2 (host-writable) isn't implemented yet.
+
 Keys carry xterm's modifier parameter (`; m`, m - 1 = Shift 1, Alt 2,
 Ctrl 4, Meta 8) and ESC + a printable byte is Alt plus that key, so
 hotkeys can use modifiers.
