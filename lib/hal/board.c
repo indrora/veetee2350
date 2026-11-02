@@ -5,6 +5,7 @@
 
 #include <malloc.h>
 
+#include "hardware/structs/powman.h"
 #include "hardware/structs/qmi.h"
 #include "hardware/structs/timer.h"
 #include "hardware/sync.h"
@@ -216,4 +217,36 @@ board_free_heap(void)
 	struct mallinfo info = mallinfo();
 
 	return (size_t)(&__StackLimit - &__bss_end__) - info.uordblks;
+}
+
+const char *
+board_reset_reason(void)
+{
+	/*
+	 * Latched until the next reset of the chip. Power-on sets the
+	 * brown-out flag too, so it's checked first; the watchdog has
+	 * several flags (which domains it reset), any of them will do.
+	 */
+	uint32_t why = powman_hw->chip_reset;
+
+	if (why & POWMAN_CHIP_RESET_HAD_POR_BITS)
+		return "power-on";
+	if (why & POWMAN_CHIP_RESET_HAD_BOR_BITS)
+		return "brown-out";
+	if (why & POWMAN_CHIP_RESET_HAD_RUN_LOW_BITS)
+		return "RUN pin";
+	if (why & (POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_PSM_BITS |
+	    POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_SWCORE_BITS |
+	    POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_BITS |
+	    POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_ASYNC_BITS))
+		return "watchdog";
+	if (why & (POWMAN_CHIP_RESET_HAD_DP_RESET_REQ_BITS |
+	    POWMAN_CHIP_RESET_HAD_RESCUE_BITS))
+		return "debugger";
+	if (why & POWMAN_CHIP_RESET_HAD_GLITCH_DETECT_BITS)
+		return "glitch detector";
+	if (why & (POWMAN_CHIP_RESET_HAD_HZD_SYS_RESET_REQ_BITS |
+	    POWMAN_CHIP_RESET_HAD_SWCORE_PD_BITS))
+		return "software";
+	return "unknown";
 }

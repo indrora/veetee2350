@@ -971,18 +971,23 @@ app_init(void)
 	hidkbd_init(&usb_keyboard);
 	if (usbhost_init(usb_keyboard_report, usb_keyboard_event, nullptr))
 		video_set_priority(PICO_HIGHEST_IRQ_PRIORITY + 0x40);
+	/* The LEDs each keyboard gets as it attaches (Num Lock starts on). */
+	usbhost_set_leds(hidkbd_leds(&usb_keyboard));
 	apply_settings();	/* may read the card */
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
 	    "SET-UP\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
-	char detail[200];
+	char detail[280];
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
-	    "sixel %u cells\r\nsettings: %s; USB keyboard port: %s\r\n",
+	    "sixel %u cells\r\nsettings: %s; USB keyboard port: %s\r\n"
+	    "last reset: %s%s\r\n",
 	    mode->name, term.font_source->name, term.screen->cols,
 	    term.screen->rows, term.graphics.tiles, settings_origin,
-	    usbhost_describe());
+	    usbhost_describe(), board_reset_reason(),
+	    strcmp(board_reset_reason(), "brown-out") == 0 ?
+	    "  (the supply dipped: a USB device plugged in?)" : "");
 	term_feed(&term, (const uint8_t *)detail, (size_t)len);
 	if (VEETEE_DEBUG_BUILD) {
 		static const char debug[] = "\x1b[1mdebug build:\x1b[22m"

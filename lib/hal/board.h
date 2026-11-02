@@ -33,6 +33,16 @@ bool	board_last_fault(uint32_t *pc, uint32_t *lr);
 void	board_boot_ok(void);
 
 /*
+ * Why the chip last reset, from the RP2350's latched flags (POWMAN
+ * CHIP_RESET): "power-on", "brown-out", "RUN pin", "watchdog",
+ * "debugger", "glitch detector", "software" or "unknown". A brown-out is
+ * worth saying out loud: this board's USB host port takes its 5 V
+ * straight from the supply, and a keyboard plugged in while running can
+ * pull it down far enough (devlog 027).
+ */
+const char *board_reset_reason(void);
+
+/*
  * Bytes malloc can still hand out: the heap's span (end of .bss up to
  * core 0's stack limit) minus what's allocated, as arduino-pico's
  * rp2040.getFreeHeap() computes it. Fragmentation can make the largest
