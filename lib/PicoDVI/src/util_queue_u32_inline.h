@@ -9,17 +9,28 @@
 #include "pico/util/queue.h"
 #include "hardware/sync.h"
 
-static inline uint16_t _queue_inc_index_u32(queue_t *q, uint16_t index) {
+// VeeTee patch: a force-inlined copy of pico-sdk's queue_get_level_unsafe()
+// (identical logic). The SDK's is plain `static inline` and GCC out-lines
+// it into flash, which core 1 must never execute. See PATCHES.md.
+static inline __attribute__((always_inline)) uint _queue_level_u32(queue_t *q) {
+    int32_t rc = (int32_t)q->wptr - (int32_t)q->rptr;
+    if (rc < 0) {
+        rc += q->element_count + 1;
+    }
+    return (uint)rc;
+}
+
+static inline __attribute__((always_inline)) uint16_t _queue_inc_index_u32(queue_t *q, uint16_t index) {
     if (++index > q->element_count) { // > because we have element_count + 1 elements
         index = 0;
     }
     return index;
 }
 
-static inline bool queue_try_add_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) bool queue_try_add_u32(queue_t *q, void *data) {
     bool success = false;
     uint32_t flags = spin_lock_blocking(q->core.spin_lock);
-    if (queue_get_level_unsafe(q) != q->element_count) {
+    if (_queue_level_u32(q) != q->element_count) {
         ((uint32_t*)q->data)[q->wptr] = *(uint32_t*)data;
         q->wptr = _queue_inc_index_u32(q, q->wptr);
         success = true;
@@ -29,10 +40,10 @@ static inline bool queue_try_add_u32(queue_t *q, void *data) {
     return success;
 }
 
-static inline bool queue_try_remove_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) bool queue_try_remove_u32(queue_t *q, void *data) {
     bool success = false;
     uint32_t flags = spin_lock_blocking(q->core.spin_lock);
-    if (queue_get_level_unsafe(q) != 0) {
+    if (_queue_level_u32(q) != 0) {
         *(uint32_t*)data = ((uint32_t*)q->data)[q->rptr];
         q->rptr = _queue_inc_index_u32(q, q->rptr);
         success = true;
@@ -42,10 +53,10 @@ static inline bool queue_try_remove_u32(queue_t *q, void *data) {
     return success;
 }
 
-static inline bool queue_try_peek_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) bool queue_try_peek_u32(queue_t *q, void *data) {
     bool success = false;
     uint32_t flags = spin_lock_blocking(q->core.spin_lock);
-    if (queue_get_level_unsafe(q) != 0) {
+    if (_queue_level_u32(q) != 0) {
         *(uint32_t*)data = ((uint32_t*)q->data)[q->rptr];
         success = true;
     }
@@ -53,7 +64,7 @@ static inline bool queue_try_peek_u32(queue_t *q, void *data) {
     return success;
 }
 
-static inline void queue_add_blocking_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) void queue_add_blocking_u32(queue_t *q, void *data) {
     bool done;
     do {
         done = queue_try_add_u32(q, data);
@@ -62,7 +73,7 @@ static inline void queue_add_blocking_u32(queue_t *q, void *data) {
     } while (true);
 }
 
-static inline void queue_remove_blocking_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) void queue_remove_blocking_u32(queue_t *q, void *data) {
     bool done;
     do {
         done = queue_try_remove_u32(q, data);
@@ -71,7 +82,7 @@ static inline void queue_remove_blocking_u32(queue_t *q, void *data) {
     } while (true);
 }
 
-static inline void queue_peek_blocking_u32(queue_t *q, void *data) {
+static inline __attribute__((always_inline)) void queue_peek_blocking_u32(queue_t *q, void *data) {
     bool done;
     do {
         done = queue_try_peek_u32(q, data);

@@ -26,6 +26,11 @@ void dvi_init(struct dvi_inst *inst, uint spinlock_tmds_queue, uint spinlock_col
 		inst->dma_cfg[i].chan_data = dma_claim_unused_channel(true);
 		inst->dma_cfg[i].tx_fifo = (void*)&inst->ser_cfg.pio->txf[inst->ser_cfg.sm_tmds[i]];
 		inst->dma_cfg[i].dreq = pio_get_dreq(inst->ser_cfg.pio, inst->ser_cfg.sm_tmds[i], true);
+		dma_channel_config cfg = dma_channel_get_default_config(inst->dma_cfg[i].chan_ctrl);
+		channel_config_set_ring(&cfg, true, 4); // 16-byte write wrap
+		channel_config_set_read_increment(&cfg, true);
+		channel_config_set_write_increment(&cfg, true);
+		inst->dma_cfg[i].ctrl_cfg = cfg;
 	}
 	inst->late_scanline_ctr = 0;
 	inst->tmds_buf_release_next = NULL;
@@ -80,10 +85,8 @@ void dvi_register_irqs_this_core(struct dvi_inst *inst, uint irq_num) {
 // data channel CHAIN_TO or an initial write to MULTI_CHAN_TRIGGER)
 static inline void __attribute__((always_inline)) _dvi_load_dma_op(const struct dvi_lane_dma_cfg dma_cfg[], struct dvi_scanline_dma_list *l) {
 	for (int i = 0; i < N_TMDS_LANES; ++i) {
-		dma_channel_config cfg = dma_channel_get_default_config(dma_cfg[i].chan_ctrl);
-		channel_config_set_ring(&cfg, true, 4); // 16-byte write wrap
-		channel_config_set_read_increment(&cfg, true);
-		channel_config_set_write_increment(&cfg, true);
+		// VeeTee patch: precomputed in dvi_init() (see dvi_lane_dma_cfg).
+		dma_channel_config cfg = dma_cfg[i].ctrl_cfg;
 		dma_channel_configure(
 			dma_cfg[i].chan_ctrl,
 			&cfg,

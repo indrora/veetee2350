@@ -68,6 +68,10 @@ struct dvi_lane_dma_cfg {
 	uint chan_data;
 	void *tx_fifo;
 	uint dreq;
+	// VeeTee patch: control-channel config, computed once in dvi_init() so
+	// the per-scanline IRQ path never calls the (flash-resident, out-lined)
+	// dma_channel_get_default_config(). See PATCHES.md.
+	dma_channel_config ctrl_cfg;
 };
 
 // Note these are already converted to pseudo-differential representation

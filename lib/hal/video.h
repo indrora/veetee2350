@@ -14,6 +14,7 @@
 #ifndef HAL_VIDEO_H
 #define HAL_VIDEO_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define VIDEO_WIDTH	640
@@ -54,5 +55,13 @@ void	video_init(video_scanline_fn scanline, void *ctx);
 
 /* Snapshot of scanout statistics; safe to call from core 0 at any time. */
 void	video_get_stats(struct video_stats *out);
+
+/*
+ * True once core 1 runs only from SRAM, so core 0 may make XIP flash
+ * unavailable (BOOTSEL read, flash program/erase) without crashing it.
+ * Core 0's own render IRQ must be masked for the duration; the picture
+ * glitches if that exceeds ~250 us (the ring's slack).
+ */
+bool	video_flash_safe(void);
 
 #endif /* HAL_VIDEO_H */

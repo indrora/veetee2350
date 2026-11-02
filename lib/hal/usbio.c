@@ -1,13 +1,13 @@
 /*
- * console.c — printf-style front end for console_write().
+ * usbio.c — printf front end for the line port.
  */
-#include "console.h"
+#include "usbio.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 
 void
-console_printf(const char *fmt, ...)
+usbio_printf(const char *fmt, ...)
 {
 	char buf[160];
 	va_list args;
@@ -20,5 +20,5 @@ console_printf(const char *fmt, ...)
 		return;
 	if ((size_t)len >= sizeof(buf))
 		len = sizeof(buf) - 1;	/* truncated; still print what fits */
-	console_write(buf, (size_t)len);
+	usbio_write(USBIO_LINE, buf, (size_t)len);
 }

@@ -1,17 +1,16 @@
 /*
  * app.c — application glue. Goal 1 (in progress): a working terminal.
  *
- * Bytes from the host arrive on the USB CDC serial port and go straight
- * into the terminal emulator (lib/term: libvterm -> cell grid); core 1
- * renders the grid to DVI. The terminal's replies (DA, DSR, ...) go back
- * out on the same port. The serial port is the "line" here: the host runs
- * a shell or program attached to it.
+ * Bytes from the host arrive on the line port (hal/usbio.h) and go into
+ * the terminal emulator (lib/term: libvterm -> cell grid), which the video
+ * pipeline draws. Replies (DA, DSR, ...) and keystrokes go back out on the
+ * line port. Keystrokes arrive on the keyboard port.
  */
 #include "app.h"
 
 #include <stdint.h>
 
-#include "console.h"
+#include "usbio.h"
 #include "font.h"
 #include "render.h"
 #include "term.h"
@@ -29,7 +28,7 @@ static void
 send_to_host(const char *bytes, size_t len, void *ctx)
 {
 	(void)ctx;
-	console_write(bytes, len);
+	usbio_write(USBIO_LINE, bytes, len);
 }
 
 void
@@ -63,7 +62,7 @@ report_stats(void)
 		return;
 	next_report = make_timeout_time_ms(1000);
 	video_get_stats(&stats);
-	console_printf("\r\n[stats] frames=%lu encode avg=%lu max=%lu "
+	usbio_printf("\r\n[stats] frames=%lu encode avg=%lu max=%lu "
 	    "render avg=%lu max=%lu starved=%lu budget=%u\r\n",
 	    (unsigned long)stats.frames, (unsigned long)stats.avg_encode_cycles,
 	    (unsigned long)stats.max_encode_cycles,
@@ -77,10 +76,15 @@ void
 app_poll(void)
 {
 	char buffer[256];
-	size_t count = console_read(buffer, sizeof(buffer));
+	size_t count = usbio_read(USBIO_LINE, buffer, sizeof(buffer));
 
 	if (count > 0)
 		term_feed(&term, (const uint8_t *)buffer, count);
+
+	/* Keys typed on the terminal go to the host over the line. */
+	count = usbio_read(USBIO_KEYBOARD, buffer, sizeof(buffer));
+	if (count > 0)
+		term_send(&term, buffer, count);
 #ifdef VEETEE_SERIAL_STATS
 	report_stats();
 #endif

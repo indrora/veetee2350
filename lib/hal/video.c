@@ -92,6 +92,12 @@ static volatile uint32_t ring_head;	/* lines produced, written by core 0 */
 static volatile uint32_t ring_tail;	/* lines consumed, written by core 1 */
 static unsigned produce_line;		/* core 0 only: next scanline index */
 
+/*
+ * Set by core 1 once it has entered the scanout loop, from which it only
+ * executes SRAM (tools/core1_audit.py checks that on every build).
+ */
+static volatile bool core1_in_ram_loop;
+
 /* Per-frame statistics; each field has a single writer core. */
 static volatile struct video_stats live_stats;
 static uint32_t render_frame_total;	/* core 0 accumulators */
@@ -209,6 +215,7 @@ static void __not_in_flash_func(core1_scanout)(void)
 	dvi_register_irqs_this_core(&dvi0, DMA_IRQ_0);
 	systick_counter_start();
 	dvi_start(&dvi0);
+	core1_in_ram_loop = true;
 
 	for (;;) {
 		uint32_t frame_max = 0;
@@ -311,4 +318,10 @@ video_get_stats(struct video_stats *out)
 		__dmb();
 	} while (frames != live_stats.frames);
 	out->frames = frames;
+}
+
+bool
+video_flash_safe(void)
+{
+	return core1_in_ram_loop;
 }
