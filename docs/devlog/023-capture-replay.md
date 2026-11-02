@@ -136,5 +136,5 @@ less heap, which at 720p means a slightly smaller Sixel pool.
 showed a flat black frame and stayed that way. The firmware still
 answered over USB (DA, and a 640x480 / 80x30 size report). The last
 committed firmware, flashed as a control, was black too, so the cause
-sits between the board's HDMI and the grabber, not in this code. Not
-solved yet: the replug happens on the desk, not in software.
+sits between the board's HDMI and the grabber, not in this code. A
+replug on the desk fixed it (devlog 024).

@@ -147,15 +147,54 @@ colourful screens got 7% slower (3979 to 4273, twice). An empty asm
 that hides the fill value from the optimiser does the job at no cost.
 `render_scanline` now calls nothing outside RAM.
 
-**No pictures.** Halfway through this round the capture card's picture
-went black and stayed black, even with older firmware that was known to
-work. The board answers over USB, so the trouble is between its HDMI
-port and the grabber. Every number above came over USB; the chart is
-drawn from them. Correctness rests on host tests: overlays as spans, a
-stale PAIR plan drawing an underline, the pair table pixel-for-pixel
-against the full loop with and without reverse video. **Nobody has
-looked at this build on a screen yet.** 720p is unmeasured too:
-changing resolution saves settings, and those are the user's.
+**The picture went away, then came back.** Halfway through this round
+the capture card's picture went black and stayed black, even with older
+firmware known to work. The board kept answering over USB, so every
+number above came over USB, and the chart is drawn from them. A replug
+on the desk brought it back.
 
-**Memory:** two plans and the table, about 10 KB more RAM. The preload
+**Memory:****Memory:** two plans and the table, about 10 KB more RAM. The preload
 row lives in SCRATCH_X, which had about 1.9 KB to spare.
+
+## On screen
+
+After the replug, every kind of row the planner draws, on the board:
+
+![Plain text; the Tools menu over it; every cell its own colours;
+attributes; Sixel; the menu over double-width lines; reverse
+video](img/024-contact.jpg)
+
+Left to right, top to bottom:
+1. Plain text (all PAIR spans).
+2. The Tools menu over it: grid, menu and grid spans, nothing composed.
+3. Every cell in its own colours (PLAIN).
+4. Attributes (MIXED).
+5. A full-screen Sixel.
+6. The menu over double-width lines.
+7. Reverse video: the PAIR table rebuilt inverted.
+
+The picker and the corner lights are spans too:
+
+![The file picker over plain text, L1 and L3 in the corner](img/024-picker.jpg)
+
+Two things in there look wrong, and both predate the planner:
+
+- **The Sixel picture stops about 85% of the way down,** partway
+  through a row. The tile pool holds 2048 cells (the boot banner says
+  so), and 80x30 is 2400.
+- **The menu over double-width lines is doubled and cut off.** A
+  double-width row has only its first 40 cells, each drawn 16 pixels
+  wide. That's the one case still composed the old way, and it always
+  did this:
+
+![The Tools menu over double-width lines, doubled and clipped](img/024-dwl-menu.jpg)
+
+The board's boot banner also said "settings: upgraded from v9", so the
+saved record was older than I'd thought, and the v9 to v12 upgrade has
+now run on hardware too.
+
+One more change came in from the user during this round:
+`-DDVI_USE_SIO_TMDS_ENCODER=1` in `platformio.ini`. That's libdvi's
+default for anything that isn't an RP2040, so it pins down what was
+already happening. It went in with the planner commit, swept up when
+`platformio.ini` was staged.
