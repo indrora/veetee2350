@@ -839,6 +839,7 @@ set_conformance(struct term *term, uint8_t level)
 	term->state->vt_level = level - 60;
 }
 
+static void	lay_out(struct term *term);
 static int	fb_csi(const char *leader, const long args[], int argcount,
 		    const char *intermed, char command, void *user);
 
@@ -1094,6 +1095,10 @@ configured_size(const struct term *term, unsigned *cols, unsigned *rows)
 {
 	render_grid_size(&term->font, term->render->width,
 	    term->render->height, cols, rows);
+	/* A status row of its own (Bottom, Top) comes off what fits. */
+	if (term_status_place(term->options.status_mode) !=
+	    RENDER_STATUS_NONE && *rows > 1)
+		*rows -= 1;
 	if (term->options.max_rows != 0 && term->options.max_rows < *rows)
 		*rows = term->options.max_rows;
 	if (term->options.max_cols != 0 && term->options.max_cols < *cols)
@@ -1195,7 +1200,7 @@ set_columns(struct term *term, bool wide)
 		graphics_release(term);
 		if (!regrid_columns(term, cols, keep))
 			return;		/* out of memory: nothing to draw */
-		render_init(term->render, &term->font, term->screen);
+		lay_out(term);
 		graphics_acquire(term);
 		vterm_set_size(term->vt, (int)rows, (int)cols);
 		sync_presentation(term);
@@ -1487,6 +1492,24 @@ fb_csi(const char *leader, const long args[], int argcount,
 		return 1;
 	}
 
+	/* DECLL, "CSI Ps ; ... q": the user lights (status.c). VT100 on. */
+	if (no_leader && intermed == nullptr && command == 'q')
+		return term_status_decll(term, args, argcount);
+
+	/*
+	 * DECSSDT, "CSI Ps $ ~": status line type, VT320 on. 0 (none) and
+	 * 1 (indicator); 2 (host-writable) isn't implemented and is
+	 * refused, as is DECSASD's "CSI 1 $ }" that writes to it.
+	 */
+	if (no_leader && intermed != nullptr && intermed[0] == '$' &&
+	    intermed[1] == '\0' && (command == '~' || command == '}')) {
+		long type = first == CSI_ARG_MISSING ? 0 : first;
+		if (command == '~' && term->conformance >= 63 &&
+		    (type == TERM_STATUS_NONE || type == TERM_STATUS_INDICATOR))
+			term->status_type = (uint8_t)type;
+		return 1;
+	}
+
 	/* DECSACE, "CSI Ps * x": remembered for DECRQSS. */
 	if (no_leader && intermed != nullptr && intermed[0] == '*' &&
 	    intermed[1] == '\0' && command == 'x') {
@@ -1688,9 +1711,9 @@ decrqss_reply(struct term *term, const char *setting, size_t len)
 	else if (len == 2 && memcmp(setting, "*x", 2) == 0)	/* DECSACE */
 		snprintf(value, sizeof(value), "%u*x", term->decsace);
 	else if (len == 2 && memcmp(setting, "$}", 2) == 0)	/* DECSASD */
-		snprintf(value, sizeof(value), "0$}");
+		snprintf(value, sizeof(value), "0$}");	/* no host-writable */
 	else if (len == 2 && memcmp(setting, "$~", 2) == 0)	/* DECSSDT */
-		snprintf(value, sizeof(value), "0$~");
+		snprintf(value, sizeof(value), "%u$~", term->status_type);
 	else
 		return 0;
 	term->output("\x1bP1$r", 5, term->output_ctx);
@@ -1744,11 +1767,20 @@ fb_dcs(const char *command, size_t commandlen, VTermStringFragment frag,
 	return 1;
 }
 
+/* libvterm patch 28: RIS resets what the terminal keeps beside it. */
+static void
+fb_reset(int hard, void *user)
+{
+	if (hard)
+		term_status_reset(user);
+}
+
 static const VTermStateFallbacks state_fallbacks = {
 	.dcs = fb_dcs,
 	.control = fb_control,
 	.csi = fb_csi,
 	.osc = fb_osc,
+	.reset = fb_reset,
 };
 
 /*
@@ -1822,9 +1854,12 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	};
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
+	term->options.peek_seconds = 5;
 	term->cursor_visible = true;
 	term->cursor_blink = true;
 	term->cursor_shape = CURSOR_BLOCK;
+	render->status_cells = term->status.cells;
+	render->status_place = RENDER_STATUS_NONE;
 
 	if (font_load_psf2(&term->font, builtin->data, builtin->len) != FONT_OK)
 		return false;
@@ -1843,7 +1878,7 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	 * hard reset below immediately calls initpen/erase/settermprop.
 	 */
 	term->screen = &term->primary;
-	render_init(render, &term->font, term->screen);
+	lay_out(term);
 
 	term->state = vterm_obtain_state(term->vt);
 	vterm_color_rgb(&fg, DEFAULT_FG_RGB);
@@ -1868,6 +1903,21 @@ fail:
 	return false;
 }
 
+/*
+ * render_init with the status row where the options put it. A fresh
+ * layout has nothing peeking, and the status row is redrawn (its size
+ * or colours may have changed).
+ */
+static void
+lay_out(struct term *term)
+{
+	term->render->status_place =
+	    term_status_place(term->options.status_mode);
+	render_init(term->render, &term->font, term->screen);
+	term->status.peek_lines = 0;
+	term->status.drawn = false;
+}
+
 bool
 term_set_font(struct term *term, const struct font_builtin *builtin)
 {
@@ -1890,7 +1940,7 @@ term_set_font(struct term *term, const struct font_builtin *builtin)
 
 	term->screen = &term->primary;
 	term->stored_modes[stored_mode_index(3, true)] = 2;	/* DECCOLM */
-	render_init(term->render, &term->font, term->screen);
+	lay_out(term);
 	graphics_acquire(term);	/* tiles are font-cell sized */
 	/*
 	 * Resize libvterm's state (margins, tab stops, line info) and then
@@ -1921,9 +1971,25 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	    options->ansi_set != term->options.ansi_set ||
 	    options->sixel_bpp != term->options.sixel_bpp ||
 	    (options->ansi_set && memcmp(options->ansi, term->options.ansi,
-	    sizeof(options->ansi)) != 0);
+	    sizeof(options->ansi)) != 0) ||
+	    /* a status row of its own changes the row count */
+	    (term_status_place(options->status_mode) != RENDER_STATUS_NONE) !=
+	    (term_status_place(term->options.status_mode) !=
+	    RENDER_STATUS_NONE);
+	bool status_moved = options->status_mode != term->options.status_mode;
 
 	term->options = *options;
+	if (status_moved) {
+		/* What a newly shown (or hidden) status line starts as. */
+		term->status_type = options->status_mode ==
+		    TERM_STATUS_HIDDEN ? TERM_STATUS_NONE :
+		    TERM_STATUS_INDICATOR;
+		if (!rebuild) {
+			/* Same rows, new place (Bottom <-> Top, peeks). */
+			render_pause(term->render);
+			lay_out(term);
+		}
+	}
 	term->options.answerback[sizeof(term->options.answerback) - 1] = '\0';
 	/* Leaving the alternate screen allowed -> disallowed: go home. */
 	if (!options->alt_screen && term->screen == &term->alternate) {

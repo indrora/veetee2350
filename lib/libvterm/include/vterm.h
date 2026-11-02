@@ -447,6 +447,9 @@ typedef struct {
   int (*apc)(VTermStringFragment frag, void *user);
   int (*pm)(VTermStringFragment frag, void *user);
   int (*sos)(VTermStringFragment frag, void *user);
+  /* VeeTee patch 28: told after every soft (DECSTR) or hard (RIS) reset,
+   * so the embedder can reset state libvterm doesn't hold. */
+  void (*reset)(int hard, void *user);
 } VTermStateFallbacks;
 
 typedef struct {

@@ -28,6 +28,21 @@
 
 /* line_row[] value for scanlines above/below the grid. */
 #define RENDER_LINE_BORDER	0xff
+/* line_row[] value for the status row's scanlines (status_cells). */
+#define RENDER_LINE_STATUS	0xfe
+static_assert(GRID_MAX_ROWS < RENDER_LINE_STATUS, "row numbers clash");
+
+/*
+ * A status row of its own, below or above the text, laid out by
+ * render_init together with the grid (centred as one block). A peeking
+ * status line has none: it slides over the text's edge row instead
+ * (render_status_peek).
+ */
+enum render_status_place {
+	RENDER_STATUS_NONE,
+	RENDER_STATUS_BOTTOM,
+	RENDER_STATUS_TOP
+};
 
 /*
  * Tile pixels are 8, 4, 2 or 1 bits (the Sixel depth in SET-UP), packed
@@ -95,8 +110,20 @@ struct render {
 	volatile bool	 active;	/* false: draw border only (see pause) */
 	bool		 live;		/* scanout running: pause must wait */
 	volatile uint32_t frame;	/* bumped by core 1 at line 0 */
-	uint8_t		 line_row[RENDER_MAX_HEIGHT];	/* grid row or BORDER */
+	uint8_t		 line_row[RENDER_MAX_HEIGHT];	/* grid row, BORDER
+							   or STATUS */
 	uint8_t		 line_sub[RENDER_MAX_HEIGHT];	/* glyph row */
+	/*
+	 * The status line (lib/term/status.c): a row of cells outside the
+	 * grid, at least grid->cols long, drawn on RENDER_LINE_STATUS lines
+	 * without cursor, overlays or reverse video (DECSCNM). nullptr: no
+	 * status line. status_place is read by render_init; text_top and
+	 * text_end are the grid's first and one-past-last scanlines.
+	 */
+	const struct cell *status_cells;
+	uint8_t		 status_place;	/* enum render_status_place */
+	uint16_t	 text_top;
+	uint16_t	 text_end;
 	/*
 	 * Sixel tiles for CELL_GRAPHIC cells (set by lib/term/graphics.c):
 	 * one byte per pixel, font-cell sized, indexing `palette`;
@@ -127,7 +154,10 @@ struct render {
 	uint32_t	 attr_ops[RENDER_MAX_CELL_HEIGHT][RENDER_ATTR_COMBOS];
 };
 
-/* Set the output size (once, before anything else; from the video mode). */
+/*
+ * Set the output size (once, before anything else; from the video mode).
+ * Clears the whole struct first, so it may live on the stack.
+ */
 void	render_set_screen(struct render *render, unsigned width,
 	    unsigned height);
 
@@ -160,6 +190,15 @@ render_set_grid(struct render *render, struct grid *grid)
 {
 	render->grid = grid;
 }
+
+/*
+ * Show the top `lines` scanlines' worth of the status row over the text:
+ * sliding up over the bottom row (glyph rows 0..lines-1 visible) or, with
+ * `top`, down over the top row (the row's last `lines` glyph rows). 0
+ * puts the text back. Rewrites only that row's line tables; the IRQ may
+ * see one line half-updated for a frame. Main loop only.
+ */
+void	render_status_peek(struct render *render, bool top, unsigned lines);
 
 /* video_scanline_fn-compatible: ctx is the struct render. */
 void	render_scanline(uint16_t *pixels, unsigned line, void *ctx);

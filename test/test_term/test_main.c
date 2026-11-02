@@ -1240,6 +1240,227 @@ test_iso_protection(void)
 	TEST_ASSERT_EQUAL(glyph(' '), cell_at(0, 2)->glyph);
 }
 
+/* --- the status line and user lights (status.c) ------------------------ */
+
+static void
+set_status_mode(uint8_t mode)
+{
+	struct term_options options = term.options;
+
+	options.status_mode = mode;
+	options.peek_seconds = 3;
+	TEST_ASSERT_TRUE(term_configure(&term, term.font_source, &options));
+}
+
+/* A row of status cells as text, for comparing. */
+static void
+status_text(char *out, unsigned from, unsigned count)
+{
+	for (unsigned i = 0; i < count; i++) {
+		uint16_t index = term.status.cells[from + i].glyph;
+		out[i] = '?';
+		for (unsigned c = 0x20; c < 0x7f; c++)
+			if (glyph(c) == index) {
+				out[i] = (char)c;
+				break;
+			}
+	}
+	out[count] = '\0';
+}
+
+static void
+test_decll(void)
+{
+	feed("\x1b[1;3q");
+	TEST_ASSERT_EQUAL_HEX8(0x05, term.status_lights);
+	feed("\x1b[21;4q");		/* L1 off, L4 on */
+	TEST_ASSERT_EQUAL_HEX8(0x0c, term.status_lights);
+	feed("\x1b[5;25;2q");		/* out of range ones ignored */
+	TEST_ASSERT_EQUAL_HEX8(0x0e, term.status_lights);
+	feed("\x1b[q");			/* bare: all off */
+	TEST_ASSERT_EQUAL_HEX8(0x00, term.status_lights);
+	feed("\x1b[2;0;4q");		/* 0 in the middle clears what's before */
+	TEST_ASSERT_EQUAL_HEX8(0x08, term.status_lights);
+	feed("\x1b[!p");		/* DECSTR leaves them */
+	TEST_ASSERT_EQUAL_HEX8(0x08, term.status_lights);
+	feed("\x1b" "c");		/* RIS turns them off */
+	TEST_ASSERT_EQUAL_HEX8(0x00, term.status_lights);
+}
+
+static void
+test_decssdt(void)
+{
+	set_status_mode(TERM_STATUS_BOTTOM);
+	TEST_ASSERT_EQUAL(TERM_STATUS_INDICATOR, term.status_type);
+	feed("\x1b[0$~");
+	TEST_ASSERT_EQUAL(TERM_STATUS_NONE, term.status_type);
+	feed("\x1bP$q$~\x1b\\");
+	TEST_ASSERT_EQUAL_STRING("\x1bP1$r0$~\x1b\\", reply);
+	feed("\x1b[2$~");		/* host-writable: refused */
+	TEST_ASSERT_EQUAL(TERM_STATUS_NONE, term.status_type);
+	feed("\x1b[1$~");
+	TEST_ASSERT_EQUAL(TERM_STATUS_INDICATOR, term.status_type);
+	feed("\x1b[0$~\x1b" "c");	/* RIS: back to SET-UP's */
+	TEST_ASSERT_EQUAL(TERM_STATUS_INDICATOR, term.status_type);
+	set_status_mode(TERM_STATUS_HIDDEN);
+	TEST_ASSERT_EQUAL(TERM_STATUS_NONE, term.status_type);
+}
+
+/* Bottom and Top take a row from the terminal; the renderer lays it out. */
+static void
+test_status_row_layout(void)
+{
+	TEST_ASSERT_EQUAL(30, term.screen->rows);
+	set_status_mode(TERM_STATUS_BOTTOM);
+	TEST_ASSERT_EQUAL(29, term.screen->rows);
+	TEST_ASSERT_EQUAL(0, render.line_row[0]);
+	TEST_ASSERT_EQUAL(28, render.line_row[29 * 16 - 1]);
+	TEST_ASSERT_EQUAL(RENDER_LINE_STATUS, render.line_row[29 * 16]);
+	TEST_ASSERT_EQUAL(15, render.line_sub[479]);
+
+	set_status_mode(TERM_STATUS_TOP);	/* same rows, moved */
+	TEST_ASSERT_EQUAL(29, term.screen->rows);
+	TEST_ASSERT_EQUAL(RENDER_LINE_STATUS, render.line_row[0]);
+	TEST_ASSERT_EQUAL(0, render.line_sub[0]);
+	TEST_ASSERT_EQUAL(0, render.line_row[16]);
+	TEST_ASSERT_EQUAL(28, render.line_row[479]);
+
+	set_status_mode(TERM_STATUS_PEEK_BOTTOM);	/* no row of its own */
+	TEST_ASSERT_EQUAL(30, term.screen->rows);
+	TEST_ASSERT_EQUAL(29, render.line_row[479]);
+}
+
+static void
+test_status_indicator(void)
+{
+	char text[16];
+
+	set_status_mode(TERM_STATUS_BOTTOM);
+	term_status_text(&term, "Printer");
+	feed("\x1b[2q\x1b[4h\x1b[12;40H");
+	term_status_poll(&term, 1000, true);
+
+	status_text(text, 0, 12);
+	TEST_ASSERT_EQUAL_STRING(" L1  L2  L3 ", text);
+	/* Bar: the theme swapped; a lit light: the theme's own colours. */
+	TEST_ASSERT_EQUAL_HEX16(term.default_bg, term.status.cells[0].fg);
+	TEST_ASSERT_EQUAL_HEX16(term.default_fg, term.status.cells[0].bg);
+	TEST_ASSERT_EQUAL_HEX16(term.default_fg, term.status.cells[4].fg);
+	TEST_ASSERT_EQUAL_HEX16(term.default_bg, term.status.cells[4].bg);
+	status_text(text, 17, 15);
+	TEST_ASSERT_EQUAL_STRING("Printer  Insert", text);
+	status_text(text, 74, 5);
+	TEST_ASSERT_EQUAL_STRING("12,40", text);
+	/* Indicator up: no corner lights. */
+	TEST_ASSERT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+
+	/* DECSSDT 0: a blank row in the screen's own colours, and the
+	 * lights go to the corner. */
+	feed("\x1b[0$~");
+	term_status_poll(&term, 1016, true);
+	status_text(text, 0, 4);
+	TEST_ASSERT_EQUAL_STRING("    ", text);
+	TEST_ASSERT_EQUAL_HEX16(term.default_bg, term.status.cells[0].bg);
+	TEST_ASSERT_NOT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+}
+
+static void
+test_status_lights_corner(void)
+{
+	const struct render_overlay *over;
+	char text[8];
+
+	term_status_poll(&term, 0, true);	/* hidden: nothing lit */
+	TEST_ASSERT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+	feed("\x1b[1;3q");
+	term_status_poll(&term, 16, true);
+	over = render.overlay[RENDER_OVERLAY_LIGHTS];
+	TEST_ASSERT_NOT_NULL(over);
+	TEST_ASSERT_EQUAL(0, over->row);
+	TEST_ASSERT_EQUAL(7, over->cols);
+	TEST_ASSERT_EQUAL(80 - 7, over->col);
+	for (unsigned i = 0; i < 7; i++) {
+		uint16_t index = over->cells[i].glyph;
+		text[i] = index == glyph('L') ? 'L' : index == glyph('1') ?
+		    '1' : index == glyph('3') ? '3' : index == glyph(' ') ?
+		    ' ' : '?';
+	}
+	text[7] = '\0';
+	TEST_ASSERT_EQUAL_STRING(" L1 L3 ", text);
+	term_status_poll(&term, 32, false);	/* SET-UP up: none */
+	TEST_ASSERT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+	feed("\x1b[0q");
+	term_status_poll(&term, 48, true);
+	TEST_ASSERT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+}
+
+/* Peek: news slides the row up over the last text row, then away. */
+static void
+test_status_peek(void)
+{
+	uint32_t now = 0;
+
+	set_status_mode(TERM_STATUS_PEEK_BOTTOM);
+	/* Let the first peek (the type became "indicator") run out. */
+	for (; now < 5000; now += 16)
+		term_status_poll(&term, now, true);
+	TEST_ASSERT_EQUAL(0, term.status.peek_lines);
+	TEST_ASSERT_EQUAL(29, render.line_row[479]);
+
+	feed("\x1b[5;5H");		/* cursor moves aren't news */
+	term_status_poll(&term, now, true);
+	TEST_ASSERT_EQUAL(0, term.status.peek_lines);
+
+	feed("\x1b[2q");		/* a light is */
+	term_status_poll(&term, now, true);
+	TEST_ASSERT_EQUAL(2, term.status.peek_lines);	/* 16 / 8 a frame */
+	TEST_ASSERT_EQUAL(RENDER_LINE_STATUS, render.line_row[478]);
+	TEST_ASSERT_EQUAL(0, render.line_sub[478]);	/* its top row */
+	TEST_ASSERT_EQUAL(29, render.line_row[477]);
+	/* Half-way in, the lights are still in the corner. */
+	TEST_ASSERT_NOT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+	for (int i = 0; i < 7; i++)
+		term_status_poll(&term, now += 16, true);
+	TEST_ASSERT_EQUAL(16, term.status.peek_lines);
+	TEST_ASSERT_EQUAL(RENDER_LINE_STATUS, render.line_row[464]);
+	TEST_ASSERT_EQUAL(0, render.line_sub[464]);
+	TEST_ASSERT_NULL(render.overlay[RENDER_OVERLAY_LIGHTS]);
+
+	/* 3 s later it slides back down and the text row returns. */
+	now += 3000;
+	for (int i = 0; i < 8; i++)
+		term_status_poll(&term, now += 16, true);
+	TEST_ASSERT_EQUAL(0, term.status.peek_lines);
+	TEST_ASSERT_EQUAL(29, render.line_row[464]);
+	TEST_ASSERT_EQUAL(29, render.line_row[479]);
+	TEST_ASSERT_EQUAL(15, render.line_sub[479]);
+
+	/* A message is news; it running out isn't. */
+	term_status_message(&term, "Saved /screens/0001.bmp", now);
+	term_status_poll(&term, now += 16, true);
+	TEST_ASSERT_EQUAL(2, term.status.peek_lines);
+	for (int i = 0; i < 400; i++)
+		term_status_poll(&term, now += 16, true);
+	TEST_ASSERT_EQUAL(0, term.status.peek_lines);
+	TEST_ASSERT_EQUAL('\0', term.status.message[0]);
+}
+
+/* Peek top: the row comes down over row 0, bottom glyph rows first. */
+static void
+test_status_peek_top(void)
+{
+	uint32_t now = 0;
+
+	set_status_mode(TERM_STATUS_PEEK_TOP);
+	term_status_poll(&term, now, true);
+	TEST_ASSERT_EQUAL(2, term.status.peek_lines);
+	TEST_ASSERT_EQUAL(RENDER_LINE_STATUS, render.line_row[0]);
+	TEST_ASSERT_EQUAL(14, render.line_sub[0]);
+	TEST_ASSERT_EQUAL(15, render.line_sub[1]);
+	TEST_ASSERT_EQUAL(0, render.line_row[2]);
+	TEST_ASSERT_EQUAL(2, render.line_sub[2]);
+}
+
 int
 main(void)
 {
@@ -1297,6 +1518,13 @@ main(void)
 	RUN_TEST(test_hpa_origin);
 	RUN_TEST(test_osc104_specials);
 	RUN_TEST(test_iso_protection);
+	RUN_TEST(test_decll);
+	RUN_TEST(test_decssdt);
+	RUN_TEST(test_status_row_layout);
+	RUN_TEST(test_status_indicator);
+	RUN_TEST(test_status_lights_corner);
+	RUN_TEST(test_status_peek);
+	RUN_TEST(test_status_peek_top);
 	RUN_TEST(test_print_screen_and_line);
 	RUN_TEST(test_auto_print);
 	RUN_TEST(test_printer_controller);

@@ -223,3 +223,11 @@ SPA, plain ED, EL and ECH also leave protected cells alone (they erase
 "selectively"); after DECSCA only DECSED/DECSEL do. Soft and hard reset
 go back to DEC rules, so RIS still clears everything. (term.c's
 DECSERA reads `protect_iso` too: it honours DEC protection only.)
+
+## 28. Reset notification (`include/vterm.h`, `src/state.c`)
+
+`VTermStateFallbacks` gets a `reset(hard, user)` member, called at the
+end of `vterm_state_reset()`: after DECSTR (soft), RIS (hard), and the
+embedder's own calls. term.c keeps state libvterm doesn't (the DECLL
+user lights, the status line type) and needs to know when RIS happens;
+no existing callback says so.

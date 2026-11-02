@@ -220,6 +220,23 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "%s", work->printer ?
 		    "on: SD card  (/print/NNNN.txt)" : "off");
 		break;
+	case ITEM_STATUS: {
+		static const char *const modes[STATUS_MODE_COUNT] = {
+			[STATUS_HIDDEN] = "hidden  (lights in the corner)",
+			[STATUS_BOTTOM] = "bottom  (a row of its own)",
+			[STATUS_TOP] = "top  (a row of its own)",
+			[STATUS_PEEK_BOTTOM] = "peek, bottom  (slides up on news)",
+			[STATUS_PEEK_TOP] = "peek, top  (slides down on news)",
+		};
+		snprintf(out, len, "%s",
+		    modes[work->status_line % STATUS_MODE_COUNT]);
+		break;
+	}
+	case ITEM_PEEK:
+		snprintf(out, len, "%u seconds",
+		    settings_peek_seconds[work->peek_time %
+		    SETTINGS_PEEK_TIMES]);
+		break;
 	case ITEM_PROFILER:
 		snprintf(out, len, "%s", work->profiler_bar ?
 		    "on  (cycles a line vs. budget, top of screen)" : "off");
@@ -277,6 +294,8 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_SCREENSHOT] = "Screenshot format",
 	[ITEM_PRINTER] = "Printer",
+	[ITEM_STATUS] = "Status line",
+	[ITEM_PEEK] = "Peek time",
 	[ITEM_PROFILER] = "Profiler bar",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
@@ -558,6 +577,14 @@ change_value(struct setup *setup, int step)
 	}
 	case ITEM_PRINTER:
 		work->printer = !work->printer;
+		break;
+	case ITEM_STATUS:
+		work->status_line = (uint8_t)cycle(work->status_line,
+		    STATUS_MODE_COUNT, step);
+		break;
+	case ITEM_PEEK:
+		work->peek_time = (uint8_t)cycle(work->peek_time,
+		    SETTINGS_PEEK_TIMES, step);
 		break;
 	case ITEM_PROFILER:
 		work->profiler_bar = !work->profiler_bar;

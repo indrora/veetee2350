@@ -43,6 +43,7 @@
 #include "graphics.h"
 #include "grid.h"
 #include "render.h"
+#include "status.h"
 #include "vterm.h"
 
 /* Sink for bytes the terminal sends to the host (DA/DSR replies, ...). */
@@ -105,6 +106,8 @@ struct term_options {
 	uint8_t		sixel_bpp;	/* tile depth: 8, 4, 2 or 1 */
 	bool		ansi_set;	/* use `ansi`, not xterm's 16 colours */
 	uint8_t		ansi[16][3];	/* ANSI colours 0-15 (base16 schemes) */
+	uint8_t		status_mode;	/* enum term_status_mode (status.h) */
+	uint8_t		peek_seconds;	/* how long a peeking status line stays */
 };
 
 /* Current SGR state, as libvterm reports it through setpenattr. */
@@ -222,6 +225,10 @@ struct term {
 	bool		 auto_print;		/* CSI ? 5 i */
 	uint8_t		 mc_held[4];	/* a possible CSI 4/5 i, held back */
 	uint8_t		 mc_held_len;
+	/* The status line and user lights (status.c). */
+	uint8_t		 status_lights;	/* DECLL: bit n is L(n+1) */
+	uint8_t		 status_type;	/* DECSSDT, enum term_status_type */
+	struct term_status status;
 };
 
 /*

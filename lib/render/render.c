@@ -76,6 +76,8 @@ build_mask_tables(void)
 void
 render_set_screen(struct render *render, unsigned width, unsigned height)
 {
+	/* The first call: start clean (no overlays, no status line). */
+	memset(render, 0, sizeof(*render));
 	if (width > RENDER_MAX_WIDTH)
 		width = RENDER_MAX_WIDTH;
 	if (height > RENDER_MAX_HEIGHT)
@@ -96,10 +98,42 @@ render_grid_size(const struct font *font, unsigned width, unsigned height,
 		*rows = GRID_MAX_ROWS;
 }
 
+/*
+ * What a scanline shows when nothing peeks: border, the reserved status
+ * row, or a grid row. render_init lays the screen out with this and
+ * render_status_peek uses it to put lines back.
+ */
+static void
+base_line(struct render *render, unsigned line)
+{
+	const unsigned height = render->font->height;
+	unsigned row = RENDER_LINE_BORDER, sub = 0;
+
+	if (line >= render->text_top && line < render->text_end) {
+		row = (line - render->text_top) / height;
+		sub = (line - render->text_top) % height;
+	} else if (render->status_place == RENDER_STATUS_TOP &&
+	    line < render->text_top && line + height >= render->text_top) {
+		row = RENDER_LINE_STATUS;
+		sub = line + height - render->text_top;
+	} else if (render->status_place == RENDER_STATUS_BOTTOM &&
+	    line >= render->text_end && line < render->text_end + height) {
+		row = RENDER_LINE_STATUS;
+		sub = line - render->text_end;
+	}
+	render->line_row[line] = (uint8_t)row;
+	render->line_sub[line] = (uint8_t)sub;
+}
+
 void
 render_init(struct render *render, const struct font *font, struct grid *grid)
 {
-	unsigned used_height = (unsigned)grid->rows * font->height;
+	/* A status row of its own only if there are cells to draw in it. */
+	if (render->status_cells == nullptr)
+		render->status_place = RENDER_STATUS_NONE;
+	const bool status_row = render->status_place != RENDER_STATUS_NONE;
+	unsigned used_height = ((unsigned)grid->rows + status_row) *
+	    font->height;
 
 	build_mask_tables();
 	render->font = font;
@@ -107,6 +141,10 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 	render->x_offset = (uint16_t)(((render->width -
 	    (unsigned)grid->cols * font->width) / 2) & ~1u);
 	render->y_offset = (uint16_t)((render->height - used_height) / 2);
+	render->text_top = (uint16_t)(render->y_offset +
+	    (render->status_place == RENDER_STATUS_TOP ? font->height : 0));
+	render->text_end = (uint16_t)(render->text_top +
+	    (unsigned)grid->rows * font->height);
 	/* Strike through the middle of lowercase letters, about 3/5 of the
 	 * way up to the baseline; overline on the top row. */
 	render->strike_row = (uint8_t)(font->baseline * 3 / 5);
@@ -130,18 +168,33 @@ render_init(struct render *render, const struct font *font, struct grid *grid)
 		}
 	}
 
-	for (unsigned line = 0; line < render->height; line++) {
-		if (line < render->y_offset ||
-		    line >= render->y_offset + used_height) {
-			render->line_row[line] = RENDER_LINE_BORDER;
-			render->line_sub[line] = 0;
-		} else {
-			unsigned inside = line - render->y_offset;
-			render->line_row[line] = (uint8_t)(inside / font->height);
-			render->line_sub[line] = (uint8_t)(inside % font->height);
-		}
-	}
+	for (unsigned line = 0; line < render->height; line++)
+		base_line(render, line);
 	render->active = true;
+}
+
+void
+render_status_peek(struct render *render, bool top, unsigned lines)
+{
+	const unsigned height = render->font->height;
+
+	if (render->status_cells == nullptr ||
+	    render->text_end < render->text_top + height)
+		return;
+	if (lines > height)
+		lines = height;
+	/* The edge row the status line slides over. */
+	unsigned first = top ? render->text_top : render->text_end - height;
+	for (unsigned line = first; line < first + height; line++)
+		base_line(render, line);
+	for (unsigned i = 0; i < lines; i++) {
+		/* Bottom: rows 0.. from text_end - lines; top: the last ones. */
+		unsigned line = top ? render->text_top + i :
+		    render->text_end - lines + i;
+		render->line_row[line] = RENDER_LINE_STATUS;
+		render->line_sub[line] = (uint8_t)(top ? height - lines + i :
+		    i);
+	}
 }
 
 void
@@ -549,6 +602,49 @@ draw_meter(const struct render *render, uint16_t *pixels, unsigned line)
 	draw_meter_bar(render, pixels, &render->meter.bar[line < 3 ? 0 : 1]);
 }
 
+/*
+ * A line of the status row (render.h): its own cells, plain text in two
+ * colours -- no attributes, pictures, cursor, overlays or DECSCNM.
+ * noinline keeps it out of render_scanline: inlined there, it cost the
+ * text path 231 cycles a line (see there).
+ *
+ * 8-px fonts get the text path's inline emit8 loop: through draw_cell,
+ * a call per cell, the status row's lines took 6747 cycles at 80
+ * columns, against 4160 for a line of text (VEETEE_RENDER_PROFILE).
+ */
+static void __attribute__((noinline))
+HOT_FUNC(draw_status_line)(const struct render *render, uint16_t *pixels,
+    unsigned sub)
+{
+	const struct font *font = render->font;
+	const struct grid *grid = render->grid;
+	const unsigned cols = grid->cols;
+	const uint8_t *glyph_rows = font->glyphs + sub * font->row_bytes;
+	uint16_t *out = pixels + render->x_offset;
+
+	fill_words((uint32_t *)pixels, render->x_offset / 2, grid->border2);
+	for (unsigned x = render->x_offset + cols * font->width;
+	    x < render->width; x++)
+		pixels[x] = (uint16_t)grid->border2;
+	if (font->width == 8) {
+		const uint32_t (*masks)[4] = byte_masks[0];
+		const unsigned glyph_bytes = font->glyph_bytes;
+		uint32_t *words = (uint32_t *)out;
+		for (unsigned col = 0; col < cols; col++, words += 4) {
+			const struct cell *cell = &render->status_cells[col];
+			emit8(words, glyph_rows[cell->glyph * glyph_bytes],
+			    CELL_BG2(cell), CELL_DIFF2(cell), masks);
+		}
+		return;
+	}
+	for (unsigned col = 0; col < cols; col++) {
+		const struct cell *cell = &render->status_cells[col];
+		draw_cell(render, out + col * font->width, cell,
+		    read_bits(glyph_rows + cell->glyph * font->glyph_bytes,
+		    font->row_bytes), false);
+	}
+}
+
 void
 HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 {
@@ -563,8 +659,19 @@ HOT_FUNC(render_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 		return;
 	}
 
+	/*
+	 * BORDER and STATUS are the two values above any row number, so one
+	 * compare keeps both off the text path. (Testing for STATUS inside
+	 * the text path cost 231 cycles a line -- 4019 -> 4250 on a full
+	 * 80x30 screen, VEETEE_RENDER_PROFILE -- though it only added
+	 * per-line work: the column loop compiled worse around it.)
+	 */
 	unsigned text_row = render->line_row[line];
-	if (!render->active || text_row == RENDER_LINE_BORDER) {
+	if (!render->active || text_row >= RENDER_LINE_STATUS) {
+		if (render->active && text_row == RENDER_LINE_STATUS) {
+			draw_status_line(render, pixels, render->line_sub[line]);
+			return;
+		}
 		fill_words((uint32_t *)pixels, render->width / 2u,
 		    render->active ? grid->border2 : 0);
 		return;

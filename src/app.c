@@ -186,6 +186,22 @@ settings_colours(struct term_options *options)
 	options->ansi_set = false;
 }
 
+/* settings.h's status modes are term's, by number. */
+static_assert((int)STATUS_HIDDEN == (int)TERM_STATUS_HIDDEN &&
+    (int)STATUS_BOTTOM == (int)TERM_STATUS_BOTTOM &&
+    (int)STATUS_TOP == (int)TERM_STATUS_TOP &&
+    (int)STATUS_PEEK_BOTTOM == (int)TERM_STATUS_PEEK_BOTTOM &&
+    (int)STATUS_PEEK_TOP == (int)TERM_STATUS_PEEK_TOP &&
+    (int)STATUS_MODE_COUNT == (int)TERM_STATUS_MODES,
+    "status line modes differ");
+
+/* The status line's standing text: what's switched on. */
+static void
+show_printer_state(void)
+{
+	term_status_text(&term, settings.printer ? "Printer" : "");
+}
+
 /* Make the terminal match `settings` (resets it if geometry changed). */
 static void
 apply_settings(void)
@@ -210,9 +226,13 @@ apply_settings(void)
 	settings_colours(&options);
 	memcpy(options.answerback, settings.answerback,
 	    sizeof(options.answerback));
+	options.status_mode = settings.status_line % STATUS_MODE_COUNT;
+	options.peek_seconds = settings_peek_seconds[settings.peek_time %
+	    SETTINGS_PEEK_TIMES];
 	if (!term_configure(&term, settings_font(), &options))
 		panic("term: cannot apply settings (memory)");
 	printer_sd_enable(&term, settings.printer != 0);
+	show_printer_state();
 }
 
 /* Where this boot's settings came from, for the boot banner. */
@@ -418,10 +438,15 @@ take_screenshot(void)
 		snprintf(text, sizeof(text), "Saved %s (%lu ms)", path,
 		    (unsigned long)(now_ms() - start));
 		setup_message(&setup, text);
-	} else if (!bell_flashing) {
-		term.screen->reverse_video = !term.reverse_video;
-		bell_flashing = true;
-		bell_until = make_timeout_time_ms(VISUAL_BELL_MS);
+	} else {
+		char text[48];
+		snprintf(text, sizeof(text), "Saved %s", path);
+		term_status_message(&term, text, now_ms());
+		if (!bell_flashing) {
+			term.screen->reverse_video = !term.reverse_video;
+			bell_flashing = true;
+			bell_until = make_timeout_time_ms(VISUAL_BELL_MS);
+		}
 	}
 }
 
@@ -487,6 +512,7 @@ run_tool(enum tool tool)
 	case TOOL_PRINTER:
 		settings.printer = !settings.printer;
 		printer_sd_enable(&term, settings.printer);
+		show_printer_state();
 		break;
 	case TOOL_CLEAR:
 		term_feed(&term, (const uint8_t *)clear, sizeof(clear) - 1);
@@ -762,6 +788,12 @@ app_poll(void)
 	board_watchdog_feed();
 	video_poll();
 	update_meter();
+	/* The status line and lights, once a frame (lib/term/status.h). */
+	static uint32_t status_frame;
+	if (render.frame != status_frame) {
+		status_frame = render.frame;
+		term_status_poll(&term, now_ms(), !in_setup);
+	}
 #ifdef VEETEE_FLASH_PROBE
 	static absolute_time_t next_probe_report;
 	if (time_reached(next_probe_report)) {

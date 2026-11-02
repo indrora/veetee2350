@@ -2610,6 +2610,10 @@ void vterm_state_reset(VTermState *state, int hard)
     VTermRect rect = { 0, state->rows, 0, state->cols };
     erase(state, rect, 0);
   }
+
+  /* VeeTee patch 28 */
+  if(state->fallbacks && state->fallbacks->reset)
+    (*state->fallbacks->reset)(hard, state->fbdata);
 }
 
 void vterm_state_get_cursorpos(const VTermState *state, VTermPos *cursorpos)
