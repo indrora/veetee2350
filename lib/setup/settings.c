@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "grid.h"
+#include "term.h"
 #include "video_modes.h"
 
 static const struct {
@@ -47,6 +48,10 @@ settings_defaults(struct settings *settings)
 	settings->local_echo = 0;
 	settings->visual_bell = 1;
 	strcpy(settings->answerback, "VeeTee 2350");
+	settings->emulation = EMU_XTERM;
+	settings->colour_depth = term_emulations[EMU_XTERM].depth;
+	settings->utf8 = term_emulations[EMU_XTERM].utf8;
+	settings->alt_screen = term_emulations[EMU_XTERM].alt_screen;
 	settings_seal(settings);
 }
 
@@ -89,6 +94,8 @@ settings_valid(const struct settings *settings)
 	    settings->scheme < SCHEME_COUNT &&
 	    settings->resolution < VIDEO_MODE_COUNT &&
 	    settings->term_size < SIZE_COUNT &&
+	    settings->emulation < EMU_COUNT &&
+	    settings->colour_depth < DEPTH_COUNT &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
 }
 

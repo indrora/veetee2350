@@ -48,6 +48,39 @@
 typedef void (*term_output_fn)(const char *bytes, size_t len, void *ctx);
 
 /*
+ * Emulation level: what the terminal claims to be (DA1/DA2 replies) and
+ * the default feature set. SET-UP picks a level, then lets each feature be
+ * overridden. term_emulation_preset() gives a level's defaults.
+ */
+enum term_emulation {
+	EMU_VT100,
+	EMU_VT220,
+	EMU_VT340,
+	EMU_XTERM,
+	EMU_COUNT
+};
+
+enum colour_depth {
+	DEPTH_MONO,		/* SGR colours ignored (VT100/VT220) */
+	DEPTH_16,		/* ANSI 16 */
+	DEPTH_256,		/* xterm 256 */
+	DEPTH_TRUE,		/* 24-bit (shown as RGB565) */
+	DEPTH_COUNT
+};
+
+struct term_emulation_info {
+	const char	*name;
+	const char	*term_hint;	/* TERM to use on the host */
+	const char	*da1;		/* reply to CSI c, without CSI */
+	const char	*da2;		/* reply to CSI > c, or nullptr */
+	uint8_t		 depth;		/* defaults: */
+	bool		 utf8;
+	bool		 alt_screen;
+};
+
+extern const struct term_emulation_info term_emulations[EMU_COUNT];
+
+/*
  * User-configurable behaviour (from SET-UP). Geometry and colours need a
  * screen rebuild + reset to apply; the rest are terminal modes applied in
  * place.
@@ -62,6 +95,10 @@ struct term_options {
 	bool		autowrap;	/* DECAWM */
 	bool		newline_mode;	/* LNM */
 	char		answerback[32];	/* sent in reply to ENQ */
+	uint8_t		emulation;	/* enum term_emulation */
+	uint8_t		colour_depth;	/* enum colour_depth */
+	bool		utf8;		/* off: 8-bit bytes, C1 + Latin-1 GR */
+	bool		alt_screen;	/* off: ignore DECSET 47/1047/1049 */
 };
 
 /* Current SGR state, as libvterm reports it through setpenattr. */
@@ -89,6 +126,7 @@ struct term {
 	struct grid	*screen;	/* the grid being written and shown */
 	struct term_pen	 pen;
 	struct term_options options;
+	uint8_t		 palette16[16][3];	/* for DEPTH_16 mapping */
 	uint16_t	 default_fg;	/* RGB565 */
 	uint16_t	 default_bg;
 	uint16_t	 space_glyph;

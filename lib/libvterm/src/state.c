@@ -1263,6 +1263,11 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
   }
 
   case 0x63: // DA - ECMA-48 8.3.24
+    /* VeeTee patch: the embedder may answer DA itself (emulation level).
+     * See PATCHES.md. */
+    if(state->fallbacks && state->fallbacks->csi &&
+       (*state->fallbacks->csi)(leader, args, argcount, intermed, command, state->fbdata))
+      break;
     val = CSI_ARG_OR(args[0], 0);
     if(val == 0)
       // DEC VT100 response
@@ -1270,6 +1275,10 @@ static int on_csi(const char *leader, const long args[], int argcount, const cha
     break;
 
   case LEADER('>', 0x63): // DEC secondary Device Attributes
+    /* VeeTee patch: as for DA above. */
+    if(state->fallbacks && state->fallbacks->csi &&
+       (*state->fallbacks->csi)(leader, args, argcount, intermed, command, state->fbdata))
+      break;
     vterm_push_output_sprintf_ctrl(state->vt, C1_CSI, ">%d;%d;%dc", 0, 100, 0);
     break;
 

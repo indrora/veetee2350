@@ -90,6 +90,10 @@ apply_settings(void)
 		.newline_mode = settings.newline_mode,
 	};
 
+	options.emulation = settings.emulation;
+	options.colour_depth = settings.colour_depth;
+	options.utf8 = settings.utf8;
+	options.alt_screen = settings.alt_screen;
 	settings_scheme_rgb(settings.scheme, options.fg_rgb, options.bg_rgb);
 	memcpy(options.answerback, settings.answerback,
 	    sizeof(options.answerback));

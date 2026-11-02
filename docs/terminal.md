@@ -51,6 +51,15 @@ size. Later reports are stripped from the stream and applied to the pty,
 which sends SIGWINCH. That fixed full-screen programs (htop, micro)
 using only part of the screen after a font or size change.
 
+## Emulation level
+
+SET-UP → Emulation picks VT100 / VT220 / VT340 / xterm. A level sets
+the DA1/DA2 replies and loads defaults for Colour depth (off / 16 / 256
+/ 24-bit), UTF-8 (off means 8-bit: C1 controls plus Latin-1 GR), and
+Alternate screen (off works like xterm's titeInhibit). Each can be
+overridden. Set `TERM` on the host to match (SET-UP shows the hint).
+Changing level or depth resets the terminal.
+
 ## Keyboard port and SET-UP
 
 The device presents two CDC ports: **VeeTee line** (the terminal's line,
@@ -130,4 +139,5 @@ and UTF-8 split across writes.
 | Wide (CJK) characters drawn half-width | Needs double-width glyphs (Unicode stretch goal). |
 | Combining characters dropped | One glyph per cell. |
 | DECCOLM (132 columns) ignored | The grid size is fixed by the font. A narrow font could provide it. |
+| 8-bit GR is Latin-1, not DEC Supplemental Graphics | libvterm has no 96-character sets. Close, but not identical for VT220 apps. |
 | A host RIS (`ESC c`) resets modes to libvterm defaults, not to the saved settings | libvterm doesn't signal RIS. SET-UP's settings are applied at boot, on exit, and by its "Reset terminal" action. |

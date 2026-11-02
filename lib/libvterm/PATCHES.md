@@ -20,3 +20,11 @@ to `VTermStateFallbacks.csi` first:
 
 If the fallback returns 0, the original behaviour applies. VeeTee uses
 this for mode 2048 (in-band resize notifications).
+
+## 2. DA1 / DA2 can be answered by the embedder (`src/state.c`)
+
+libvterm always answered `CSI c` with `?1;2c` (VT100 with AVO) and
+`CSI > c` with `>0;100;0c`. Both cases now offer the sequence to
+`VTermStateFallbacks.csi` first, and the built-in reply is only used if
+the fallback returns 0. VeeTee answers according to its emulation level
+(VT100 / VT220 / VT340 / xterm), and adds Sixel (`;4`) when enabled.

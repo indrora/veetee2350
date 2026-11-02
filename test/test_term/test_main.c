@@ -12,6 +12,7 @@
 #include "grid.h"
 #include "render.h"
 #include "term.h"
+#include "colour.h"
 
 static struct render render;
 static struct term term;
@@ -298,6 +299,99 @@ test_inband_resize_reports(void)
 	TEST_ASSERT_EQUAL_STRING("", reply);
 }
 
+static void
+configure(enum term_emulation level, unsigned depth, bool utf8, bool alt)
+{
+	struct term_options options = term.options;
+
+	options.emulation = level;
+	options.colour_depth = depth;
+	options.utf8 = utf8;
+	options.alt_screen = alt;
+	TEST_ASSERT_TRUE(term_configure(&term, term.font_source, &options));
+	reply_len = 0;
+	reply[0] = '\0';
+}
+
+static void
+test_colour_module(void)
+{
+	TEST_ASSERT_EQUAL(196, colour_nearest_256(255, 0, 0));
+	TEST_ASSERT_EQUAL(244, colour_nearest_256(128, 128, 128));
+	TEST_ASSERT_EQUAL(16, colour_nearest_256(0, 0, 0));
+	uint8_t rgb[3];
+	colour_256_rgb(196, rgb);
+	TEST_ASSERT_EQUAL(255, rgb[0]);
+	TEST_ASSERT_EQUAL(0, rgb[1]);
+}
+
+static void
+test_device_attributes_per_level(void)
+{
+	feed("\x1b[c");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?64;6;22c", reply);	/* xterm */
+	reply_len = 0;
+	feed("\x1b[>c");
+	TEST_ASSERT_EQUAL_STRING("\x1b[>41;390;0c", reply);
+
+	configure(EMU_VT100, DEPTH_MONO, false, false);
+	feed("\x1b[c");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?1;2c", reply);
+	reply_len = 0;
+	reply[0] = '\0';
+	feed("\x1b[>c");				/* VT100: no DA2 */
+	TEST_ASSERT_EQUAL_STRING("", reply);
+
+	configure(EMU_VT220, DEPTH_MONO, false, false);
+	feed("\x1b[c");
+	TEST_ASSERT_EQUAL_STRING("\x1b[?62;6;22c", reply);
+}
+
+static void
+test_colour_depths(void)
+{
+	/* Truecolor: exact. */
+	feed("\x1b[38;2;10;200;30mA");
+	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(10, 200, 30), cell_fg(cell_at(0, 0)));
+
+	/* 256: snapped to the cube (0,215,0)-ish, not exact. */
+	configure(EMU_XTERM, DEPTH_256, true, true);
+	feed("\x1b[38;2;10;200;30mA");
+	uint8_t rgb[3];
+	colour_256_rgb(colour_nearest_256(10, 200, 30), rgb);
+	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(rgb[0], rgb[1], rgb[2]),
+	    cell_fg(cell_at(0, 0)));
+
+	/* 16: snapped to the nearest ANSI colour, libvterm's green (0,224,0). */
+	configure(EMU_XTERM, DEPTH_16, true, true);
+	feed("\x1b[38;2;10;230;30mA");
+	const uint8_t *green = term.palette16[2];
+	TEST_ASSERT_EQUAL_HEX16(grid_rgb565(green[0], green[1], green[2]),
+	    cell_fg(cell_at(0, 0)));
+
+	/* Mono: colours ignored. */
+	configure(EMU_VT100, DEPTH_MONO, false, false);
+	feed("\x1b[31;44mA");
+	TEST_ASSERT_EQUAL_HEX16(term.default_fg, cell_fg(cell_at(0, 0)));
+	TEST_ASSERT_EQUAL_HEX16(term.default_bg, cell_bg(cell_at(0, 0)));
+}
+
+static void
+test_utf8_off_and_alt_screen_off(void)
+{
+	configure(EMU_VT220, DEPTH_MONO, false, false);
+	feed("\xe9");				/* Latin-1 e-acute */
+	TEST_ASSERT_EQUAL(glyph(0xe9), cell_at(0, 0)->glyph);
+
+	/* 8-bit C1: 0x9B is CSI. */
+	feed("\x9b" "5;1HX");
+	TEST_ASSERT_EQUAL(glyph('X'), cell_at(4, 0)->glyph);
+
+	feed("\x1b[?1049h");			/* ignored */
+	TEST_ASSERT_EQUAL_PTR(&term.primary, term.screen);
+	TEST_ASSERT_EQUAL(glyph(0xe9), cell_at(0, 0)->glyph);
+}
+
 int
 main(void)
 {
@@ -318,5 +412,9 @@ main(void)
 	RUN_TEST(test_osc50_query_cycle_and_unknown);
 	RUN_TEST(test_size_queries);
 	RUN_TEST(test_inband_resize_reports);
+	RUN_TEST(test_colour_module);
+	RUN_TEST(test_device_attributes_per_level);
+	RUN_TEST(test_colour_depths);
+	RUN_TEST(test_utf8_off_and_alt_screen_off);
 	return UNITY_END();
 }

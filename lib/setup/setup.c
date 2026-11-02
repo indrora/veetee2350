@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "render.h"
+#include "term.h"
 #include "video_modes.h"
 
 /* Menu colours: VT-style light text on blue, selection inverted. */
@@ -121,6 +122,30 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 			snprintf(out, len, "%ux%u", cols, rows);
 		break;
 	}
+	case ITEM_EMULATION: {
+		const struct term_emulation_info *info =
+		    &term_emulations[work->emulation % EMU_COUNT];
+		snprintf(out, len, "%s  (host: TERM=%s)", info->name,
+		    info->term_hint);
+		break;
+	}
+	case ITEM_DEPTH: {
+		static const char *const depth_names[DEPTH_COUNT] = {
+			"off (monochrome)", "16 colours", "256 colours",
+			"24-bit",
+		};
+		snprintf(out, len, "%s", depth_names[work->colour_depth %
+		    DEPTH_COUNT]);
+		break;
+	}
+	case ITEM_UTF8:
+		snprintf(out, len, "%s", work->utf8 ? "on" :
+		    "off (8-bit: C1 controls, Latin-1)");
+		break;
+	case ITEM_ALTSCREEN:
+		snprintf(out, len, "%s", work->alt_screen ? "allowed" :
+		    "ignored (full-screen apps leave output behind)");
+		break;
 	case ITEM_SCHEME:
 		snprintf(out, len, "%s", settings_scheme_name(work->scheme));
 		break;
@@ -155,7 +180,11 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_RESOLUTION] = "Resolution",
 	[ITEM_FONT] = "Font",
 	[ITEM_SIZE] = "Terminal size",
-	[ITEM_SCHEME] = "Colours",
+	[ITEM_EMULATION] = "Emulation",
+	[ITEM_DEPTH] = "Colour depth",
+	[ITEM_UTF8] = "UTF-8",
+	[ITEM_ALTSCREEN] = "Alternate screen",
+	[ITEM_SCHEME] = "Colour scheme",
 	[ITEM_CURSOR] = "Cursor",
 	[ITEM_BLINK] = "Cursor blink",
 	[ITEM_WRAP] = "Auto wrap",
@@ -170,11 +199,14 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_EXIT] = "Exit SET-UP            (F3 / Esc)",
 };
 
-/* Screen row of each item: settings, a gap, then the actions. */
+/*
+ * Screen row of each item. Everything (title, note, 20 items, help,
+ * message) fits exactly in 24 rows, so SET-UP works on an 80x24 terminal.
+ */
 static unsigned
 item_row(unsigned item)
 {
-	return FIRST_ROW + item + (item >= ITEM_SAVE ? 1 : 0);
+	return FIRST_ROW + item;
 }
 
 void
@@ -207,15 +239,14 @@ setup_draw(struct setup *setup)
 		put(setup, row, VALUE_COL, value, fg, bg);
 	}
 
-	unsigned help_row = item_row(ITEM_EXIT) + 2;
+	put(setup, 1, LABEL_COL, "Font, size, emulation, colours: reset the "
+	    "terminal.  Resolution: restarts.", DIM_FG, MENU_BG);
+	unsigned help_row = item_row(ITEM_EXIT) + 1;
 	put(setup, help_row, LABEL_COL, setup->editing ?
 	    "Type the answerback; Enter or Esc to finish." :
-	    "Up/Down: select   Left/Right/Enter: change", DIM_FG, MENU_BG);
-	put(setup, help_row + 1, LABEL_COL,
-	    "Font/size/colours reset the terminal; resolution restarts it.",
+	    "Up/Down select   Left/Right/Enter change   S save   F3 leave",
 	    DIM_FG, MENU_BG);
-	/* Row 23 at most: SET-UP must fit an 80x24 terminal. */
-	put(setup, help_row + 2, LABEL_COL, setup->message, TITLE_BG,
+	put(setup, help_row + 1, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
 }
 
@@ -276,6 +307,27 @@ change_value(struct setup *setup, int step)
 	}
 	case ITEM_SIZE:
 		work->term_size = (uint8_t)cycle(work->term_size, SIZE_COUNT, step);
+		break;
+	case ITEM_EMULATION: {
+		/* A new level brings its own feature defaults. */
+		work->emulation = (uint8_t)cycle(work->emulation, EMU_COUNT,
+		    step);
+		const struct term_emulation_info *info =
+		    &term_emulations[work->emulation];
+		work->colour_depth = info->depth;
+		work->utf8 = info->utf8;
+		work->alt_screen = info->alt_screen;
+		break;
+	}
+	case ITEM_DEPTH:
+		work->colour_depth = (uint8_t)cycle(work->colour_depth,
+		    DEPTH_COUNT, step);
+		break;
+	case ITEM_UTF8:
+		work->utf8 = !work->utf8;
+		break;
+	case ITEM_ALTSCREEN:
+		work->alt_screen = !work->alt_screen;
 		break;
 	case ITEM_SCHEME:
 		work->scheme = (uint8_t)cycle(work->scheme, SCHEME_COUNT, step);

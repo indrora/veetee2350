@@ -13,6 +13,8 @@
  */
 #include "term.h"
 
+#include "colour.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -20,15 +22,74 @@
 #define DEFAULT_FG_RGB	229, 229, 229
 #define DEFAULT_BG_RGB	0, 0, 0
 
+/*
+ * Emulation levels. DA1 attributes: 1 = 132 columns, 2 = printer port,
+ * 6 = selective erase, 22 = ANSI colour; 62/63/64 = VT220/VT320/VT420
+ * conformance. We only claim what we do (132 columns depends on the
+ * resolution, so it's never claimed). DA2: terminal id ; firmware ; ROM.
+ */
+const struct term_emulation_info term_emulations[EMU_COUNT] = {
+	[EMU_VT100] = {"VT100", "vt100", "?1;2c", nullptr,
+	    DEPTH_MONO, false, false},
+	[EMU_VT220] = {"VT220", "vt220", "?62;6;22c", ">1;10;0c",
+	    DEPTH_MONO, false, false},
+	[EMU_VT340] = {"VT340", "vt340", "?63;6;22c", ">19;10;0c",
+	    DEPTH_16, false, false},
+	[EMU_XTERM] = {"xterm", "xterm-256color", "?64;6;22c", ">41;390;0c",
+	    DEPTH_TRUE, true, true},
+};
+
+/*
+ * SGR colour -> RGB565 at the configured depth. Mono ignores colours
+ * (defaults only); 16 snaps everything to the ANSI palette; 256 snaps RGB
+ * to the xterm cube/grey ramp; truecolor passes RGB through.
+ */
 static uint16_t
 resolve_colour(const struct term *term, VTermColor colour, bool foreground)
 {
-	if (foreground && VTERM_COLOR_IS_DEFAULT_FG(&colour))
+	unsigned depth = term->options.colour_depth;
+
+	if ((foreground && VTERM_COLOR_IS_DEFAULT_FG(&colour)) ||
+	    (depth == DEPTH_MONO && foreground))
 		return term->default_fg;
-	if (!foreground && VTERM_COLOR_IS_DEFAULT_BG(&colour))
+	if ((!foreground && VTERM_COLOR_IS_DEFAULT_BG(&colour)) ||
+	    (depth == DEPTH_MONO && !foreground))
 		return term->default_bg;
+
+	bool indexed = VTERM_COLOR_IS_INDEXED(&colour);
+	unsigned index = indexed ? colour.indexed.idx : 0;
 	vterm_state_convert_color_to_rgb(term->state, &colour);
-	return grid_rgb565(colour.rgb.red, colour.rgb.green, colour.rgb.blue);
+	uint8_t red = colour.rgb.red, green = colour.rgb.green;
+	uint8_t blue = colour.rgb.blue;
+
+	if (depth == DEPTH_16 && !(indexed && index < 16)) {
+		const uint8_t *rgb = term->palette16[colour_nearest_16(red, green,
+		    blue, (const uint8_t (*)[3])term->palette16)];
+		red = rgb[0];
+		green = rgb[1];
+		blue = rgb[2];
+	} else if (depth == DEPTH_256 && !indexed) {
+		uint8_t rgb[3];
+		colour_256_rgb(colour_nearest_256(red, green, blue), rgb);
+		red = rgb[0];
+		green = rgb[1];
+		blue = rgb[2];
+	}
+	return grid_rgb565(red, green, blue);
+}
+
+/* Cache the 16 ANSI colours (for DEPTH_16 matching). */
+static void
+cache_palette16(struct term *term)
+{
+	for (int i = 0; i < 16; i++) {
+		VTermColor colour;
+		vterm_state_get_palette_color(term->state, i, &colour);
+		vterm_state_convert_color_to_rgb(term->state, &colour);
+		term->palette16[i][0] = colour.rgb.red;
+		term->palette16[i][1] = colour.rgb.green;
+		term->palette16[i][2] = colour.rgb.blue;
+	}
 }
 
 /* A cell drawing `glyph` with the current pen (SGR state). */
@@ -287,6 +348,14 @@ cb_settermprop(VTermProp prop, VTermValue *val, void *user)
 		term->reverse_video = val->boolean;
 		break;
 	case VTERM_PROP_ALTSCREEN: {
+		/*
+		 * Alternate screen disabled (VT100/VT220, or by choice): stay
+		 * on the primary, like xterm's titeInhibit. Returning 0 makes
+		 * libvterm refuse the switch -- otherwise it would still erase
+		 * "the alternate screen", which is our primary.
+		 */
+		if (!term->options.alt_screen)
+			return 0;
 		struct grid *next = val->boolean ? &term->alternate :
 		    &term->primary;
 		if (next == term->screen)
@@ -439,6 +508,23 @@ fb_csi(const char *leader, const long args[], int argcount,
 	bool no_leader = leader == nullptr || leader[0] == '\0';
 	long first = argcount > 0 ? CSI_ARG(args[0]) : CSI_ARG_MISSING;
 
+	/* Device attributes, per emulation level (libvterm patch 2). */
+	if (command == 'c' && intermed == nullptr &&
+	    (first == CSI_ARG_MISSING || first == 0)) {
+		const struct term_emulation_info *info =
+		    &term_emulations[term->options.emulation % EMU_COUNT];
+		const char *reply = no_leader ? info->da1 :
+		    (leader[0] == '>' ? info->da2 : nullptr);
+		if (no_leader || leader[0] == '>') {
+			if (reply != nullptr) {
+				term->output("\x1b[", 2, term->output_ctx);
+				term->output(reply, strlen(reply),
+				    term->output_ctx);
+			}
+			return 1;	/* VT100 has no DA2: stay silent */
+		}
+	}
+
 	/* xterm window ops: size queries only. */
 	if (no_leader && intermed == nullptr && command == 't') {
 		switch (first) {
@@ -550,6 +636,10 @@ term_init(struct term *term, const struct font_builtin *builtin,
 		.cursor_shape = CURSOR_BLOCK,
 		.cursor_blink = true,
 		.autowrap = true,
+		.emulation = EMU_XTERM,
+		.colour_depth = DEPTH_TRUE,
+		.utf8 = true,
+		.alt_screen = true,
 	};
 	term->default_fg = grid_rgb565(DEFAULT_FG_RGB);
 	term->default_bg = grid_rgb565(DEFAULT_BG_RGB);
@@ -581,6 +671,7 @@ term_init(struct term *term, const struct font_builtin *builtin,
 	vterm_color_rgb(&bg, DEFAULT_BG_RGB);
 	vterm_state_set_default_colors(term->state, &fg, &bg);
 	vterm_state_set_bold_highbright(term->state, 1);
+	cache_palette16(term);
 	vterm_state_set_callbacks(term->state, &state_callbacks, term);
 	vterm_state_set_unrecognised_fallbacks(term->state, &state_fallbacks,
 	    term);
@@ -636,11 +727,19 @@ term_configure(struct term *term, const struct font_builtin *builtin,
 	bool rebuild = builtin != term->font_source ||
 	    options->max_rows != term->options.max_rows ||
 	    options->max_cols != term->options.max_cols ||
+	    options->emulation != term->options.emulation ||
+	    options->colour_depth != term->options.colour_depth ||
 	    memcmp(options->fg_rgb, term->options.fg_rgb, 3) != 0 ||
 	    memcmp(options->bg_rgb, term->options.bg_rgb, 3) != 0;
 
 	term->options = *options;
 	term->options.answerback[sizeof(term->options.answerback) - 1] = '\0';
+	/* Leaving the alternate screen allowed -> disallowed: go home. */
+	if (!options->alt_screen && term->screen == &term->alternate) {
+		term->screen = &term->primary;
+		render_set_grid(term->render, term->screen);
+		sync_presentation(term);
+	}
 	if (!rebuild) {
 		apply_modes(term);
 		return true;
@@ -678,10 +777,48 @@ term_free(struct term *term)
 	memset(term, 0, sizeof(*term));
 }
 
+/*
+ * 8-bit mode (UTF-8 off), done in front of libvterm, which stays in UTF-8
+ * mode and only knows 94-character sets: C1 controls 0x80-0x9F become
+ * their 7-bit forms (ESC + byte-0x40: 0x9B CSI -> ESC [, 0x9C ST ->
+ * ESC \), and 0xA0-0xFF are taken as ISO Latin-1 and re-encoded as UTF-8.
+ * Byte-by-byte and stateless, so chunk boundaries don't matter. (A real
+ * VT220's default GR set is DEC Supplemental Graphics, which differs from
+ * Latin-1 in a few positions; see docs/terminal.md.)
+ */
+static void
+feed_8bit(struct term *term, const uint8_t *bytes, size_t len)
+{
+	char out[128];
+	size_t used = 0;
+
+	for (size_t i = 0; i < len; i++) {
+		uint8_t byte = bytes[i];
+		if (used > sizeof(out) - 2) {
+			vterm_input_write(term->vt, out, used);
+			used = 0;
+		}
+		if (byte < 0x80) {
+			out[used++] = (char)byte;
+		} else if (byte < 0xa0) {
+			out[used++] = 0x1b;
+			out[used++] = (char)(byte - 0x40);
+		} else {
+			out[used++] = (char)(0xc0 | byte >> 6);
+			out[used++] = (char)(0x80 | (byte & 0x3f));
+		}
+	}
+	if (used > 0)
+		vterm_input_write(term->vt, out, used);
+}
+
 void
 term_feed(struct term *term, const uint8_t *bytes, size_t len)
 {
-	vterm_input_write(term->vt, (const char *)bytes, len);
+	if (term->options.utf8)
+		vterm_input_write(term->vt, (const char *)bytes, len);
+	else
+		feed_8bit(term, bytes, len);
 
 	/*
 	 * Font switches requested by OSC 50 are applied here, outside

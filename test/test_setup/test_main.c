@@ -71,10 +71,8 @@ test_navigation_and_values(void)
 	press(KEY_DOWN, 0);
 	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_RIGHT, 0));
 	TEST_ASSERT_EQUAL_STRING(font_builtins[1].name, setup.work.font);
-	/* Down to Colours, Left wraps around to the last scheme. */
-	press(KEY_DOWN, 0);
-	press(KEY_DOWN, 0);
-	TEST_ASSERT_EQUAL(ITEM_SCHEME, setup.selected);
+	/* Colour scheme: Left wraps around to the last scheme. */
+	setup.selected = ITEM_SCHEME;
 	press(KEY_LEFT, 0);
 	TEST_ASSERT_EQUAL(SCHEME_COUNT - 1, setup.work.scheme);
 	/* Up from the top wraps to Exit. */
@@ -95,6 +93,22 @@ test_toggles_and_actions(void)
 	TEST_ASSERT_EQUAL(SETUP_SAVE, press(KEY_CHAR, 's'));
 	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_F3, 0));
 	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_ESCAPE, 0));
+}
+
+static void
+test_emulation_presets(void)
+{
+	setup.selected = ITEM_EMULATION;
+	TEST_ASSERT_EQUAL(EMU_XTERM, setup.work.emulation);
+	press(KEY_RIGHT, 0);			/* wraps to VT100 */
+	TEST_ASSERT_EQUAL(EMU_VT100, setup.work.emulation);
+	TEST_ASSERT_EQUAL(DEPTH_MONO, setup.work.colour_depth);
+	TEST_ASSERT_FALSE(setup.work.utf8);
+	TEST_ASSERT_FALSE(setup.work.alt_screen);
+	/* Toggles can still be overridden after choosing a level. */
+	setup.selected = ITEM_DEPTH;
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(DEPTH_16, setup.work.colour_depth);
 }
 
 static void
@@ -204,6 +218,7 @@ main(void)
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);
+	RUN_TEST(test_emulation_presets);
 	RUN_TEST(test_answerback_editing);
 	RUN_TEST(test_size_resolution);
 	RUN_TEST(test_term_configure);

@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	3	/* 2: resolution; 3: rows -> size */
+#define SETTINGS_VERSION	4	/* 2 resolution, 3 size, 4 emulation */
 #define SETTINGS_FONT_MAX	24
 #define SETTINGS_ANSWERBACK_MAX	32
 
@@ -64,6 +64,10 @@ struct settings {
 	uint8_t		local_echo;
 	uint8_t		visual_bell;
 	char		answerback[SETTINGS_ANSWERBACK_MAX];	/* ENQ reply */
+	uint8_t		emulation;	/* enum term_emulation (term.h) */
+	uint8_t		colour_depth;	/* enum colour_depth (term.h) */
+	uint8_t		utf8;
+	uint8_t		alt_screen;
 	uint32_t	crc;
 };
 
