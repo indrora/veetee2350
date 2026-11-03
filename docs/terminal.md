@@ -82,10 +82,9 @@ banner then says "last reset: brown-out". A powered hub avoids it too.
 An unplug isn't noticed (the last report keeps arriving), which is
 harmless: only changes between reports are keys.
 
-The port needs the system clock to be a multiple of 12 MHz: it works at
-640x480 @ 60, 960x540 and the 720p30 mode, and is off (the banner says
-why) in the others. Debug builds print every report and where each key
-went (`[hid]`, `[key]`) on the line port. Devlog 027.
+The port works in every video mode (devlog 028). Debug builds print
+every report and where each key went (`[hid]`, `[key]`) on the line
+port. Devlog 027.
 
 ## Keyboard port and SET-UP
 
@@ -96,10 +95,19 @@ line, with new-line mode and local echo applied, except **hotkeys**.
 **Ctrl+F3** (`ESC [ 1 ; 5 R`, `ESC [ 13 ; 5 ~` or `ESC O 5 R`) opens the
 **Tools menu**: Set-Up, Screenshot, Print screen, Printer on/off, Clear
 screen, Soft reset (DECSTR), Hard reset (RIS); Up/Down, Enter, Esc. F12
-takes a screenshot. Plain F3 goes to the host like any other key. The
-BOOTSEL button opens SET-UP. Inside SET-UP: Up/Down to select,
+takes a screenshot. Plain F3 goes to the host like any other key. A tap
+on the BOOTSEL button opens SET-UP (or closes it). **Holding BOOTSEL for
+5 seconds is a factory reset**: after a second SET-UP opens and counts
+down, letting go cancels, and at 5 seconds every setting goes back to
+factory defaults, is saved, and the board restarts once the button is
+let go. It needs no keyboard and no picture, so it's the way out of a
+mode the monitor can't show. Inside SET-UP: Up/Down to select,
 Left/Right/Enter/Space to change, `S` save, `R` recall, `D` factory
-defaults, F3/Esc to leave.
+defaults, **F4 to save and leave**, F3/Esc to leave. If anything changed,
+F3/Esc ask "Save changes?" first: Y (or F4) saves, N discards it all as
+if SET-UP never opened, Esc goes back. A new resolution takes a restart,
+so it only happens once saved, and the question says "and restart".
+Leaving never saves by itself.
 
 SET-UP's **Hotkeys...** page rebinds any tool to any key (with
 modifiers); **Profiler bar** shows the last frame's per-line cycle counts

@@ -35,7 +35,7 @@ Three constraints shaped `lib/hal/usbhost.c`:
   clock has to be a multiple of 12 MHz. 252 MHz is (×21), so 640x480 @
   60 works, as do 960x540 and 720p30. In the 72 Hz mode (devlog 025) and
   the other in-between modes the port stays off, and the boot banner
-  says why.
+  says why. *(Wrong: any clock works. Devlog 028.)*
 - **Power.** The port's 5 V comes straight off the supply, with no
   switch.
 

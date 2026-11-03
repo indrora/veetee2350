@@ -102,6 +102,38 @@ settings_seal(struct settings *settings)
 	settings->crc = crc32(settings, offsetof(struct settings, crc));
 }
 
+/* Zero a text field past its NUL, so equal text is equal bytes. */
+static void
+tidy_text(char *text, size_t size)
+{
+	size_t len = strnlen(text, size);
+
+	memset(text + len, 0, size - len);
+}
+
+bool
+settings_same(const struct settings *a, const struct settings *b)
+{
+	/*
+	 * Compared as bytes, after sealing tidied copies: the record is
+	 * stored as raw bytes, so that's exactly "would a save change
+	 * anything". Padding can't differ: every record starts as a
+	 * zeroed settings_defaults() or a copy of one (flash holds what
+	 * was saved from one), and fields are only ever assigned.
+	 */
+	struct settings left = *a, right = *b;
+
+	tidy_text(left.font, sizeof(left.font));
+	tidy_text(right.font, sizeof(right.font));
+	tidy_text(left.scheme_file, sizeof(left.scheme_file));
+	tidy_text(right.scheme_file, sizeof(right.scheme_file));
+	tidy_text(left.answerback, sizeof(left.answerback));
+	tidy_text(right.answerback, sizeof(right.answerback));
+	settings_seal(&left);
+	settings_seal(&right);
+	return memcmp(&left, &right, sizeof(left)) == 0;
+}
+
 bool
 settings_valid(const struct settings *settings)
 {

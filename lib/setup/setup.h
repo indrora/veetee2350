@@ -22,7 +22,13 @@
 
 enum setup_action {
 	SETUP_NONE,		/* key handled inside the menu (or ignored) */
-	SETUP_EXIT,		/* leave SET-UP, applying `work` */
+	/*
+	 * Leave with nothing unsaved: `work` is as SET-UP opened, or as
+	 * saved with S (applied now, restarting for a saved new mode).
+	 */
+	SETUP_EXIT,
+	SETUP_SAVE_EXIT,	/* write `work` to flash, apply it, leave */
+	SETUP_DISCARD,		/* leave as if never here: nothing applied */
 	SETUP_SAVE,		/* apply `work` and write it to flash */
 	SETUP_RECALL,		/* replace `work` with the saved settings */
 	SETUP_DEFAULTS,		/* replace `work` with factory defaults */
@@ -58,6 +64,7 @@ enum setup_item {
 	ITEM_RECALL,
 	ITEM_DEFAULTS,
 	ITEM_RESET,
+	ITEM_SAVE_EXIT,
 	ITEM_EXIT,
 	ITEM_COUNT
 };
@@ -86,6 +93,9 @@ struct setup_catalogue {
 
 struct setup {
 	struct settings	 work;		/* the settings being edited */
+	/* As SET-UP opened, or as last saved: "changed" is against this. */
+	struct settings	 baseline;
+	bool		 confirming;	/* leaving asked "Save changes?" */
 	struct grid	*grid;
 	const struct font *font;	/* to look up glyphs while drawing */
 	unsigned	 selected;	/* enum setup_item */
@@ -110,8 +120,32 @@ void	setup_begin(struct setup *setup, const struct settings *current,
 	    struct grid *grid, const struct font *font,
 	    unsigned running_resolution);
 
-/* Handle one key; redraws as needed. */
+/*
+ * Handle one key; redraws as needed. F4 saves and leaves; F3 and Esc
+ * leave via setup_exit().
+ */
 enum setup_action setup_key(struct setup *setup, const struct key_event *key);
+
+/*
+ * Leave (F3, Esc, Exit, or a BOOTSEL tap). Nothing changed: SETUP_EXIT.
+ * Changed (setup_dirty): ask "Save changes?" (and "...and restart?" if
+ * setup_dirty_reset) and return SETUP_NONE; the answer is the next key:
+ * Y or F4 is SETUP_SAVE_EXIT, N is SETUP_DISCARD, anything else goes
+ * back to the menu.
+ */
+enum setup_action setup_exit(struct setup *setup);
+
+/*
+ * Has anything changed since SET-UP opened, or since the last save? The
+ * user's two flags, worked out rather than kept, so changing a setting
+ * back clears them: "dirty" for any change, "dirty reset" for a new
+ * resolution (saving it means a restart).
+ */
+bool	setup_dirty(const struct setup *setup);
+bool	setup_dirty_reset(const struct setup *setup);
+
+/* The app wrote `work` to flash: changes are counted from here now. */
+void	setup_saved(struct setup *setup);
 
 /* Offer the card's fonts and schemes (the arrays must outlive SET-UP). */
 void	setup_catalogue(struct setup *setup,

@@ -104,14 +104,22 @@ keyboard_count(void)
 	return count;
 }
 
+/*
+ * Counted by keyboards mounted, not by devices: TinyUSB calls
+ * tuh_mount_cb only once *every* interface on a device has been set up,
+ * and a keyboard's own HID interface can be up and typing long before
+ * that, or with it never happening. Seen on the board (devlog 028):
+ * after warm restarts, with the keyboard powered throughout, keys
+ * arrived while tuh_mount_cb never came, and this said "no keyboard".
+ */
 static void
 describe(void)
 {
-	if (running && devices == 0 && !VEETEE_DEBUG_BUILD) {
+	if (running && keyboard_count() == 0 && !VEETEE_DEBUG_BUILD) {
 		snprintf(state, sizeof(state), "on, no keyboard yet");
 		return;
 	}
-	if (running && devices == 0) {
+	if (running && devices == 0 && hid_interfaces == 0) {
 		/* Nothing enumerated: what the root port itself sees. */
 		root_port_t *root = PIO_USB_ROOT_PORT(0);
 		const pio_usb_veetee_stats_t *bus = &pio_usb_veetee_stats;
@@ -131,26 +139,33 @@ describe(void)
 		    keyboard_count(), keyboard_count() == 1 ? "" : "s");
 	else if (running)
 		snprintf(state, sizeof(state), "on, %u keyboard%s; %u device%s"
-		    " (last %04x:%04x), %u HID (last protocol %u)",
+		    "%s (last %04x:%04x), %u HID (last protocol %u)",
 		    keyboard_count(), keyboard_count() == 1 ? "" : "s", devices,
-		    devices == 1 ? "" : "s", last_vid, last_pid, hid_interfaces,
-		    last_protocol);
+		    devices == 1 ? "" : "s", devices == 0 ? " fully set up" : "",
+		    last_vid, last_pid, hid_interfaces, last_protocol);
 }
 
 bool
 usbhost_init(usbhost_report_fn report, usbhost_event_fn event, void *ctx)
 {
 	static pio_usb_configuration_t config = PIO_USB_DEFAULT_CONFIG;
-	uint32_t hz = clock_get_hz(clk_sys);
 
 	report_fn = report;
 	event_fn = event;
 	callback_ctx = ctx;
-	if (hz % 12000000u != 0) {
-		snprintf(state, sizeof(state), "off: %lu MHz isn't 12 x n",
-		    (unsigned long)(hz / 1000000u));
-		return false;
-	}
+	/*
+	 * No clock check. This used to refuse any sysclk that isn't a
+	 * multiple of 12 MHz (Waveshare's demo says it should be), which
+	 * left the keyboard dead in five of the seven video modes. But
+	 * PIO-USB works its PIO dividers out from the real clock, fractions
+	 * allowed (pio_usb_host.c, pio_usb_host_init): a multiple of 12 MHz
+	 * only makes the *low-speed* dividers (sysclk / 6 and / 12 MHz)
+	 * whole. Full speed was never whole even at 252 MHz (/ 48 MHz is
+	 * 5.25, / 96 MHz is 2.625) and works there. A fractional divider
+	 * moves an edge by at most one sysclk, ~3-4 ns, against bits of 83
+	 * ns (full speed) and 667 ns (low speed). Checked on the board in
+	 * every mode (devlog 028).
+	 */
 	config.pin_dp = USBHOST_PIN_DP;
 	config.pio_tx_num = 1;
 	config.sm_tx = 0;
@@ -260,6 +275,9 @@ tuh_hid_mount_cb(uint8_t dev, uint8_t instance, uint8_t const *desc,
 	(void)desc_len;
 	hid_interfaces++;
 	last_protocol = tuh_hid_interface_protocol(dev, instance);
+	/* The device descriptor is in by now, even if tuh_mount_cb never
+	 * comes (describe). */
+	(void)tuh_vid_pid_get(dev, &last_vid, &last_pid);
 	describe();
 	if (last_protocol != HID_ITF_PROTOCOL_KEYBOARD) {
 		/* Mice, media keys: not yet. Debug builds read them anyway
@@ -278,6 +296,7 @@ tuh_hid_mount_cb(uint8_t dev, uint8_t instance, uint8_t const *desc,
 		announce(dev, "attached");
 		if (leds != 0)
 			usbhost_set_leds(leds);
+		describe();	/* now with this keyboard counted */
 		return;
 	}
 }
@@ -292,6 +311,7 @@ tuh_hid_umount_cb(uint8_t dev, uint8_t instance)
 			announce(dev, "removed");
 		}
 	}
+	describe();
 }
 
 void

@@ -8,8 +8,9 @@
  * Keys arrive on the keyboard port and pass through a decoder (lib/input):
  * normally they're forwarded to the host unchanged (with LNM and local
  * echo applied), except hotkeys (settings.hotkeys): Ctrl+F3 opens the
- * Tools menu (lib/setup/menu.h), F12 takes a screenshot. The BOOTSEL
- * button opens SET-UP. The Tools menu is an overlay over the live screen. While SET-UP is open, keys drive the
+ * Tools menu (lib/setup/menu.h), F12 takes a screenshot. A tap on the
+ * BOOTSEL button opens SET-UP; holding it 5 s resets every setting to
+ * factory defaults (factory_reset). The Tools menu is an overlay over the live screen. While SET-UP is open, keys drive the
  * menu instead, and its own grid replaces the terminal's on screen; the
  * terminal keeps processing host output underneath.
  */
@@ -21,6 +22,7 @@
 
 #include "board.h"
 #include "build.h"
+#include "button.h"
 #include "capture_sd.h"
 #include "card.h"
 #include "flashcfg.h"
@@ -49,6 +51,8 @@
 static_assert(sizeof(struct settings) <= FLASHCFG_MAX);
 
 #define BOOTSEL_POLL_MS		50
+#define BOOTSEL_HOLD_MS		1000	/* down this long: a hold, not a tap */
+#define BOOTSEL_RESET_MS	5000	/* held this long: factory reset */
 #define BOOT_HEALTHY_MS		60000	/* then the crash count clears */
 #define CRASHES_MAX		2	/* in a row: boot with factory defaults */
 #define VISUAL_BELL_MS		100
@@ -58,10 +62,23 @@ static struct term term;
 static struct settings settings;	/* in effect now */
 static unsigned running_resolution;	/* video mode chosen at boot */
 static struct keys keys;
+static struct button bootsel;		/* tap: SET-UP; hold: factory reset */
 
 static bool in_setup;
 static struct setup setup;
 static struct grid setup_grid;
+/*
+ * SET-UP's screen: at most 80x30, in RAM of its own. It used to be one
+ * terminal screen's worth from the heap, which after a save that rebuilt
+ * the terminal (new font, size, colours) could be there in total but
+ * not in one piece: SET-UP then wouldn't open again until a restart
+ * (devlog 028). SET-UP is the way out of bad settings, so it mustn't
+ * depend on the heap: 19 KB, always there. On a bigger screen it's a
+ * centred 80x30 panel, as on a VT220, and its list scrolls.
+ */
+#define SETUP_COLS	80
+#define SETUP_ROWS	30
+static struct cell setup_cells[SETUP_COLS * SETUP_ROWS];
 
 /* Configuration Error screen: problems collected while applying. */
 static char problems[512];
@@ -343,15 +360,28 @@ enter_setup(void)
 {
 	struct grid *screen = term.screen;
 	struct cell blank = grid_make_cell(term.space_glyph, 0xffff, 0, 0);
+	/* No bigger than the terminal's grid: that's known to fit. */
+	unsigned cols = screen->cols < SETUP_COLS ? screen->cols : SETUP_COLS;
+	unsigned rows = screen->rows < SETUP_ROWS ? screen->rows : SETUP_ROWS;
 
-	if (!grid_init(&setup_grid, screen->cols, screen->rows, blank))
-		return;		/* no memory: stay in the terminal */
+	if (!grid_init_in(&setup_grid, cols, rows, setup_cells, blank)) {
+		/* Can't happen (sizes are capped), but never silently. */
+		term_status_message(&term, "SET-UP won't open", now_ms());
+		return;
+	}
 	setup_grid.cursor_visible = false;
 	setup_grid.border2 = grid_dup565(grid_rgb565(16, 40, 120));
 	setup_begin(&setup, &settings, &setup_grid, &term.font,
 	    running_resolution);
-	/* Shown first, so the card scan's progress is visible. */
-	render_set_grid(&render, &setup_grid);
+	/*
+	 * Shown first, so the card scan's progress is visible. Laid out
+	 * afresh, not just swapped in (render_set_grid): SET-UP's grid can
+	 * be smaller than the terminal's (80x30 at most), so it needs its
+	 * own centring and row map. Swapped in alone it sat top-left, with
+	 * its title row repeated down the rest of the screen.
+	 */
+	render_pause(&render);
+	render_init(&render, &term.font, &setup_grid);
 	in_setup = true;
 	show_storage_status();
 	struct setup_catalogue catalogue;
@@ -359,53 +389,79 @@ enter_setup(void)
 	setup_catalogue(&setup, &catalogue);
 }
 
+/*
+ * Close SET-UP. `apply`: put its settings in effect (nothing unsaved is
+ * left by then: setup_exit asks first). Otherwise it's "discard": the
+ * settings stay exactly as they were, as if SET-UP never opened.
+ */
 static void
-leave_setup(void)
+leave_setup(bool apply)
 {
 	in_setup = false;
-	render_set_grid(&render, term.screen);
-	settings = setup.work;
-	settings_seal(&settings);
-
 	/*
-	 * A new resolution means a new sysclk, VREG and DVI timing, which are
-	 * only set at boot (video_init), so save it and restart. Saving is
-	 * implied: without it the restart would come back in the old mode.
+	 * Back to the terminal's grid and its own layout in one go: drawn
+	 * with SET-UP's (smaller, centred) layout, a wider terminal grid
+	 * would run past the end of the scanline.
 	 */
-	if (settings.resolution != running_resolution) {
-		if (!flashcfg_write(&settings, sizeof(settings)))
-			panic("settings: save before restart failed");
-		board_reboot();
+	render_pause(&render);
+	render_init(&render, &term.font, term.screen);
+	if (apply) {
+		settings = setup.work;
+		settings_seal(&settings);
 	}
 
 	/*
-	 * Free SET-UP's grid before applying: a font change rebuilds the
-	 * terminal's grids and the Sixel pool, and should have the memory.
-	 * The renderer was pointed back at the terminal above; the pause
-	 * makes sure no scanline still reads setup_grid.
+	 * A new resolution means a new sysclk, VREG and DVI timing, which are
+	 * only set at boot (video_init), so restart. It's saved by now: SET-UP
+	 * only lets a new mode out through a save (F4, Y, or S then F3), so
+	 * the restart comes back in it. Leaving never saves by itself; it
+	 * used to, for a new mode, until that caught the user out.
+	 */
+	if (settings.resolution != running_resolution)
+		board_reboot();
+
+	/*
+	 * Paused again while settings apply: a font or size change rebuilds
+	 * the terminal's grids under the renderer, and render_init resumes
+	 * on whatever they become. (setup_grid's cells are its own, in
+	 * setup_cells, so there's nothing of SET-UP's to free.)
 	 */
 	render_pause(&render);
-	grid_free(&setup_grid);
 	card_release();		/* SET-UP's lists: memory for a card font */
 	apply_settings();
 	render_init(&render, &term.font, term.screen);
 	show_config_problems();
 }
 
+/* Carry out what SET-UP asked for (a key, or a BOOTSEL tap). */
 static void
-setup_handle(const struct key_event *key)
+setup_act(enum setup_action action)
 {
 	struct settings stored;
 
-	switch (setup_key(&setup, key)) {
+	switch (action) {
 	case SETUP_EXIT:
-		leave_setup();
+		leave_setup(true);
+		break;
+	case SETUP_DISCARD:
+		leave_setup(false);
+		break;
+	case SETUP_SAVE_EXIT:
+		settings_seal(&setup.work);
+		if (!flashcfg_write(&setup.work, sizeof(setup.work))) {
+			setup_message(&setup, "Save FAILED.");
+			break;
+		}
+		leave_setup(true);
 		break;
 	case SETUP_SAVE:
 		settings_seal(&setup.work);
-		setup_message(&setup, flashcfg_write(&setup.work,
-		    sizeof(setup.work)) ? "Saved. Applied on exit." :
-		    "Save FAILED.");
+		if (flashcfg_write(&setup.work, sizeof(setup.work))) {
+			setup_saved(&setup);
+			setup_message(&setup, "Saved. Applied on exit.");
+		} else {
+			setup_message(&setup, "Save FAILED.");
+		}
 		break;
 	case SETUP_RECALL:
 		flashcfg_read(&stored, sizeof(stored));
@@ -427,6 +483,12 @@ setup_handle(const struct key_event *key)
 	case SETUP_NONE:
 		break;
 	}
+}
+
+static void
+setup_handle(const struct key_event *key)
+{
+	setup_act(setup_key(&setup, key));
 }
 
 /* --- keyboard path ---------------------------------------------------- */
@@ -834,25 +896,95 @@ poll_usb_keyboard(void)
 		handle_key(&key);
 }
 
+/*
+ * BOOTSEL held for BOOTSEL_RESET_MS: every setting back to factory
+ * defaults, saved, and a restart into them. The way out of a setting
+ * you can't undo without a keyboard, or a video mode the monitor can't
+ * show (it works blind). "Every setting" is the whole settings record:
+ * mode, font, colours, hotkeys, lights, printer, capture. Files on the
+ * SD card aren't touched, and the restart is a deliberate one, so it
+ * doesn't count towards the crash fallback (board_boot_begin).
+ */
+static void
+factory_reset(void)
+{
+	struct settings defaults;
+
+	settings_defaults(&defaults);
+	settings_seal(&defaults);
+	bool saved = flashcfg_write(&defaults, sizeof(defaults));
+	if (in_setup)
+		setup_message(&setup, saved ?
+		    "Factory defaults saved. Let go of BOOTSEL to restart." :
+		    "Factory reset FAILED to save. Let go of BOOTSEL.");
+	/*
+	 * Wait for the button to be let go. The bootrom reads BOOTSEL at
+	 * reset, and finding it held, would come up as a USB drive instead
+	 * of the VeeTee. Video carries on meanwhile (it's interrupts and
+	 * core 1); only the main loop waits, so feed the watchdog.
+	 */
+	while (board_bootsel_pressed()) {
+		board_watchdog_feed();
+		sleep_ms(BOOTSEL_POLL_MS);
+	}
+	if (saved)
+		board_reboot();
+}
+
 static void
 poll_bootsel(void)
 {
 	static absolute_time_t next_poll;
-	static bool was_pressed;
+	static uint32_t shown_seconds;	/* countdown on screen, 0: none */
+	uint32_t left_ms;
 
 	if (!time_reached(next_poll) || !video_flash_safe())
 		return;
 	next_poll = make_timeout_time_ms(BOOTSEL_POLL_MS);
-	bool pressed = board_bootsel_pressed();
-	if (pressed && !was_pressed) {
+	switch (button_sample(&bootsel, board_bootsel_pressed(), now_ms(),
+	    &left_ms)) {
+	case BUTTON_TAP:
 		if (in_config_error)
 			dismiss_config_error();
 		else if (in_setup)
-			leave_setup();
+			setup_act(setup_exit(&setup));	/* asks, if changed */
 		else
 			enter_setup();
+		break;
+	case BUTTON_HOLDING: {
+		/*
+		 * Show the countdown in SET-UP's message line, opening
+		 * SET-UP for it if need be. If that fails (no memory) the
+		 * reset still happens, just without a countdown.
+		 */
+		if (!in_setup) {
+			if (in_config_error)
+				dismiss_config_error();
+			enter_setup();
+			shown_seconds = 0;
+		}
+		uint32_t seconds = (left_ms + 999) / 1000;
+		if (in_setup && seconds != shown_seconds) {
+			char text[64];
+			snprintf(text, sizeof(text), "Keep holding BOOTSEL: "
+			    "factory reset in %lu s", (unsigned long)seconds);
+			setup_message(&setup, text);
+			shown_seconds = seconds;
+		}
+		break;
 	}
-	was_pressed = pressed;
+	case BUTTON_CANCELLED:
+		if (in_setup)
+			setup_message(&setup, "Factory reset cancelled.");
+		shown_seconds = 0;
+		break;
+	case BUTTON_FIRED:
+		factory_reset();
+		shown_seconds = 0;	/* only if the save failed */
+		break;
+	case BUTTON_NONE:
+		break;
+	}
 }
 
 /* Visual bell: invert the screen briefly on BEL. */
@@ -949,6 +1081,7 @@ app_init(void)
 {
 	load_settings();
 	keys_init(&keys);
+	button_init(&bootsel, BOOTSEL_HOLD_MS, BOOTSEL_RESET_MS);
 	/*
 	 * If the last boots ended in watchdog resets (a crash or hang, e.g.
 	 * an overclocked mode this chip can't hold), run this session on
@@ -993,7 +1126,7 @@ app_init(void)
 
 	static const char banner[] =
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
-	    "SET-UP\r\n";
+	    "SET-UP (hold 5 s: factory reset)\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
 	char detail[280];
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "

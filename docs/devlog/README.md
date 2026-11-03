@@ -31,6 +31,7 @@ was learned.
 25. [ATI Small Wonder, a 72 Hz mode, and debug builds that show it](025-small-wonder.md)
 26. [fastfetch](026-fastfetch.md)
 27. [A USB keyboard on the board itself](027-usb-keyboard.md)
+28. [A way out: BOOTSEL factory reset, the USB keyboard in every mode, a SET-UP that asks](028-a-way-out.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

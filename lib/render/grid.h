@@ -134,6 +134,12 @@ grid_make_cell(uint16_t glyph, uint16_t fg, uint16_t bg, uint16_t attr)
 /* Allocate a cols x rows grid filled with `blank`. Init-time only. */
 [[nodiscard]] bool grid_init(struct grid *grid, unsigned cols, unsigned rows,
 	    struct cell blank);
+/*
+ * The same in the caller's `cells` (cols x rows of them), for a grid that
+ * must never fail for want of heap: SET-UP's (app.c). Never grid_free it.
+ */
+[[nodiscard]] bool grid_init_in(struct grid *grid, unsigned cols,
+	    unsigned rows, struct cell *cells, struct cell blank);
 void	grid_free(struct grid *grid);
 
 /* Cells of logical row `row` (0 = top of screen). */

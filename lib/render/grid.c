@@ -9,14 +9,27 @@
 bool
 grid_init(struct grid *grid, unsigned cols, unsigned rows, struct cell blank)
 {
+	struct cell *cells;
+
 	memset(grid, 0, sizeof(*grid));
 	if (cols == 0 || cols > GRID_MAX_COLS || rows == 0 ||
 	    rows > GRID_MAX_ROWS)
 		return false;
-
-	grid->cells = malloc((size_t)cols * rows * sizeof(*grid->cells));
-	if (grid->cells == nullptr)
+	cells = malloc((size_t)cols * rows * sizeof(*cells));
+	if (cells == nullptr)
 		return false;
+	return grid_init_in(grid, cols, rows, cells, blank);
+}
+
+bool
+grid_init_in(struct grid *grid, unsigned cols, unsigned rows,
+    struct cell *cells, struct cell blank)
+{
+	memset(grid, 0, sizeof(*grid));
+	if (cols == 0 || cols > GRID_MAX_COLS || rows == 0 ||
+	    rows > GRID_MAX_ROWS)
+		return false;
+	grid->cells = cells;
 	grid->cols = (uint16_t)cols;
 	grid->rows = (uint16_t)rows;
 	for (unsigned row = 0; row < rows; row++) {

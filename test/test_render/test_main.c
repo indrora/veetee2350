@@ -55,6 +55,25 @@ expected(uint32_t codepoint, unsigned sub, unsigned x, uint16_t fg,
 	return (bits >> (7 - x)) & 1 ? fg : bg;
 }
 
+/* A grid in the caller's cells (SET-UP's): set up as grid_init would. */
+static void
+test_grid_init_in(void)
+{
+	static struct cell cells[80 * 30];
+	struct grid fixed;
+
+	memset(cells, 0xa5, sizeof(cells));
+	TEST_ASSERT_TRUE(grid_init_in(&fixed, 80, 30, cells, blank_cell()));
+	TEST_ASSERT_EQUAL_PTR(cells, fixed.cells);
+	TEST_ASSERT_EQUAL(80, fixed.cols);
+	TEST_ASSERT_EQUAL(30, fixed.rows);
+	TEST_ASSERT_EQUAL(29, fixed.row_map[29]);
+	TEST_ASSERT_EQUAL_MEMORY(&cells[0], &grid_row(&fixed, 29)[79],
+	    sizeof(struct cell));
+	TEST_ASSERT_EQUAL(blank_cell().glyph, cells[80 * 30 - 1].glyph);
+	TEST_ASSERT_FALSE(grid_init_in(&fixed, 0, 30, cells, blank_cell()));
+}
+
 static void
 test_grid_size_default_font(void)
 {
@@ -362,6 +381,7 @@ int
 main(void)
 {
 	UNITY_BEGIN();
+	RUN_TEST(test_grid_init_in);
 	RUN_TEST(test_grid_size_default_font);
 	RUN_TEST(test_glyph_pixels);
 	RUN_TEST(test_reverse_video_and_underline);

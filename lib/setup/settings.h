@@ -180,6 +180,13 @@ void	settings_seal(struct settings *settings);
 /* True if `settings` is a sealed record of this version. */
 bool	settings_valid(const struct settings *settings);
 /*
+ * True if `a` and `b` hold the same settings: what saving one over the
+ * other would change nothing of. Text fields compare up to their NUL
+ * (what follows it is leftovers of a longer, earlier value), and the
+ * seal (magic, version, size, CRC) isn't a setting.
+ */
+bool	settings_same(const struct settings *a, const struct settings *b);
+/*
  * Read `raw` (a record as flashcfg returned it, sizeof(struct settings)
  * bytes) if it's a sealed record of an older version, from
  * SETTINGS_UPGRADE_FROM on: its fields are kept and the newer ones take

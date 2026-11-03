@@ -5,6 +5,7 @@
 
 #include <unity.h>
 
+#include "button.h"
 #include "hidkbd.h"
 #include "keys.h"
 
@@ -295,6 +296,84 @@ test_hid_repeat_after_stall(void)
 	TEST_ASSERT_EQUAL('a', event.byte);
 }
 
+/* --- BOOTSEL's tap and hold (button.c) ---------------------------------- */
+
+/* As app.c sets it up: a hold from 1 s, firing at 5 s. */
+static struct button bootsel;
+static uint32_t left;		/* BUTTON_HOLDING's time to go */
+
+static enum button_event
+sample(bool pressed, uint32_t now)
+{
+	return button_sample(&bootsel, pressed, now, &left);
+}
+
+/* A tap is told on release, never on the press itself. */
+static void
+test_button_tap(void)
+{
+	button_init(&bootsel, 1000, 5000);
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(false, 0));
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(true, 50));
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(true, 900));
+	TEST_ASSERT_EQUAL(BUTTON_TAP, sample(false, 1049));
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(false, 1100));
+}
+
+/* Held past the hint, let go before firing: cancelled, and no tap. */
+static void
+test_button_hold_cancelled(void)
+{
+	button_init(&bootsel, 1000, 5000);
+	sample(true, 100);
+	TEST_ASSERT_EQUAL(BUTTON_HOLDING, sample(true, 1100));
+	TEST_ASSERT_EQUAL_UINT32(4000, left);
+	TEST_ASSERT_EQUAL(BUTTON_HOLDING, sample(true, 5099));
+	TEST_ASSERT_EQUAL_UINT32(1, left);
+	TEST_ASSERT_EQUAL(BUTTON_CANCELLED, sample(false, 5099));
+	/* The next press starts from scratch. */
+	sample(true, 6000);
+	TEST_ASSERT_EQUAL(BUTTON_TAP, sample(false, 6200));
+}
+
+/* Fires once at fire_ms; holding on, and letting go, say nothing more. */
+static void
+test_button_hold_fires_once(void)
+{
+	button_init(&bootsel, 1000, 5000);
+	sample(true, 0);
+	TEST_ASSERT_EQUAL(BUTTON_HOLDING, sample(true, 4999));
+	TEST_ASSERT_EQUAL(BUTTON_FIRED, sample(true, 5000));
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(true, 9000));
+	TEST_ASSERT_EQUAL(BUTTON_NONE, sample(false, 9050));
+}
+
+/*
+ * The main loop away longer than the whole hold (an SD card scan): the
+ * next sample fires straight away, and a release after the gap is no tap.
+ */
+static void
+test_button_late_samples(void)
+{
+	button_init(&bootsel, 1000, 5000);
+	sample(true, 0);
+	TEST_ASSERT_EQUAL(BUTTON_FIRED, sample(true, 7000));
+	button_init(&bootsel, 1000, 5000);
+	sample(true, 0);
+	TEST_ASSERT_EQUAL(BUTTON_CANCELLED, sample(false, 3000));
+}
+
+/* Across the 32-bit millisecond wrap (49.7 days up). */
+static void
+test_button_wraps(void)
+{
+	button_init(&bootsel, 1000, 5000);
+	sample(true, UINT32_MAX - 499);
+	TEST_ASSERT_EQUAL(BUTTON_HOLDING, sample(true, 500));
+	TEST_ASSERT_EQUAL_UINT32(4000, left);
+	TEST_ASSERT_EQUAL(BUTTON_FIRED, sample(true, 4500));
+}
+
 int
 main(void)
 {
@@ -311,5 +390,10 @@ main(void)
 	RUN_TEST(test_hid_keypad);
 	RUN_TEST(test_hid_auto_repeat);
 	RUN_TEST(test_hid_repeat_after_stall);
+	RUN_TEST(test_button_tap);
+	RUN_TEST(test_button_hold_cancelled);
+	RUN_TEST(test_button_hold_fires_once);
+	RUN_TEST(test_button_late_samples);
+	RUN_TEST(test_button_wraps);
 	return UNITY_END();
 }

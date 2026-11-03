@@ -85,8 +85,11 @@ struct graphics {
  * DECCOLM) and taken again afterwards: that way it can use whatever the
  * current grids leave over without starving the rebuild. Its size is
  * min(budget, free heap - reserve), the reserve covering what may still
- * be allocated while it's held: SET-UP's own grid and a DECCRA copy
- * (one screen of cells each) plus a margin.
+ * be allocated while it's held: a DECCRA copy (one screen of cells) plus
+ * a margin. (SET-UP's grid has RAM of its own: app.c, setup_cells.)
+ * "Free heap" is the total, holes included, so after a runtime rebuild
+ * the reserve can be there but in pieces; nothing that must not fail
+ * should count on it.
  */
 void	graphics_configure(struct term *term, size_t budget,
 	    graphics_heap_fn heap_free);

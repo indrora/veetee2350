@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 /*
- * State of the BOOTSEL button (used as the SET-UP key). Disables
+ * State of the BOOTSEL button (tap: SET-UP; hold: factory reset). Disables
  * interrupts and XIP for ~10 us: only call when video_flash_safe().
  * Implemented in src/main.cpp (Arduino's BOOTSEL object is C++).
  */

@@ -11,10 +11,9 @@
  * interrupt and answers handshakes from the CPU within microseconds, so
  * nothing may interrupt it mid-packet: its interrupt is the only one on
  * core 0 above the renderer's doorbell (video.c), and the 8-line ring of
- * rendered lines rides out the wait. It also needs the system clock to
- * be a multiple of 12 MHz (it divides it down to the USB bit rate): true
- * of 252 and 372 MHz, not of the 270, 295, 297 or 315 MHz modes, where
- * the port stays off and says why.
+ * rendered lines rides out the wait. Any system clock will do, not only
+ * multiples of 12 MHz (usbhost_init says why), so the port works in
+ * every video mode.
  *
  * Known on this board (another project's long soak): an unplugged device
  * isn't noticed, and its last report keeps arriving; keyboards are only

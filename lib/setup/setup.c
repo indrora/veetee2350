@@ -150,7 +150,7 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 	case ITEM_RESOLUTION:
 		snprintf(out, len, "%s%s", mode->name,
 		    work->resolution != setup->running_resolution ?
-		    "  (restarts on exit)" : "");
+		    "  (restarts when saved)" : "");
 		break;
 	case ITEM_FONT: {
 		unsigned cols, rows;
@@ -330,6 +330,7 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_RECALL] = "Recall saved settings  (R)",
 	[ITEM_DEFAULTS] = "Factory defaults       (D)",
 	[ITEM_RESET] = "Reset terminal",
+	[ITEM_SAVE_EXIT] = "Save and exit          (F4)",
 	[ITEM_EXIT] = "Exit SET-UP            (F3 / Esc)",
 };
 
@@ -479,7 +480,8 @@ setup_draw(struct setup *setup)
 	    "Press the new key.  Esc: cancel" :
 	    setup->hotkeys_page ?
 	    "Up/Down select   Enter: new key   Delete: none   Esc: back" :
-	    "Up/Down select   Left/Right/Enter change   S save   F3 leave";
+	    /* F3 is in the title bar; 64 columns don't fit both here. */
+	    "Up/Down select  Left/Right change  S save  F4 save & exit";
 	put(setup, help_row, LABEL_COL, help, DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
@@ -512,6 +514,7 @@ setup_begin(struct setup *setup, const struct settings *current,
 {
 	memset(setup, 0, sizeof(*setup));
 	setup->work = *current;
+	setup->baseline = *current;
 	setup->grid = grid;
 	setup->font = font;
 	setup->running_resolution = running_resolution;
@@ -714,8 +717,10 @@ activate(struct setup *setup)
 		return SETUP_DEFAULTS;
 	case ITEM_RESET:
 		return SETUP_RESET_TERMINAL;
+	case ITEM_SAVE_EXIT:
+		return SETUP_SAVE_EXIT;
 	case ITEM_EXIT:
-		return SETUP_EXIT;
+		return setup_exit(setup);
 	default:
 		change_value(setup, +1);
 		return SETUP_NONE;
@@ -794,11 +799,69 @@ hotkeys_key(struct setup *setup, const struct key_event *key)
 	}
 }
 
+bool
+setup_dirty(const struct setup *setup)
+{
+	return !settings_same(&setup->work, &setup->baseline);
+}
+
+bool
+setup_dirty_reset(const struct setup *setup)
+{
+	return setup->work.resolution != setup->baseline.resolution;
+}
+
+void
+setup_saved(struct setup *setup)
+{
+	setup->baseline = setup->work;
+}
+
+/*
+ * Leaving with unsaved changes asks first, rather than saving them
+ * (which this used to do for a new resolution, as the restart needed
+ * it) or dropping them unasked. N means "as if never here": nothing is
+ * applied, nothing written, no restart. The question goes in the
+ * message line; the next key answers it (confirm_key).
+ */
+enum setup_action
+setup_exit(struct setup *setup)
+{
+	if (!setup_dirty(setup))
+		return SETUP_EXIT;
+	setup->confirming = true;
+	snprintf(setup->message, sizeof(setup->message), "%s",
+	    setup_dirty_reset(setup) ?
+	    "Save changes and restart? Y: yes  N: discard  Esc: back" :
+	    "Save changes? Y: yes  N: discard  Esc: back");
+	setup_draw(setup);
+	return SETUP_NONE;
+}
+
+/* The key after "Save changes?": Y or F4, N, or back to the menu. */
+static enum setup_action
+confirm_key(struct setup *setup, const struct key_event *key)
+{
+	bool plain = key->code == KEY_CHAR && key->mods == 0;
+
+	setup->confirming = false;
+	setup->message[0] = '\0';
+	if (key->code == KEY_F4 || (plain && (key->byte == 'y' ||
+	    key->byte == 'Y')))
+		return SETUP_SAVE_EXIT;
+	if (plain && (key->byte == 'n' || key->byte == 'N'))
+		return SETUP_DISCARD;
+	setup_draw(setup);
+	return SETUP_NONE;
+}
+
 enum setup_action
 setup_key(struct setup *setup, const struct key_event *key)
 {
 	enum setup_action action = SETUP_NONE;
 
+	if (setup->confirming)
+		return confirm_key(setup, key);
 	if (setup->editing)
 		return edit_answerback(setup, key);
 	if (setup->hotkeys_page) {
@@ -827,7 +890,10 @@ setup_key(struct setup *setup, const struct key_event *key)
 		break;
 	case KEY_ESCAPE:
 	case KEY_F3:
-		action = SETUP_EXIT;
+		action = setup_exit(setup);
+		break;
+	case KEY_F4:
+		action = SETUP_SAVE_EXIT;
 		break;
 	case KEY_CHAR:
 		if (key->mods != 0)

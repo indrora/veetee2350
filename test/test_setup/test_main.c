@@ -90,7 +90,10 @@ test_navigation_and_values(void)
 	setup.selected = 0;
 	press(KEY_UP, 0);
 	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
-	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_ENTER, 0));
+	/* Things changed, so Exit asks first (test_exit_prompt). */
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ENTER, 0));
+	TEST_ASSERT_TRUE(setup.confirming);
+	TEST_ASSERT_EQUAL(SETUP_DISCARD, press(KEY_CHAR, 'n'));
 	/* The original settings are untouched until the app applies. */
 	TEST_ASSERT_EQUAL_STRING(font_builtins[0].name, settings.font);
 }
@@ -102,8 +105,90 @@ test_toggles_and_actions(void)
 	press(KEY_CHAR, ' ');
 	TEST_ASSERT_FALSE(setup.work.autowrap);
 	TEST_ASSERT_EQUAL(SETUP_SAVE, press(KEY_CHAR, 's'));
+	setup_saved(&setup);		/* as the app does when the write works */
 	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_F3, 0));
 	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_ESCAPE, 0));
+}
+
+/*
+ * Leaving: F3/Esc/Exit go straight out with nothing changed, and ask
+ * "Save changes?" otherwise (with "and restart" for a new resolution):
+ * Y or F4 saves, N discards, anything else goes back. F4 always saves.
+ */
+static void
+test_exit_prompt(void)
+{
+	/* Nothing changed: out, no question. */
+	TEST_ASSERT_FALSE(setup_dirty(&setup));
+	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_F3, 0));
+
+	/* A change: asked, and Esc goes back with the change kept. */
+	setup.selected = ITEM_WRAP;
+	press(KEY_CHAR, ' ');
+	TEST_ASSERT_TRUE(setup_dirty(&setup));
+	TEST_ASSERT_FALSE(setup_dirty_reset(&setup));
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ESCAPE, 0));
+	TEST_ASSERT_TRUE(setup.confirming);
+	TEST_ASSERT_EQUAL_STRING("Save changes? Y: yes  N: discard  Esc: back",
+	    setup.message);
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ESCAPE, 0));
+	TEST_ASSERT_FALSE(setup.confirming);
+	TEST_ASSERT_EQUAL_STRING("", setup.message);
+	TEST_ASSERT_FALSE(setup.work.autowrap);
+
+	/* Asked again; N discards, Y saves, and F4 answers yes too. */
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_F3, 0));
+	TEST_ASSERT_EQUAL(SETUP_DISCARD, press(KEY_CHAR, 'N'));
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_F3, 0));
+	TEST_ASSERT_EQUAL(SETUP_SAVE_EXIT, press(KEY_CHAR, 'y'));
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_F3, 0));
+	TEST_ASSERT_EQUAL(SETUP_SAVE_EXIT, press(KEY_F4, 0));
+
+	/* Changed back: clean again, so out without asking. */
+	press(KEY_CHAR, ' ');
+	TEST_ASSERT_TRUE(setup.work.autowrap);
+	TEST_ASSERT_FALSE(setup_dirty(&setup));
+	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_F3, 0));
+
+	/* A new resolution: the question says it restarts. */
+	setup.selected = ITEM_RESOLUTION;
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_TRUE(setup_dirty_reset(&setup));
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_F3, 0));
+	TEST_ASSERT_EQUAL_STRING("Save changes and restart? Y: yes  N: discard"
+	    "  Esc: back", setup.message);
+	/* Not an answer: back to the menu, nothing done. */
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_CHAR, 'q'));
+	TEST_ASSERT_FALSE(setup.confirming);
+
+	/* F4 saves and leaves without asking; Save and exit is the same. */
+	TEST_ASSERT_EQUAL(SETUP_SAVE_EXIT, press(KEY_F4, 0));
+	setup.selected = ITEM_SAVE_EXIT;
+	TEST_ASSERT_EQUAL(SETUP_SAVE_EXIT, press(KEY_ENTER, 0));
+
+	/* Once the app has saved, nothing is unsaved. */
+	setup_saved(&setup);
+	TEST_ASSERT_FALSE(setup_dirty(&setup));
+	TEST_ASSERT_FALSE(setup_dirty_reset(&setup));
+	TEST_ASSERT_EQUAL(SETUP_EXIT, press(KEY_ESCAPE, 0));
+}
+
+/* Text compares up to its NUL: leftovers of a longer name don't count. */
+static void
+test_settings_same(void)
+{
+	struct settings other = settings;
+
+	TEST_ASSERT_TRUE(settings_same(&settings, &other));
+	snprintf(other.font, sizeof(other.font), "%s", "a-much-longer-name");
+	TEST_ASSERT_FALSE(settings_same(&settings, &other));
+	/* Back to the original name, with the long one's tail behind it. */
+	memcpy(other.font, settings.font, strlen(settings.font) + 1);
+	TEST_ASSERT_TRUE(settings_same(&settings, &other));
+	other.crc ^= 1;			/* the seal isn't a setting */
+	TEST_ASSERT_TRUE(settings_same(&settings, &other));
+	other.visual_bell = !other.visual_bell;
+	TEST_ASSERT_FALSE(settings_same(&settings, &other));
 }
 
 static void
@@ -590,6 +675,8 @@ main(void)
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);
+	RUN_TEST(test_exit_prompt);
+	RUN_TEST(test_settings_same);
 	RUN_TEST(test_emulation_presets);
 	RUN_TEST(test_answerback_editing);
 	RUN_TEST(test_size_resolution);
