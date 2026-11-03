@@ -12,6 +12,11 @@
   in while running can brown the chip out). Host via Pico-PIO-USB on
   PIO 1 (transmit) and PIO 2 (receive); `lib/hal/usbhost.c`, devlog 027.
 
+## 40-pin header
+
+GPIO 0–27, all unused today. The planned HAT (an RS-232 line on UART0
+and a PS/2 keyboard on pio0) and its pin assignment are in `docs/hat.md`.
+
 ## DVI (mini-HDMI)
 
 | Signal  | GPIO (P / N) | PicoDVI lane |

@@ -5,7 +5,8 @@
 - Project goals: `GOAL.md`. Design notes and spike reports: `docs/`.
 - Build firmware: `pio run -e pizero`. Host tests: `pio test -e native`.
 - Hardware: Waveshare RP2350-PiZero (RP2350B). DVI TMDS on GPIO 32–39
-  (PIO GPIO base must be 16), see `lib/hal/video.c`.
+  (PIO GPIO base must be 16), see `lib/hal/video.c`. HAT pinout (UART,
+  PS/2): `docs/hat.md` -- firmware for those follows it.
 - Run a real terminal session through the board: `cd tools && python3
   hostshell.py /dev/cu.usbmodem*` (see docs/terminal.md).
 - Drive the board yourself (keys, BOOTSEL, debug text): flash a debug
