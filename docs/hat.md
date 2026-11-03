@@ -11,7 +11,10 @@ file first.
 The Waveshare RP2350-PiZero has a 40-pin header in the Raspberry Pi
 layout, carrying GPIO 0–27. Everything here was checked against the
 `40Pin OUT` block (connector J5) of Waveshare's schematic,
-`files.waveshare.com/wiki/RP2350-PiZero/RP2350-PiZero.pdf`.
+`files.waveshare.com/wiki/RP2350-PiZero/RP2350-PiZero.pdf`. Each
+`GPIOn` net on J5 runs to the RP2350B's own `GPIOn` pin (U3: GPIO0 is
+chip pin 77, GPIO4 is pin 1, and so on), so every GPIO number in this
+file is the chip's own, the one the firmware uses.
 
 **It is not BCM-numbered everywhere.** Twenty of the GPIOs sit where the
 same BCM number would on a Pi. Waveshare moved the other eight so that
