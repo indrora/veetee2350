@@ -234,7 +234,7 @@ What the schematic does:
   - ~ONLINE has a strap: R2 to 3.3 V is fitted and R3 to GND is DNP.
   - ~STATUS and the NC pins are no-connects.
 - **PS/2:** Q1/Q2 shift DATA/CLK between GPIO 16/17 (10 kΩ to 3.3 V,
-  R4/R5) and the keyboard (4.7 kΩ to `+5V_PS2`, R6/R7). F1 feeds the
+  R4/R5) and the keyboard (4.7 kΩ to `PS2_5V`, R6/R7). F1 feeds the
   keyboard from VBUS, with C7/C8 after it.
 - The DB9 and mini-DIN shells go to GND.
 
@@ -257,4 +257,9 @@ Open before layout:
   the DS1093 datasheet.
 - **J1.** Pick an LCSC part. On the PCB, line pin 1 up with the board's
   pin 1 as seen from above.
-- **Layout.** The schematic is auto-placed: correct, but not pretty yet.
+- **Sheet layout.** Laid out in blocks: the header on the left, RS-232
+  across the top, PS/2 along the bottom. Signals connect by local labels
+  on pin stubs. J1's GND pins share a bus on each side, U1's power pins
+  and the connector shells are tied together, and everything else gets
+  its own upright power symbol. Moving a symbol in KiCad drags its stubs
+  (G), so nets survive rearranging.
