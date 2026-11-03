@@ -14,7 +14,9 @@
 
 ## 40-pin header
 
-GPIO 0–27, all unused today. The planned HAT (an RS-232 line on UART0
+GPIO 0–27, all unused today. **Not BCM-numbered everywhere**: Waveshare
+moved eight GPIOs so pins 8/10 carry UART1 TX/RX (GPIO 4/5), like a Pi's
+serial port. The header map, the planned HAT (an RS-232 line on UART1
 and a PS/2 keyboard on pio0) and its pin assignment are in `docs/hat.md`.
 
 ## DVI (mini-HDMI)

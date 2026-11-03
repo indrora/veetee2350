@@ -8,13 +8,29 @@ file first.
 
 ## The header
 
-The Waveshare RP2350-PiZero has a 40-pin header that Waveshare calls
-"compatible with Raspberry Pi". It exposes 28 GPIOs, GPIO 0–27, and they
-are assumed to sit at the same positions as BCM GPIO 0–27 on a Pi.
-**Check that against Waveshare's schematic
-(`files.waveshare.com/wiki/RP2350-PiZero/RP2350-PiZero.pdf`) before you
-order boards.** The wiki confirms the header and the GPIO count, but not
-each pin's position.
+The Waveshare RP2350-PiZero has a 40-pin header in the Raspberry Pi
+layout, carrying GPIO 0–27. Everything here was checked against the
+`40Pin OUT` block (connector J5) of Waveshare's schematic,
+`files.waveshare.com/wiki/RP2350-PiZero/RP2350-PiZero.pdf`.
+
+**It is not BCM-numbered everywhere.** Twenty of the GPIOs sit where the
+same BCM number would on a Pi. Waveshare moved the other eight so that
+each pin's function matches a Pi instead: UART TX/RX on pins 8/10,
+I²C on 3/5, and SPI on 19/21/23. The moved pins:
+
+| Header pin | On a Pi (BCM) | On this board |
+|---|---|---|
+| 7 | GPIO 4 | GPIO 14 |
+| 8 | GPIO 14 (TXD) | GPIO 4 (UART1 TX) |
+| 10 | GPIO 15 (RXD) | GPIO 5 (UART1 RX) |
+| 19 | GPIO 10 (MOSI) | GPIO 11 (SPI1 TX) |
+| 21 | GPIO 9 (MISO) | GPIO 12 (SPI1 RX) |
+| 23 | GPIO 11 (SCLK) | GPIO 10 (SPI1 SCK) |
+| 29 | GPIO 5 | GPIO 15 |
+| 32 | GPIO 12 | GPIO 9 |
+
+Use the board's own map (under "Pin assignment" below), not a Pi's,
+when you place the HAT's footprint.
 
 None of GPIO 0–27 is used by the firmware today. Everything the board
 already uses is off the header:
@@ -26,7 +42,9 @@ already uses is off the header:
 | 32–39 | DVI TMDS |
 | 44, 45, 46 | HDMI DDC and CEC (wired to the HDMI connector, not used) |
 
-All logic on the header is **3.3 V**.
+All logic on the header is **3.3 V**. Pins 2 and 4 are **VBUS**: the
+5 V straight from the USB-C port, with no regulator or switch between
+them.
 
 ## Constraints that set the pin choice
 
@@ -54,10 +72,10 @@ All logic on the header is **3.3 V**.
 
 | Function | GPIO | Header pin | Direction (from the VeeTee) | Peripheral |
 |---|---|---|---|---|
-| Serial TXD | 12 | 32 | out | UART0 TX (F2) |
-| Serial RXD | 13 | 33 | in | UART0 RX (F2) |
-| Serial CTS | 14 | 8 | in | UART0 CTS (F2) |
-| Serial RTS | 15 | 10 | out | UART0 RTS (F2) |
+| Serial TXD | 4 | 8 | out | UART1 TX (F2) |
+| Serial RXD | 5 | 10 | in | UART1 RX (F2) |
+| Serial CTS | 6 | 31 | in | UART1 CTS (F2) |
+| Serial RTS | 7 | 26 | out | UART1 RTS (F2) |
 | PS/2 DATA | 16 | 36 | open-drain, both ways | pio0 SM 3 |
 | PS/2 CLK | 17 | 11 | open-drain, both ways | pio0 SM 3 |
 | DTR (optional) | 22 | 15 | out | plain GPIO |
@@ -65,44 +83,41 @@ All logic on the header is **3.3 V**.
 | DSR (optional) | 24 | 18 | in | plain GPIO |
 | RI (optional) | 25 | 22 | in | plain GPIO |
 
-The whole header, with Pi pin numbering and the BCM positions assumed
-above:
+The whole header, from the schematic. **Bold** marks the pins that
+differ from a Pi's BCM layout:
 
 | Use | Signal | Pin | Pin | Signal | Use |
 |---|---|---|---|---|---|
-| | 3.3 V | 1 | 2 | 5 V | PS/2 power |
-| | GPIO 2 | 3 | 4 | 5 V | |
+| | 3.3 V | 1 | 2 | VBUS (5 V) | PS/2 power |
+| | GPIO 2 | 3 | 4 | VBUS (5 V) | |
 | | GPIO 3 | 5 | 6 | GND | |
-| | GPIO 4 | 7 | 8 | GPIO 14 | Serial CTS |
-| | GND | 9 | 10 | GPIO 15 | Serial RTS |
+| | **GPIO 14** | 7 | 8 | **GPIO 4** | Serial TXD |
+| | GND | 9 | 10 | **GPIO 5** | Serial RXD |
 | PS/2 CLK | GPIO 17 | 11 | 12 | GPIO 18 | |
 | | GPIO 27 | 13 | 14 | GND | |
 | DTR | GPIO 22 | 15 | 16 | GPIO 23 | DCD |
 | | 3.3 V | 17 | 18 | GPIO 24 | DSR |
-| | GPIO 10 | 19 | 20 | GND | |
-| | GPIO 9 | 21 | 22 | GPIO 25 | RI |
-| | GPIO 11 | 23 | 24 | GPIO 8 | |
-| | GND | 25 | 26 | GPIO 7 | |
+| | **GPIO 11** | 19 | 20 | GND | |
+| | **GPIO 12** | 21 | 22 | GPIO 25 | RI |
+| | **GPIO 10** | 23 | 24 | GPIO 8 | |
+| | GND | 25 | 26 | GPIO 7 | Serial RTS |
 | | GPIO 0 | 27 | 28 | GPIO 1 | |
-| | GPIO 5 | 29 | 30 | GND | |
-| | GPIO 6 | 31 | 32 | GPIO 12 | Serial TXD |
-| Serial RXD | GPIO 13 | 33 | 34 | GND | |
+| | **GPIO 15** | 29 | 30 | GND | |
+| Serial CTS | GPIO 6 | 31 | 32 | **GPIO 9** | |
+| | GPIO 13 | 33 | 34 | GND | |
 | | GPIO 19 | 35 | 36 | GPIO 16 | PS/2 DATA |
 | | GPIO 26 | 37 | 38 | GPIO 20 | |
 | | GND | 39 | 40 | GPIO 21 | |
 
 Why these pins:
 
-- **UART on GPIO 12–15.** These four make up one complete UART0 block
-  on the plain UART function. They're below 16, so they use none of the
-  pins pio0 can reach. GPIO 0–3 would also work, but GPIO 0/1 (pins
-  27/28) are reserved for the ID EEPROM on Pi HATs, so this layout
-  avoids them.
-- **Different from a Pi's serial layout.** A Pi serial HAT has TXD/RXD
-  on pins 8/10 (GPIO 14/15). Here those pins are CTS/RTS, so an
-  off-the-shelf Pi serial HAT won't work as-is. A Pi-compatible layout
-  is possible: TXD/RXD on 14/15 via F11, with CTS/RTS on 18/19. It's
-  untested, though, and it would take 18/19 away from PIO.
+- **UART1 on GPIO 4–7.** These four make up one complete UART1 block
+  on the plain UART function, and they're below 16, so they use none of
+  the pins pio0 can reach. Waveshare wired GPIO 4/5 to pins 8/10, so
+  TXD/RXD are where a Pi's serial port has them. CTS/RTS (pins 31/26)
+  don't follow any Pi convention.
+- **GPIO 0/1 (pins 27/28) are left alone.** They're reserved for the ID
+  EEPROM on Pi HATs, and the schematic labels them ID_SDA/ID_SCL.
 - **PS/2 DATA then CLK, next to each other.** pio0 can reach both pins,
   and having DATA first with CLK right after keeps the PIO program
   simple.
@@ -110,9 +125,9 @@ Why these pins:
   the firmware from time to time. If you leave them off the HAT, GPIO
   22–25 stay free.
 
-Free for anything else afterwards: GPIO 0–11 (UART1 is on 4–7 or 8–11
-if you want a second port), 18–21, 26 and 27, plus 22–25 if you skip the
-modem lines.
+Free for anything else afterwards: GPIO 0–3 and 8–15, 18–21, 26 and 27,
+plus 22–25 if you skip the modem lines. A second serial port would go
+on UART0, GPIO 12–15: TXD pin 21, RXD 33, CTS 7, RTS 29.
 
 ## Serial port (RS-232)
 
@@ -120,17 +135,17 @@ The header carries 3.3 V TTL serial. For a real serial port, add a
 3.3 V RS-232 transceiver and a **DE-9 male** connector wired as DTE (the
 VeeTee is the terminal):
 
-| DE-9 pin | Signal | Direction | From GPIO |
+| DE-9 pin | Signal | Direction | From GPIO (header pin) |
 |---|---|---|---|
-| 1 | DCD | in | 23 (optional) |
-| 2 | RXD | in | 13 |
-| 3 | TXD | out | 12 |
-| 4 | DTR | out | 22 (optional) |
+| 1 | DCD | in | 23 (16), optional |
+| 2 | RXD | in | 5 (10) |
+| 3 | TXD | out | 4 (8) |
+| 4 | DTR | out | 22 (15), optional |
 | 5 | GND | | GND |
-| 6 | DSR | in | 24 (optional) |
-| 7 | RTS | out | 15 |
-| 8 | CTS | in | 14 |
-| 9 | RI | in | 25 (optional) |
+| 6 | DSR | in | 24 (18), optional |
+| 7 | RTS | out | 7 (26) |
+| 8 | CTS | in | 6 (31) |
+| 9 | RI | in | 25 (22), optional |
 
 For TXD, RXD, RTS and CTS only, a MAX3232-class part is enough (2
 drivers, 2 receivers). For the full DTE set, use a MAX3243-class part
@@ -138,9 +153,9 @@ drivers, 2 receivers). For the full DTE set, use a MAX3243-class part
 the datasheet of whichever part you choose. The transceiver does the
 RS-232 inversion, so the UART runs at normal TTL polarity.
 
-A header for 3.3 V TTL straight off GPIO 12–15 (GND, TXD, RXD, CTS,
-RTS), placed before the transceiver or with jumpers to bypass it, is
-cheap and useful for testing with a USB-TTL adapter.
+A header for 3.3 V TTL straight off GPIO 4–7 (GND, TXD, RXD, CTS, RTS),
+placed before the transceiver or with jumpers to bypass it, is cheap and
+useful for testing with a USB-TTL adapter.
 
 ## PS/2 keyboard
 
@@ -169,11 +184,12 @@ Lock LEDs), so both lines have to work in both directions:
 - **Don't rely on the RP2350 tolerating 5 V.** The pads may well survive
   it, but it hasn't been checked against the datasheet, and the shifter
   costs pennies.
-- **Power.** Feed the keyboard's 5 V from the header through a polyfuse
-  of a few hundred mA. PS/2 isn't designed to be hot-plugged. The board's
-  PIO-USB port browns out when a device is plugged in while it's running
-  (`docs/hardware.md`), and plugging in a keyboard draws from the same
-  5 V. Put a bulk capacitor (about 10 µF) on the keyboard's 5 V.
+- **Power.** Feed the keyboard's 5 V from header pin 2 or 4 (VBUS)
+  through a polyfuse of a few hundred mA, with a bulk capacitor (about
+  10 µF) after it. PS/2 isn't designed to be hot-plugged. The board's
+  PIO-USB port already browns out when a device is plugged in while it's
+  running (`docs/hardware.md`), and the keyboard draws from the same
+  VBUS.
 
 How the firmware will read it: a PIO program on pio0 state machine 3
 captures scancode set 2 frames into its FIFO (11 bits: start, 8 data,
