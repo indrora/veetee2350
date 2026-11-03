@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run a shell on the Mac whose terminal is the VeeTee 2350.
 
-    uv run hostshell.py LINE_PORT [--keyboard KBD_PORT] [--type 'ls -G' ...]
+    uv run hostshell.py LINE_PORT [--hid] [--type 'ls -G' ...]
                         [--keys '\x1bOR'] [--exit-after 20]
 
 The shell runs in a pseudo-terminal sized to the VeeTee's grid (see
@@ -11,13 +11,15 @@ The shell runs in a pseudo-terminal sized to the VeeTee's grid (see
     VeeTee replies (DA, DSR, ...) --> serial --> shell
     this script's stdin (your keyboard) --> shell
 
-so it is a complete terminal session, with the Mac's keyboard standing in
-until the USB HID keyboard (Goal 3) exists.
+so it is a complete terminal session. A USB keyboard on the VeeTee types
+into it too, through the line port like any terminal's keys.
 
-With --keyboard, keys go the way they would on a real terminal: into the
-VeeTee's keyboard port, through the device (which can claim them, e.g.
-for the SET-UP screen), and back out of the line port to the shell.
-Without it, keys go straight to the shell.
+With --hid (debug builds), the Mac's keys go the way a real terminal's
+would: into the VeeTee through its automation HID (tools/vthid.py),
+through the device (which can claim them, e.g. for the SET-UP screen),
+and back out of the line port to the shell. Without it, they go straight
+to the shell. (--hid replaced --keyboard KBD_PORT, a CDC port that stood
+in for a keyboard until the board had one: devlog 029.)
 
 Size: the bridge enables the VeeTee's in-band resize reports (DECSET
 2048) and starts the shell at the size the terminal reports. Later
@@ -28,7 +30,8 @@ size. --rows/--cols only matter if the terminal never answers.
 
 --type TEXT (TEXT + Enter) and --keys ESCAPED (Python escapes, no Enter)
 inject keystrokes in order, 1 s apart, for scripted tests. Standard
-library only (termios/pty/select), so no pyserial dependency.
+library only (termios/pty/select), so no pyserial dependency; --hid
+alone needs hidapi.
 """
 
 from __future__ import annotations
@@ -134,7 +137,8 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=30)
     parser.add_argument("--cols", type=int, default=80)
     parser.add_argument("--shell", default="/bin/bash")
-    parser.add_argument("--keyboard", help="VeeTee keyboard port (CDC 1)")
+    parser.add_argument("--hid", action="store_true",
+                        help="keys through the VeeTee (automation HID)")
     parser.add_argument(
         "--type",
         dest="actions",
@@ -154,12 +158,21 @@ def main() -> int:
     args = parser.parse_args()
 
     serial_fd = open_serial(args.port)
-    keyboard_fd = open_serial(args.keyboard) if args.keyboard else None
+    veetee = None
+    if args.hid:
+        from vthid import VeeTee  # hidapi: only needed here
+        veetee = VeeTee()
     tracker = SizeTracker()
     rows, cols = query_size(serial_fd, tracker) or (args.rows, args.cols)
     applied = (rows, cols)
     pid, master = spawn_shell(rows, cols, args.shell)
-    key_sink = keyboard_fd if keyboard_fd is not None else master
+
+    def send_keys(data):
+        if veetee is not None:
+            veetee.type(data)
+        else:
+            write_all(master, data)
+
     interactive = sys.stdin.isatty() and not args.actions
     saved = None
     if interactive:
@@ -175,7 +188,7 @@ def main() -> int:
         while True:
             now = time.monotonic()
             if pending and now >= next_type:
-                write_all(key_sink, pending.pop(0))
+                send_keys(pending.pop(0))
                 next_type = now + 1.0
             if deadline and now >= deadline:
                 break
@@ -199,14 +212,14 @@ def main() -> int:
                     if data:
                         write_all(master, data)
                 else:  # our stdin: the keyboard
-                    write_all(key_sink, data)
+                    send_keys(data)
     finally:
         if saved is not None:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
         write_all(serial_fd, b"\x1b[?2048l")
         os.close(serial_fd)
-        if keyboard_fd is not None:
-            os.close(keyboard_fd)
+        if veetee is not None:
+            veetee.close()
         try:
             os.kill(pid, 9)
         except ProcessLookupError:

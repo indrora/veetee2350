@@ -32,6 +32,7 @@ was learned.
 26. [fastfetch](026-fastfetch.md)
 27. [A USB keyboard on the board itself](027-usb-keyboard.md)
 28. [A way out: BOOTSEL factory reset, the USB keyboard in every mode, a SET-UP that asks](028-a-way-out.md)
+29. [Hands for the robot: an automation HID for debug builds](029-automation-hid.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

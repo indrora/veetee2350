@@ -72,7 +72,7 @@ USB-C, GPIO 28/29) types straight into the terminal: US layout, Caps /
 Num / Scroll Lock with their LEDs, auto-repeat (500 ms, then 30 a
 second), and the keypad. The terminal encodes each key by its modes,
 as a VT terminal does (cursor keys, keypad, new line), and the Tools
-menu, hotkeys, SET-UP and replay take it like the keyboard port's keys.
+menu, hotkeys, SET-UP and replay take it like any other keys.
 Print Screen and Pause send nothing, so they make good hotkeys.
 
 **Plug the keyboard in before powering the board.** The port's 5 V
@@ -86,12 +86,31 @@ The port works in every video mode (devlog 028). Debug builds print
 every report and where each key went (`[hid]`, `[key]`) on the line
 port. Devlog 027.
 
-## Keyboard port and SET-UP
+## Keys, automation and SET-UP
 
-The device presents two CDC ports: **VeeTee line** (the terminal's line,
-which ends in `1` on macOS) and **VeeTee keyboard** (ends in `3`). Bytes
-written to the keyboard port are keys. They go to the host over the
-line, with new-line mode and local echo applied, except **hotkeys**.
+The device presents one CDC port, **VeeTee line** (the terminal's line,
+`/dev/cu.usbmodem…1` on macOS). Keys come from the USB keyboard above.
+They go to the host over the line, encoded by the terminal's modes, with
+new-line mode and local echo applied, except **hotkeys**.
+
+**Debug builds** (`pio run -e pizero-debug`, or any debug env) add a
+vendor-defined HID, **VeeTee automation**, that a script drives the
+VeeTee through as a person would, and that carries the debug text
+(`[key] F3 -> set-up`, `[hid] …`, stats) instead of the line. Release
+builds don't have it. It replaced a second CDC port, "VeeTee keyboard",
+which stood in for a keyboard until the board had one (devlog 029).
+From the Mac (`uv` installs hidapi):
+
+    cd tools
+    uv run sendkeys.py 'key:ctrl+F3' 'wait:-> hotkey' 'key:enter'  # Tools, Set-Up
+    uv run sendkeys.py 'k:ls -G\r'          # bytes as an xterm sends them
+    uv run sendkeys.py 'keys:hello'         # key by key, virtual USB keyboard
+    uv run sendkeys.py 'tap'                # BOOTSEL; 'hold:N' holds it
+    uv run sendkeys.py --log                # watch the debug text
+
+`wait:REGEX` waits for a debug line, which makes scripts check
+themselves. The report layout is `include/automation_hid.h`, mirrored
+by `tools/vthid.py`.
 **Ctrl+F3** (`ESC [ 1 ; 5 R`, `ESC [ 13 ; 5 ~` or `ESC O 5 R`) opens the
 **Tools menu**: Set-Up, Screenshot, Print screen, Printer on/off, Clear
 screen, Soft reset (DECSTR), Hard reset (RIS); Up/Down, Enter, Esc. F12
@@ -137,10 +156,10 @@ Keys carry xterm's modifier parameter (`; m`, m - 1 = Shift 1, Alt 2,
 Ctrl 4, Meta 8) and ESC + a printable byte is Alt plus that key, so
 hotkeys can use modifiers.
 
-    python3 tools/hostshell.py /dev/cu.usbmodem*1 --keyboard /dev/cu.usbmodem*3
+    cd tools && uv run hostshell.py /dev/cu.usbmodem*1 --hid
 
-routes your keys through the device, so Ctrl+F3 opens the Tools menu.
-`tools/sendkeys.py` scripts keystrokes for tests.
+routes the Mac's keys through the device (debug builds), so Ctrl+F3
+opens the Tools menu. `tools/sendkeys.py` scripts keystrokes for tests.
 
 Settings live in the last flash sector (`hal/flashcfg`), CRC-checked.
 They're applied at power-up and when leaving SET-UP. Font, rows and

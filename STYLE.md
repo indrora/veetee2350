@@ -14,7 +14,8 @@ parallel one.
   `typeof`.
 - **No C++ in our code.** The only C++ files are shims in `src/`:
   `main.cpp` hands Arduino's `setup()`/`loop()` to C entry points and
-  wraps the USB CDC ports (`usbio`); `storage_sd.cpp` wraps SdFat
+  wraps the USB line port and the debug builds' automation HID
+  (`usbio`); `storage_sd.cpp` wraps SdFat
   (`storage`). Each implements a C header in `lib/hal/` and holds no
   policy. Everything else is `.c`/`.h`.
 - Firmware environment: PlatformIO, `maxgerhardt/platform-raspberrypi`,
@@ -76,7 +77,7 @@ Every public symbol starts with its module's prefix (`video_`, `usbio_`,
 ```
 src/            main.cpp shim and app glue (app.c: wires modules together)
 include/        public headers that cross module boundaries
-lib/hal/        hardware abstraction: video (DVI), usbio (CDC), clocks, flash
+lib/hal/        hardware abstraction: video (DVI), usbio (CDC, HID), clocks, flash
 lib/term/       escape-sequence handling (libvterm state) -> cell grid model
                 graphics.c: Sixel images as CELL_GRAPHIC cells + tile pool
 lib/sixel/      streaming Sixel decoder (pure, no allocation, host-testable)

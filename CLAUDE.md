@@ -8,6 +8,12 @@
   (PIO GPIO base must be 16), see `lib/hal/video.c`.
 - Run a real terminal session through the board: `cd tools && python3
   hostshell.py /dev/cu.usbmodem*` (see docs/terminal.md).
+- Drive the board yourself (keys, BOOTSEL, debug text): flash a debug
+  build (`pio run -e pizero-debug -t upload`), then `cd tools && uv run
+  sendkeys.py 'key:ctrl+F3' 'wait:-> hotkey' ...` through its automation
+  HID (devlog 029). Debug text comes back over the HID (`--log`), never
+  down the line. Never leave the virtual BOOTSEL down: 5 s is a factory
+  reset of the user's settings.
 - Fonts: edit `tools/fonts.toml`, then `cd tools && uv run ttf2psf.py`
   regenerates `fonts/psf/` and `lib/font/fonts_builtin.c`.
 - Check the screen: `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2"

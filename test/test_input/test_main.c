@@ -5,6 +5,8 @@
 
 #include <unity.h>
 
+#include "automation.h"
+#include "automation_hid.h"
 #include "button.h"
 #include "hidkbd.h"
 #include "keys.h"
@@ -374,6 +376,92 @@ test_button_wraps(void)
 	TEST_ASSERT_EQUAL(BUTTON_FIRED, sample(true, 4500));
 }
 
+/* --- the automation HID's reports (automation.c) ------------------------ */
+
+static struct automation robot;
+
+/* A 64-byte OUT report: type, then `bytes` (as the Mac tool pads it). */
+static unsigned
+robot_report(uint8_t type, const char *bytes, size_t len, uint32_t now,
+    struct key_event *out, unsigned max)
+{
+	uint8_t report[AUTOMATION_REPORT_SIZE] = {type};
+
+	memcpy(report + 1, bytes, len);
+	return automation_report(&robot, report, sizeof(report), now, out, max);
+}
+
+/* Keyboard reports: a USB keyboard of its own, Ctrl+F3 included. */
+static void
+test_automation_keyboard(void)
+{
+	struct key_event events[8];
+
+	automation_init(&robot);
+	TEST_ASSERT_EQUAL(1, robot_report(AUTOMATION_KEYBOARD,
+	    "\x00\x00\x04", 3, 0, events, 8));
+	TEST_ASSERT_EQUAL(KEY_CHAR, events[0].code);
+	TEST_ASSERT_EQUAL('a', events[0].byte);
+	TEST_ASSERT_EQUAL(0, robot_report(AUTOMATION_KEYBOARD, "", 0, 10,
+	    events, 8));			/* let go */
+	TEST_ASSERT_EQUAL(1, robot_report(AUTOMATION_KEYBOARD,
+	    "\x01\x00\x3c", 3, 20, events, 8));
+	TEST_ASSERT_EQUAL(KEY_F3, events[0].code);
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL, events[0].mods);
+	/* Held: it repeats from the main loop, like the real one. */
+	struct key_event polled[2];
+	TEST_ASSERT_EQUAL(0, automation_poll(&robot, 450, polled));
+	TEST_ASSERT_EQUAL(1, automation_poll(&robot, 520, polled));
+	TEST_ASSERT_EQUAL(KEY_F3, polled[0].code);
+}
+
+/* Typed bytes: what an xterm sends, through keys.c's decoder. */
+static void
+test_automation_typed(void)
+{
+	struct key_event events[8];
+	struct key_event polled[2];
+
+	automation_init(&robot);
+	TEST_ASSERT_EQUAL(2, robot_report(AUTOMATION_TYPE, "\x02hi", 3, 0,
+	    events, 8));
+	TEST_ASSERT_EQUAL('h', events[0].byte);
+	TEST_ASSERT_EQUAL('i', events[1].byte);
+	TEST_ASSERT_EQUAL(1, robot_report(AUTOMATION_TYPE, "\x06\x1b[1;5R", 7,
+	    10, events, 8));
+	TEST_ASSERT_EQUAL(KEY_F3, events[0].code);
+	TEST_ASSERT_EQUAL(KEY_MOD_CTRL, events[0].mods);
+	/* No more events than room for them. */
+	TEST_ASSERT_EQUAL(1, robot_report(AUTOMATION_TYPE, "\x03xyz", 4, 20,
+	    events, 1));
+	/* A lone Esc only shows once a pause says it's alone. */
+	TEST_ASSERT_EQUAL(0, robot_report(AUTOMATION_TYPE, "\x01\x1b", 2, 30,
+	    events, 8));
+	TEST_ASSERT_EQUAL(1, automation_poll(&robot, 2000, polled));
+	TEST_ASSERT_EQUAL(KEY_ESCAPE, polled[0].code);
+}
+
+/* BOOTSEL down and up; unknown and short reports do nothing. */
+static void
+test_automation_bootsel(void)
+{
+	struct key_event events[8];
+	uint8_t tiny[1] = {AUTOMATION_BOOTSEL};
+
+	automation_init(&robot);
+	TEST_ASSERT_FALSE(robot.bootsel);
+	TEST_ASSERT_EQUAL(0, robot_report(AUTOMATION_BOOTSEL, "\x01", 1, 0,
+	    events, 8));
+	TEST_ASSERT_TRUE(robot.bootsel);
+	robot_report(AUTOMATION_BOOTSEL, "\x00", 1, 5, events, 8);
+	TEST_ASSERT_FALSE(robot.bootsel);
+	TEST_ASSERT_EQUAL(0, robot_report(99, "\x01", 1, 10, events, 8));
+	TEST_ASSERT_EQUAL(0, automation_report(&robot, tiny, sizeof(tiny), 20,
+	    events, 8));
+	TEST_ASSERT_EQUAL(0, robot_report(AUTOMATION_LOG, "\x01x", 2, 30,
+	    events, 8));			/* an IN type, sent OUT */
+}
+
 int
 main(void)
 {
@@ -395,5 +483,8 @@ main(void)
 	RUN_TEST(test_button_hold_fires_once);
 	RUN_TEST(test_button_late_samples);
 	RUN_TEST(test_button_wraps);
+	RUN_TEST(test_automation_keyboard);
+	RUN_TEST(test_automation_typed);
+	RUN_TEST(test_automation_bootsel);
 	return UNITY_END();
 }

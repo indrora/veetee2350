@@ -5,14 +5,17 @@
  * the terminal emulator (lib/term: libvterm -> cell grid), which the video
  * pipeline draws. Replies (DA, DSR, ...) go back out on the line port.
  *
- * Keys arrive on the keyboard port and pass through a decoder (lib/input):
- * normally they're forwarded to the host unchanged (with LNM and local
- * echo applied), except hotkeys (settings.hotkeys): Ctrl+F3 opens the
- * Tools menu (lib/setup/menu.h), F12 takes a screenshot. A tap on the
- * BOOTSEL button opens SET-UP; holding it 5 s resets every setting to
- * factory defaults (factory_reset). The Tools menu is an overlay over the live screen. While SET-UP is open, keys drive the
- * menu instead, and its own grid replaces the terminal's on screen; the
- * terminal keeps processing host output underneath.
+ * Keys come from a USB keyboard on the board's own port (lib/hal/
+ * usbhost.h, lib/input/hidkbd.h), or in debug builds from a script on the
+ * host through the automation HID (poll_automation). They're sent to the
+ * host as the terminal's modes say (term_key_bytes), except hotkeys
+ * (settings.hotkeys): Ctrl+F3 opens the Tools menu (lib/setup/menu.h),
+ * F12 takes a screenshot. A tap on the BOOTSEL button opens SET-UP;
+ * holding it 5 s resets every setting to factory defaults
+ * (factory_reset). The Tools menu is an overlay over the live screen.
+ * While SET-UP is open, keys drive the menu instead, and its own grid
+ * replaces the terminal's on screen; the terminal keeps processing host
+ * output underneath.
  */
 #include "app.h"
 
@@ -20,6 +23,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "automation.h"
+#include "automation_hid.h"
 #include "board.h"
 #include "build.h"
 #include "button.h"
@@ -61,7 +66,6 @@ static struct render render;
 static struct term term;
 static struct settings settings;	/* in effect now */
 static unsigned running_resolution;	/* video mode chosen at boot */
-static struct keys keys;
 static struct button bootsel;		/* tap: SET-UP; hold: factory reset */
 
 static bool in_setup;
@@ -839,18 +843,57 @@ handle_key(const struct key_event *key)
 	}
 }
 
-static void
-poll_keyboard(void)
-{
-	char buffer[64];
-	struct key_event key;
-	size_t count = usbio_read(USBIO_KEYBOARD, buffer, sizeof(buffer));
+#if VEETEE_DEBUG_BUILD
+/*
+ * The automation HID (debug builds; include/automation_hid.h): a script
+ * on the host typing, pressing keys and BOOTSEL. Its keys take the same
+ * road as a person's (handle_key: hotkeys, menus, SET-UP, the host), and
+ * its BOOTSEL joins the real one in bootsel_down().
+ */
+static struct automation automation;
 
-	for (size_t i = 0; i < count; i++)
-		if (keys_feed(&keys, (uint8_t)buffer[i], now_ms(), &key))
-			handle_key(&key);
-	if (keys_poll(&keys, now_ms(), &key))
-		handle_key(&key);
+static void
+poll_automation(void)
+{
+	uint8_t report[AUTOMATION_REPORT_SIZE];
+	struct key_event events[AUTOMATION_REPORT_SIZE];
+
+	while (usbio_automation_read(report)) {
+		unsigned count = automation_report(&automation, report,
+		    sizeof(report), now_ms(), events, AUTOMATION_REPORT_SIZE);
+		for (unsigned i = 0; i < count; i++)
+			handle_key(&events[i]);
+	}
+	unsigned count = automation_poll(&automation, now_ms(), events);
+	for (unsigned i = 0; i < count; i++)
+		handle_key(&events[i]);
+	usbio_poll();			/* debug text queued for the host */
+}
+#endif
+
+/*
+ * Is BOOTSEL down: the real button, or (debug builds) the automation
+ * HID's. `fresh` reads the HID's reports first, but only for BOOTSEL
+ * (keys in them are dropped): for factory_reset's wait, where the main
+ * loop isn't running and nothing may act on a key.
+ */
+static bool
+bootsel_down(bool fresh)
+{
+	bool down = board_bootsel_pressed();
+
+#if VEETEE_DEBUG_BUILD
+	uint8_t report[AUTOMATION_REPORT_SIZE];
+	struct key_event dropped[AUTOMATION_REPORT_SIZE];
+
+	while (fresh && usbio_automation_read(report))
+		(void)automation_report(&automation, report, sizeof(report),
+		    now_ms(), dropped, AUTOMATION_REPORT_SIZE);
+	down = down || automation.bootsel;
+#else
+	(void)fresh;
+#endif
+	return down;
 }
 
 /* --- the USB keyboard (lib/hal/usbhost.h, lib/input/hidkbd.h) -------- */
@@ -923,7 +966,7 @@ factory_reset(void)
 	 * of the VeeTee. Video carries on meanwhile (it's interrupts and
 	 * core 1); only the main loop waits, so feed the watchdog.
 	 */
-	while (board_bootsel_pressed()) {
+	while (bootsel_down(true)) {
 		board_watchdog_feed();
 		sleep_ms(BOOTSEL_POLL_MS);
 	}
@@ -941,7 +984,7 @@ poll_bootsel(void)
 	if (!time_reached(next_poll) || !video_flash_safe())
 		return;
 	next_poll = make_timeout_time_ms(BOOTSEL_POLL_MS);
-	switch (button_sample(&bootsel, board_bootsel_pressed(), now_ms(),
+	switch (button_sample(&bootsel, bootsel_down(false), now_ms(),
 	    &left_ms)) {
 	case BUTTON_TAP:
 		if (in_config_error)
@@ -1080,7 +1123,9 @@ void
 app_init(void)
 {
 	load_settings();
-	keys_init(&keys);
+#if VEETEE_DEBUG_BUILD
+	automation_init(&automation);
+#endif
 	button_init(&bootsel, BOOTSEL_HOLD_MS, BOOTSEL_RESET_MS);
 	/*
 	 * If the last boots ended in watchdog resets (a crash or hang, e.g.
@@ -1263,7 +1308,9 @@ app_poll(void)
 	}
 	capture_sd_poll(now_ms());
 	check_capture();
-	poll_keyboard();
+#if VEETEE_DEBUG_BUILD
+	poll_automation();
+#endif
 	poll_usb_keyboard();
 	poll_bootsel();
 	poll_bell();

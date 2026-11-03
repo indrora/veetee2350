@@ -6,7 +6,8 @@
   That leaves 520 KiB SRAM.
 - arduino-pico board ID: `waveshare_rp2350_pizero`. The board was added
   upstream after early 2025, so the PlatformIO platform must be up to date.
-- USB: native USB-C (CDC/programming) plus a PIO-USB port: D+ GPIO 28,
+- USB: native USB-C (CDC line + programming; debug builds add the
+  automation HID, devlog 029) plus a PIO-USB port: D+ GPIO 28,
   D- GPIO 29, VBUS straight from 5 V with no switch (so a device plugged
   in while running can brown the chip out). Host via Pico-PIO-USB on
   PIO 1 (transmit) and PIO 2 (receive); `lib/hal/usbhost.c`, devlog 027.
