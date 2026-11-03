@@ -150,11 +150,12 @@ VeeTee is the terminal):
 | 8 | CTS | in | 6 (31) |
 | 9 | RI | in | 25 (22), optional |
 
-For TXD, RXD, RTS and CTS only, a MAX3232-class part is enough (2
-drivers, 2 receivers). For the full DTE set, use a MAX3243-class part
-(3 drivers, 5 receivers: TXD/RTS/DTR out, RXD/CTS/DSR/DCD/RI in). Check
-the datasheet of whichever part you choose. The transceiver does the
-RS-232 inversion, so the UART runs at normal TTL polarity.
+The HAT (`hardware/`) wires only TXD, RXD, RTS and CTS, through a 3PEAK
+TPT3122E (2 drivers, 2 receivers, MAX3232-class, with a separate
+logic-supply pin, VL, tied to 3.3 V). DCD, DSR, DTR and RI are left off.
+The full DTE set would need a 3-driver, 5-receiver part in the
+MAX3243 class. The transceiver does the RS-232 inversion, so the UART
+runs at normal TTL polarity.
 
 A header for 3.3 V TTL straight off GPIO 4–7 (GND, TXD, RXD, CTS, RTS),
 placed before the transceiver or with jumpers to bypass it, is cheap and
@@ -179,8 +180,9 @@ PS/2 is 5 V and open-collector on both lines. The VeeTee pulls CLK low
 to hold the keyboard off and to send it commands (the Caps/Num/Scroll
 Lock LEDs), so both lines have to work in both directions:
 
-- **Level shifting: one BSS138 MOSFET per line**, as in the common
-  bidirectional I²C level-shifter circuit. PS/2 is open-drain like I²C,
+- **Level shifting: one N-MOSFET per line**, as in the common
+  bidirectional BSS138 I²C level-shifter circuit. The HAT uses a 2N7002
+  (a JLCPCB basic part; the BSS138 is only an extended part there). PS/2 is open-drain like I²C,
   so the same circuit works. Put pull-ups on both sides of each FET:
   10 kΩ to 3.3 V on the GPIO side, and 4.7–10 kΩ to 5 V on the keyboard
   side (these are the host pull-ups PS/2 expects).
@@ -201,3 +203,58 @@ rendering takes about 42% of core 0 from a top-priority interrupt, and
 interrupts are off while settings are saved to flash. A GPIO interrupt
 would miss bits during either. The bits are only valid for 30–50 µs.
 Decoded scancodes become the same key events as the USB keyboard's.
+
+## The board (`hardware/`)
+
+`hardware/hardware.kicad_pro` is the HAT's KiCad 10 project. So far
+it's a schematic only; there's no PCB layout yet. Board-specific parts
+live in the project library `local` (`local.kicad_sym`, `local.pretty`,
+`local.3dshapes`). Everything else comes from KiCad's stock libraries.
+Every part has its JLCPCB/LCSC number in an `LCSC` field. All
+resistors and capacitors are JLCPCB basic parts.
+
+| Ref | Part | LCSC | JLCPCB |
+|---|---|---|---|
+| J1 | 2x20 2.54 mm socket (Pi header) | TBD | |
+| U1 | 3PEAK TPT3122EH-QF8R, QFN-24 4x4 | C19188736 | extended |
+| J2 | Ckmtw D-DMR009PM-D002, DB9 male, right angle | C141880 | extended |
+| J3 | CONNFLY DS1093-01-PN60, mini-DIN-6 female, right angle | C77848 | extended |
+| Q1, Q2 | 2N7002, SOT-23 | C8545 | basic |
+| F1 | nSMD025-24V polyfuse, 250 mA hold, 1206 | C70069 | extended |
+| C1–C6, C8 | 100 nF 50 V X7R 0603 | C14663 | basic |
+| C7 | 10 µF 10 V X5R 0603 | C19702 | basic |
+| R1–R5 | 10 kΩ 0603 (R3 is DNP) | C25804 | basic |
+| R6, R7 | 4.7 kΩ 0603 | C23162 | basic |
+
+What the schematic does:
+
+- **U1** runs from 3.3 V (VCC and VL). C1/C2 are the charge-pump caps,
+  C3/C4 hold V+/V−, and C5/C6 decouple VCC/VL.
+  - ~SHUTDOWN is pulled up (R1), so U1 is always on.
+  - ~ONLINE has a strap: R2 to 3.3 V is fitted and R3 to GND is DNP.
+  - ~STATUS and the NC pins are no-connects.
+- **PS/2:** Q1/Q2 shift DATA/CLK between GPIO 16/17 (10 kΩ to 3.3 V,
+  R4/R5) and the keyboard (4.7 kΩ to `+5V_PS2`, R6/R7). F1 feeds the
+  keyboard from VBUS, with C7/C8 after it.
+- The DB9 and mini-DIN shells go to GND.
+
+Checked so far:
+
+- **Netlist.** Exported and compared with the planned connections:
+  every net matches, and the only single-pin nets are the 33 pins
+  deliberately marked no-connect.
+- **ERC.** The 4 errors and 27 warnings left all come from the pin
+  types in the imported `local` symbols. Every TPT3122E pin is
+  "unspecified", and the DB9 pins are "input", so ERC can't see a
+  driver on the RS-232 lines.
+
+Open before layout:
+
+- **TPT3122E datasheet.** Check which way ~ONLINE must be strapped for
+  always-on, and the charge-pump capacitor values at 3.3 V (100 nF
+  assumed).
+- **J3's pin numbering.** Confirm it matches the PS/2 standard, from
+  the DS1093 datasheet.
+- **J1.** Pick an LCSC part. On the PCB, line pin 1 up with the board's
+  pin 1 as seen from above.
+- **Layout.** The schematic is auto-placed: correct, but not pretty yet.
