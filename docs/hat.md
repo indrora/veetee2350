@@ -181,9 +181,10 @@ to hold the keyboard off and to send it commands (the Caps/Num/Scroll
 Lock LEDs), so both lines have to work in both directions:
 
 - **Level shifting: one N-MOSFET per line**, as in the common
-  bidirectional BSS138 I²C level-shifter circuit. The HAT uses a 2N7002
-  (a JLCPCB basic part; the BSS138 is only an extended part there). PS/2 is open-drain like I²C,
-  so the same circuit works. Put pull-ups on both sides of each FET:
+  bidirectional BSS138 I²C level-shifter circuit. The HAT uses a
+  2N7002W in SOT-323, which is tiny and on JLCPCB's preferred extended
+  list. Its 1.6 V gate threshold works with the 3.3 V gate. PS/2 is
+  open-drain like I²C, so the same circuit works. Put pull-ups on both sides of each FET:
   10 kΩ to 3.3 V on the GPIO side, and 4.7–10 kΩ to 5 V on the keyboard
   side (these are the host pull-ups PS/2 expects).
 - **Don't rely on the RP2350 tolerating 5 V.** The pads may well survive
@@ -219,7 +220,7 @@ resistors and capacitors are JLCPCB basic parts.
 | U1 | 3PEAK TPT3122EH-QF8R, QFN-24 4x4 | C19188736 | extended |
 | J2 | Ckmtw D-DMR009PM-D002, DB9 male, right angle | C141880 | extended |
 | J3 | CONNFLY DS1093-01-PN60, mini-DIN-6 female, right angle | C77848 | extended |
-| Q1, Q2 | 2N7002, SOT-23 | C8545 | basic |
+| Q1, Q2 | R+O 2N7002W, SOT-323 (`local:2N7002W_C7420322`) | C7420322 | preferred extended |
 | F1 | nSMD025-24V polyfuse, 250 mA hold, 1206 | C70069 | extended |
 | C1–C6, C8 | 100 nF 50 V X7R 0603 | C14663 | basic |
 | C7 | 10 µF 10 V X5R 0603 | C19702 | basic |
@@ -243,10 +244,10 @@ Checked so far:
 - **Netlist.** Exported and compared with the planned connections:
   every net matches, and the only single-pin nets are the 33 pins
   deliberately marked no-connect.
-- **ERC.** The 4 errors and 27 warnings left all come from the pin
-  types in the imported `local` symbols. Every TPT3122E pin is
-  "unspecified", and the DB9 pins are "input", so ERC can't see a
-  driver on the RS-232 lines.
+- **ERC.** The 4 errors and 33 warnings left all come from the pin
+  types in the imported `local` symbols. Every TPT3122E and 2N7002W
+  pin is "unspecified", and the DB9 pins are "input", so ERC can't see
+  a driver on the RS-232 lines.
 
 Open before layout:
 

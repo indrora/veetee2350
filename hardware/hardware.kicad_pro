@@ -240,7 +240,7 @@
       "internal_id": "",
       "mfg": "",
       "mpn": "",
-      "sch_revision": ""
+      "sch_revision": "r0.1"
     },
     "layer_pairs": [],
     "layer_presets": [],
@@ -654,11 +654,22 @@
     "reuse_designators": true,
     "subpart_first_id": 65,
     "subpart_id_separator": 0,
-    "top_level_sheets": [],
+    "top_level_sheets": [
+      {
+        "filename": "hardware.kicad_sch",
+        "name": "Root",
+        "uuid": "84383fd4-aeae-4f56-b4e4-6a943fcf5f92"
+      }
+    ],
     "used_designators": "",
     "variants": []
   },
-  "sheets": [],
+  "sheets": [
+    [
+      "84383fd4-aeae-4f56-b4e4-6a943fcf5f92",
+      "Root"
+    ]
+  ],
   "text_variables": {},
   "tuning_profiles": {
     "meta": {
