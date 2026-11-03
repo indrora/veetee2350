@@ -65,8 +65,31 @@ All logic on the header is **3.3 V**.
 | DSR (optional) | 24 | 18 | in | plain GPIO |
 | RI (optional) | 25 | 22 | in | plain GPIO |
 
-Power: 5 V on pins 2 and 4, 3.3 V on 1 and 17, GND on 6, 9, 14, 20, 25,
-30, 34 and 39.
+The whole header, with Pi pin numbering and the BCM positions assumed
+above:
+
+| Use | Signal | Pin | Pin | Signal | Use |
+|---|---|---|---|---|---|
+| | 3.3 V | 1 | 2 | 5 V | PS/2 power |
+| | GPIO 2 | 3 | 4 | 5 V | |
+| | GPIO 3 | 5 | 6 | GND | |
+| | GPIO 4 | 7 | 8 | GPIO 14 | Serial CTS |
+| | GND | 9 | 10 | GPIO 15 | Serial RTS |
+| PS/2 CLK | GPIO 17 | 11 | 12 | GPIO 18 | |
+| | GPIO 27 | 13 | 14 | GND | |
+| DTR | GPIO 22 | 15 | 16 | GPIO 23 | DCD |
+| | 3.3 V | 17 | 18 | GPIO 24 | DSR |
+| | GPIO 10 | 19 | 20 | GND | |
+| | GPIO 9 | 21 | 22 | GPIO 25 | RI |
+| | GPIO 11 | 23 | 24 | GPIO 8 | |
+| | GND | 25 | 26 | GPIO 7 | |
+| | GPIO 0 | 27 | 28 | GPIO 1 | |
+| | GPIO 5 | 29 | 30 | GND | |
+| | GPIO 6 | 31 | 32 | GPIO 12 | Serial TXD |
+| Serial RXD | GPIO 13 | 33 | 34 | GND | |
+| | GPIO 19 | 35 | 36 | GPIO 16 | PS/2 DATA |
+| | GPIO 26 | 37 | 38 | GPIO 20 | |
+| | GND | 39 | 40 | GPIO 21 | |
 
 Why these pins:
 
