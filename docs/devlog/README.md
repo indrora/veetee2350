@@ -34,6 +34,7 @@ was learned.
 28. [A way out: BOOTSEL factory reset, the USB keyboard in every mode, a SET-UP that asks](028-a-way-out.md)
 29. [Hands for the robot: an automation HID for debug builds](029-automation-hid.md)
 30. [A real serial line: the header's UART, SET-UP split into pages, a poor man's getty](030-serial-line.md)
+31. [Writing only in the blanking gap: no more torn frames under a flood](031-blanking-gap.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`
