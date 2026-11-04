@@ -6,3 +6,4 @@ captures/
 
 # Generated SD card contents (tools/sd_card.py)
 /sd/
+__pycache__
