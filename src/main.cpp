@@ -39,6 +39,13 @@ usbio_read(enum usbio_port port, char *buf, size_t cap)
 	return Serial.readBytes(buf, avail);
 }
 
+extern "C" size_t
+usbio_available(enum usbio_port port)
+{
+	(void)port;
+	return (size_t)Serial.available();
+}
+
 extern "C" void
 usbio_write(enum usbio_port port, const char *buf, size_t len)
 {

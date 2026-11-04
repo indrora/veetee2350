@@ -305,6 +305,68 @@ show_bytes(const uint8_t *bytes, size_t len)
 	capture_sd_feed(bytes, len, now_ms());
 }
 
+static size_t
+line_available(void)
+{
+	return line_on_uart ? serial_available() :
+	    usbio_available(USBIO_LINE);
+}
+
+/*
+ * Host output to the screen without tearing (devlog 031). The render
+ * IRQ reads the grid a few lines ahead of the picture; output fed while
+ * it does lands in the middle of a frame, the top of the screen showing
+ * one moment and the rest the next. So output is fed only while the grid
+ * is idle (video.h, video_in_gap): the vertical blanking interval,
+ * about 1.2-1.7 ms a frame, in chunks small enough that one straddling its end
+ * (the next line read) barely shows.
+ *
+ * The line keeps arriving meanwhile: the UART ring (8 KiB) and the CDC
+ * port (whose host simply waits) hold it. When that backlog passes
+ * FEED_BACKLOG -- a flood faster than the gaps can take, a `cat` of a
+ * large file over USB -- output is fed mid-frame too, a pass at a time,
+ * trading tearing for throughput.
+ */
+#define FEED_CHUNK	64
+#define FEED_BACKLOG	2048
+#define FEED_BUSY_MAX	256	/* bytes a pass, mid-frame */
+
+/* Running totals for the stats build's [feed] line. */
+static uint32_t feed_idle_bytes, feed_busy_bytes, feed_frames;
+static uint32_t feed_passes, feed_idle_passes;
+
+static void
+feed_line(void)
+{
+	char chunk[FEED_CHUNK];
+	size_t busy = 0;
+	bool backlog = line_available() > FEED_BACKLOG;
+	static uint32_t fed_frame;
+
+	feed_passes++;
+	if (video_in_gap())
+		feed_idle_passes++;
+
+	while (video_in_gap() || (backlog && busy < FEED_BUSY_MAX)) {
+		bool idle = video_in_gap();
+		size_t count = line_read(chunk, sizeof(chunk));
+
+		if (count == 0)
+			break;
+		show_bytes((const uint8_t *)chunk, count);
+		if (idle) {
+			feed_idle_bytes += count;
+			if (fed_frame != render.frame) {
+				fed_frame = render.frame;
+				feed_frames++;
+			}
+		} else {
+			feed_busy_bytes += count;
+			busy += count;
+		}
+	}
+}
+
 /* Make the terminal match `settings` (resets it if geometry changed). */
 static void
 apply_settings(void)
@@ -1128,6 +1190,25 @@ report_stats(void)
 	    (unsigned long)stats.starved, (unsigned long)stats.yields,
 	    video_line_budget());
 	usbio_printf("[usb] keyboard port %s\r\n", usbhost_refresh());
+	/* Host output this second: fed in the blanking gap (frames that
+	 * had some), fed mid-frame because of a backlog (devlog 031). */
+	static uint32_t seen_idle, seen_busy, seen_frames, seen_passes,
+	    seen_idle_passes;
+	usbio_printf("[blank] longest pause before line %lu, %lu cycles\r\n",
+	    (unsigned long)stats.gap_line, (unsigned long)stats.gap_cycles);
+	usbio_printf("[feed] gap=%lu bytes in %lu frames, mid-frame=%lu bytes, "
+	    "waiting=%u; loop passes=%lu, in the gap=%lu\r\n",
+	    (unsigned long)(feed_idle_bytes - seen_idle),
+	    (unsigned long)(feed_frames - seen_frames),
+	    (unsigned long)(feed_busy_bytes - seen_busy),
+	    (unsigned)line_available(),
+	    (unsigned long)(feed_passes - seen_passes),
+	    (unsigned long)(feed_idle_passes - seen_idle_passes));
+	seen_idle = feed_idle_bytes;
+	seen_busy = feed_busy_bytes;
+	seen_frames = feed_frames;
+	seen_passes = feed_passes;
+	seen_idle_passes = feed_idle_passes;
 #ifdef VEETEE_RENDER_PROFILE
 	/* Overlay composition (Tools menu, user lights), per composed line. */
 	/* Running totals (render.h): this second's share is the change. */
@@ -1309,7 +1390,6 @@ void
 app_poll(void)
 {
 	static bool boot_marked_ok;
-	char buffer[256];
 
 	board_watchdog_feed();
 	video_poll();
@@ -1343,8 +1423,8 @@ app_poll(void)
 	}
 	/* Host output waits while the Configuration Error is showing, and
 	 * while a replay has the screen (it stays in the USB buffers). */
-	size_t count = in_config_error || replay_sd_active() ? 0 :
-	    line_read(buffer, sizeof(buffer));
+	if (!in_config_error && !replay_sd_active())
+		feed_line();
 	/* On the UART, what a program sends the idle CDC port goes
 	 * nowhere: drain it rather than let it back up into the host. */
 	if (line_on_uart) {
@@ -1353,8 +1433,6 @@ app_poll(void)
 			;
 	}
 
-	if (count > 0)
-		show_bytes((const uint8_t *)buffer, count);
 	if (replay_sd_active() && !in_config_error &&
 	    !replay_sd_poll(now_ms(), replay_sink, nullptr)) {
 		term_status_message(&term, "Replay finished", now_ms());

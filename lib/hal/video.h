@@ -19,6 +19,19 @@
 
 #include "video_modes.h"
 
+/* Line buffers between core 0's rendering and core 1's encoding. */
+#define VIDEO_RING_LINES	8
+
+/*
+ * True while nothing is rendering, so nothing reads the screen's grid:
+ * the vertical blanking interval, about 1.2-1.7 ms a frame. The main loop
+ * changes the grid only then (app.c, feed_line), so a frame shows one
+ * moment of the screen, not the top of one and the bottom of the next
+ * (devlog 031). It can end at any moment: change in small pieces and
+ * check again between them.
+ */
+bool	video_in_gap(void);
+
 /*
  * Fill `pixels` (video_width() RGB565 values, 4-byte aligned) for visible
  * line `line` (0..video_height()-1). Runs on core 0 in IRQ context; must
@@ -35,6 +48,10 @@ struct video_stats {
 	uint32_t	max_render_cycles;
 	uint32_t	starved;	  /* lines the ring was empty (cumulative) */
 	uint32_t	yields;		  /* render IRQ gave way to the main loop */
+	/* Stats builds: the line rendered after the frame's longest pause
+	 * (the blanking interval), and that pause in cycles. */
+	uint32_t	gap_line;
+	uint32_t	gap_cycles;
 };
 
 /*

@@ -64,7 +64,21 @@ static_assert(PICO_PIO_USE_GPIO_BASE, "PIO GPIO base support required");
 static_assert(DVI_SYMBOLS_PER_WORD == 2, "lane stride below assumes 2 sym/word");
 static_assert(DVI_VERTICAL_REPEAT == 1, "full-res rendering assumes no repeat");
 
-#define RING_LINES	8	/* power of two: ring index is a mask */
+#define RING_LINES	VIDEO_RING_LINES	/* power of two: index is a mask */
+
+/*
+ * How far rendering runs ahead of the picture: the ring, plus libdvi's
+ * TMDS buffers, which core 1 encodes into ahead of scanout. So the next
+ * frame's first LEAD_LINES are rendered at the end of this one, and the
+ * render IRQ then waits out the vertical blanking interval: the "gap"
+ * (video_in_gap). Measured, not only worked out: the stats build's
+ * [blank] line finds the frame's long pause (1.7 ms at 720p24) just
+ * before line 12 = 8 + 4 (devlog 031).
+ */
+#define LEAD_LINES	(RING_LINES + DVI_N_TMDS_BUFFERS)
+/* Set by the render IRQ after line LEAD_LINES - 1, cleared before line
+ * LEAD_LINES; read by the main loop. Single writer, one byte. */
+static volatile bool in_gap = true;
 static_assert((RING_LINES & (RING_LINES - 1)) == 0);
 
 /*
@@ -231,7 +245,27 @@ static bool __not_in_flash_func(produce_lines)(bool sliced)
 	while (ring_head - ring_tail < RING_LINES) {
 		if (sliced && m33_hw->dwt_cyccnt - entry > slice_cycles)
 			return false;
+		/* The grid is about to be read again: the gap is over. */
+		if (produce_line == LEAD_LINES)
+			in_gap = false;
 		uint32_t start = m33_hw->dwt_cyccnt;
+#ifdef VEETEE_SERIAL_STATS
+		/* Where the frame's longest pause between lines falls: the
+		 * vertical blanking interval, seen from here (render.h,
+		 * lead_lines). */
+		static uint32_t last_start, longest_pause, longest_before;
+		uint32_t pause = start - last_start;
+		last_start = start;
+		if (pause > longest_pause) {
+			longest_pause = pause;
+			longest_before = produce_line;
+		}
+		if (produce_line == active_height - 1) {
+			live_stats.gap_line = longest_before;
+			live_stats.gap_cycles = longest_pause;
+			longest_pause = 0;
+		}
+#endif
 		scanline_fn(ring[ring_head & (RING_LINES - 1)], produce_line,
 		    scanline_ctx);
 		uint32_t spent = m33_hw->dwt_cyccnt - start;
@@ -243,6 +277,11 @@ static bool __not_in_flash_func(produce_lines)(bool sliced)
 		render_frame_total += spent;
 		if (spent > render_frame_max)
 			render_frame_max = spent;
+		/* The next frame's first LEAD_LINES are done: nothing reads
+		 * the grid again until scanout reaches them, after the
+		 * vertical blanking interval. */
+		if (produce_line + 1 == LEAD_LINES)
+			in_gap = true;
 		if (++produce_line == active_height) {
 			produce_line = 0;
 			live_stats.avg_render_cycles = render_frame_total /
@@ -277,6 +316,12 @@ void
 video_set_priority(uint8_t priority)
 {
 	irq_set_priority(bell_irq, priority);
+}
+
+bool
+video_in_gap(void)
+{
+	return in_gap;
 }
 
 void
@@ -470,6 +515,8 @@ video_get_stats(struct video_stats *out)
 		out->max_render_cycles = live_stats.max_render_cycles;
 		out->starved = live_stats.starved;
 		out->yields = live_stats.yields;
+		out->gap_line = live_stats.gap_line;
+		out->gap_cycles = live_stats.gap_cycles;
 		__dmb();
 	} while (frames != live_stats.frames);
 	out->frames = frames;

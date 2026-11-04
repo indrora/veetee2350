@@ -47,6 +47,8 @@ void	serial_begin(const struct serial_format *format);
 /* Stop it and give the pins back (inputs, pulled up). */
 void	serial_end(void);
 
+/* How many received bytes are waiting in the ring. */
+size_t	serial_available(void);
 /* Up to `cap` received bytes into buf; returns the count. */
 size_t	serial_read(uint8_t *buf, size_t cap);
 /* Queue bytes to send; returns how many fit (the rest are dropped). */

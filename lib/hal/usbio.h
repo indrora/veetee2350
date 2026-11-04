@@ -28,6 +28,8 @@ enum usbio_port {
 
 /* Copy up to `cap` received bytes into buf; returns the count. */
 size_t	usbio_read(enum usbio_port port, char *buf, size_t cap);
+/* How many received bytes are waiting to be read. */
+size_t	usbio_available(enum usbio_port port);
 /* Queue bytes for the host; drops them if the port isn't open. */
 void	usbio_write(enum usbio_port port, const char *buf, size_t len);
 /*

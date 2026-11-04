@@ -152,6 +152,12 @@ serial_end(void)
 }
 
 size_t
+serial_available(void)
+{
+	return running ? rx_head - rx_tail : 0;
+}
+
+size_t
 serial_read(uint8_t *buf, size_t cap)
 {
 	size_t count = 0;
