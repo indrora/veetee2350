@@ -93,7 +93,7 @@ static size_t problems_len;
 static bool in_config_error;
 
 /*
- * The boot splash (lib/render/splash.h): a small test card for the first
+ * The boot splash (lib/render/splash.h): a 256x256 test card for the first
  * SPLASH_MS, drawn instead of the terminal, because some capture cards
  * lock onto a busy picture far more readily than onto a fresh boot's
  * nearly-black screen (devlog 032). The terminal runs underneath all the
@@ -493,13 +493,6 @@ end_splash(void)
 	splash_up = false;
 	video_set_scanline(render_scanline, &render);
 	render.live = true;
-	/*
-	 * The splash's pixels were in SET-UP's screen (setup_cells): wipe
-	 * them. video_set_scanline holds off the render IRQ, so the line it
-	 * might have been drawing finished before the swap; lines after it
-	 * are the terminal's.
-	 */
-	memset(setup_cells, 0, sizeof(setup_cells));
 }
 
 static void
@@ -1320,8 +1313,7 @@ app_init(void)
 	 * The first picture is the splash; render.live stays false until it
 	 * ends (end_splash), since the renderer isn't drawing until then.
 	 */
-	splash_layout(&splash, mode->width, mode->height, setup_cells,
-	    sizeof(setup_cells));	/* SET-UP's screen: free until opened */
+	splash_layout(&splash, mode->width, mode->height);
 	splash_up = true;
 	video_init(running_resolution, splash_scanline, &splash);
 	splash_until = now_ms() + SPLASH_MS;

@@ -2,14 +2,13 @@
  * splash.c — paint the boot splash, one scanline at a time (splash.h).
  *
  * Runs in the render IRQ in place of render_scanline while the splash is
- * up, so it obeys the same rules (hal/video.h): RAM-resident, no blocking,
- * no calls into flash. It is much cheaper than text: a line outside the
- * image is a word fill, and an image line is one palette lookup per
- * source pixel, written as whole 32-bit words.
+ * up, so it obeys the same rules (hal/video.h): RAM-resident code, no
+ * blocking, no calls into flash. It does READ flash -- the image lives
+ * there -- which is the one exception, and why splash.h does the sums.
+ * A line outside the image is a word fill; a line through it is a copy,
+ * two pixels to a 32-bit load and store (or one, doubled, at 2x).
  */
 #include "splash.h"
-
-#include <string.h>
 
 #include "hot.h"
 
@@ -28,12 +27,11 @@ fill_words(uint32_t *out, unsigned count, uint32_t value)
 }
 
 void
-splash_layout(struct splash *splash, unsigned width, unsigned height,
-    void *ram, size_t ram_bytes)
+splash_layout(struct splash *splash, unsigned width, unsigned height)
 {
 	/*
-	 * 1:1 up to 540 lines, doubled from 720: a small card either way
-	 * (192x128, or 384x256 at 720p, under a third of the screen either way).
+	 * 1:1 up to 540 lines (256x256), doubled from 720 (512x512): it
+	 * must fit, and every mode under 720 lines is under 512 tall.
 	 */
 	unsigned scale = height >= 720 ? 2 : 1;
 
@@ -43,14 +41,7 @@ splash_layout(struct splash *splash, unsigned width, unsigned height,
 	/* Even, so the image starts on a word: two pixels per store. */
 	splash->left = (uint16_t)(((width - SPLASH_WIDTH * scale) / 2) & ~1u);
 	splash->top = (uint16_t)((height - SPLASH_HEIGHT * scale) / 2);
-	for (unsigned index = 0; index < SPLASH_COLOURS; index++)
-		splash->palette[index] = splash_palette[index];
-	splash->background = (uint32_t)splash_palette[0] * 0x10001u;
-	splash->pixels = splash_pixels;
-	if (ram != nullptr && ram_bytes >= SPLASH_PIXEL_BYTES) {
-		memcpy(ram, splash_pixels, SPLASH_PIXEL_BYTES);
-		splash->pixels = ram;
-	}
+	splash->background = (uint32_t)splash_background * 0x10001u;
 }
 
 void
@@ -71,21 +62,19 @@ HOT_FUNC(splash_scanline)(uint16_t *pixels, unsigned line, void *ctx)
 	fill_words(out, left_words, splash->background);
 	out += left_words;
 
-	/* The image: each source byte is two pixels, low nibble first. */
-	const uint8_t *source = splash->pixels +
-	    (line - splash->top) / scale * (SPLASH_WIDTH / 2);
-	const uint16_t *palette = splash->palette;
+	/* The image's row, two pixels to a word (splash_pixels is aligned). */
+	const uint32_t *source = (const uint32_t *)(splash_pixels +
+	    (line - splash->top) / scale * SPLASH_WIDTH);
 	if (scale == 1) {
 		for (unsigned index = 0; index < SPLASH_WIDTH / 2; index++) {
-			uint8_t pair = source[index];
-			*out++ = palette[pair & 15] |
-			    (uint32_t)palette[pair >> 4] << 16;
+			*out++ = source[index];
+			__asm__ volatile ("" ::: "memory");	/* no memcpy */
 		}
 	} else {	/* 2: each pixel fills a word */
 		for (unsigned index = 0; index < SPLASH_WIDTH / 2; index++) {
-			uint8_t pair = source[index];
-			*out++ = palette[pair & 15] * 0x10001u;
-			*out++ = palette[pair >> 4] * 0x10001u;
+			uint32_t pair = source[index];
+			*out++ = (pair & 0xffff) * 0x10001u;
+			*out++ = (pair >> 16) * 0x10001u;
 		}
 	}
 

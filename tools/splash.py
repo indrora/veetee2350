@@ -5,8 +5,8 @@ splash.py -- the boot splash bitmap: make it, and bake it into firmware.
 Why a splash at all: some HDMI capture cards (the ShadowCast 2 here) are
 slow to lock onto a fresh boot whose screen is nearly all black, but lock
 at once onto a busy picture such as SET-UP. So the first three seconds
-after power-on show a small test card in the middle of the screen, on a
-dark (not black) background (devlog 032).
+after power-on show a test card in the middle of the screen, on a dark
+(not black) background (devlog 032).
 
 Two steps, both from this script:
 
@@ -15,14 +15,14 @@ Two steps, both from this script:
   uv run splash.py              convert assets/splash.png into
                                 lib/render/splash_image.c
 
-The PNG is the source of truth: replace it with any 192x128 image and
-re-run the second step. The converter quantises to at most 16 colours
-(4 bits a pixel, so the image is 12 KB of flash) and puts the
-top-left pixel's colour in palette entry 0: the firmware fills the rest
-of the screen with it, so the image's border decides the background.
+The PNG is the source of truth: replace it with any 256x256 image and
+re-run the second step. It is stored as RGB565, exactly as the scanline
+wants it (128 KB of flash, read straight from flash by the painter: no
+palette, no copy). The top-right pixel's colour fills the rest of the
+screen, so the image's border decides the background.
 
-The firmware draws it 1:1 on the 480- and 540-line modes and doubled at
-720p (lib/render/splash.c), centred.
+The firmware draws it 1:1 on the 480- and 540-line modes and doubled
+(512x512) at 720p (lib/render/splash.c), centred.
 """
 
 import argparse
@@ -37,10 +37,8 @@ PNG = ROOT / "assets" / "splash.png"
 OUT_C = ROOT / "lib" / "render" / "splash_image.c"
 FONT = ROOT / "fonts" / "psf" / "fmtowns-8x16.psf"
 
-WIDTH, HEIGHT = 192, 128
-COLOURS = 16
+WIDTH, HEIGHT = 256, 256
 
-# The test card's palette. Entry 0 is the letterbox (see module comment).
 NAVY = (16, 24, 72)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -84,13 +82,11 @@ def load_psf2(path):
     mapping = {}
     if flags & 1:
         table = data[header_size + count * glyph_bytes:]
-        index = 0
-        for entry in table.split(b"\xff")[:count]:
+        for index, entry in enumerate(table.split(b"\xff")[:count]):
             # Single codepoints come before the first 0xFE sequence.
             singles = entry.split(b"\xfe")[0].decode("utf-8", "replace")
             for char in singles:
                 mapping.setdefault(ord(char), glyphs[index])
-            index += 1
     else:
         mapping = {index: glyph for index, glyph in enumerate(glyphs)}
     return mapping
@@ -114,40 +110,61 @@ def text_width(font, text, scale):
     return sum(len(font.get(ord(c), font[ord("?")])[0]) for c in text) * scale
 
 
+def hue(position):
+    """A fully saturated hue for position 0..1 (red, yellow, ... back)."""
+    sector = position * 6
+    fraction = sector % 1
+    rising, falling = int(255 * fraction), int(255 * (1 - fraction))
+    return [(255, rising, 0), (falling, 255, 0), (0, 255, rising),
+            (0, falling, 255), (rising, 0, 255), (255, 0, falling)][
+        int(sector) % 6]
+
+
 def generate():
-    """The default test card: bars, a castellated strip, a title panel."""
+    """
+    The default test card, top to bottom inside a navy frame: seven bars,
+    the SMPTE reversed strip, a grey ramp, a hue sweep, and the title.
+    Hard edges and smooth gradients both, so every line has detail.
+    """
     image = Image.new("RGB", (WIDTH, HEIGHT), NAVY)
     draw = ImageDraw.Draw(image)
     font = load_psf2(FONT)
 
-    # A navy frame (so the corner pixel, and the screen around the card,
-    # is navy), then two thirds of the rest in seven bars. Integer edges
-    # spread the remainder.
-    frame = 4
+    frame = 8
     inner = WIDTH - 2 * frame
-    bars_top = frame
-    bars_bottom = 84
-    for index, colour in enumerate(BARS):
-        left = frame + index * inner // len(BARS)
-        right = frame + (index + 1) * inner // len(BARS) - 1
-        draw.rectangle([left, bars_top, right, bars_bottom - 1],
-                       fill=colour)
 
-    # A thin strip of the bars reversed, alternating with black, as on
-    # the SMPTE card: hard vertical edges for the receiver to lock on.
-    strip_bottom = bars_bottom + 8
+    def columns(index, count):
+        """Integer column edges that spread the remainder."""
+        return (frame + index * inner // count,
+                frame + (index + 1) * inner // count - 1)
+
+    bars_bottom = 136
+    for index, colour in enumerate(BARS):
+        left, right = columns(index, len(BARS))
+        draw.rectangle([left, frame, right, bars_bottom - 1], fill=colour)
+
+    strip_bottom = bars_bottom + 12
     for index in range(len(BARS)):
         colour = BARS[len(BARS) - 1 - index] if index % 2 == 0 else BLACK
-        left = frame + index * inner // len(BARS)
-        right = frame + (index + 1) * inner // len(BARS) - 1
+        left, right = columns(index, len(BARS))
         draw.rectangle([left, bars_bottom, right, strip_bottom - 1],
                        fill=colour)
 
-    # The title on the navy panel below, at the font's own size.
+    # A black-to-white ramp, then a hue sweep: every column different.
+    ramp_bottom = strip_bottom + 16
+    sweep_bottom = ramp_bottom + 16
+    for x in range(inner):
+        level = round(255 * x / (inner - 1))
+        draw.line([frame + x, strip_bottom, frame + x, ramp_bottom - 1],
+                  fill=(level, level, level))
+        draw.line([frame + x, ramp_bottom, frame + x, sweep_bottom - 1],
+                  fill=hue(x / inner))
+
+    # The title on the navy below, twice the font's size.
     title = "VeeTee 2350"
-    scale = 1
+    scale = 2
     x = (WIDTH - text_width(font, title, scale)) // 2
-    y = strip_bottom + (HEIGHT - strip_bottom - 16 * scale) // 2
+    y = sweep_bottom + (HEIGHT - frame - sweep_bottom - 16 * scale) // 2
     draw_text(draw, font, title, x, y, scale, WHITE)
 
     PNG.parent.mkdir(parents=True, exist_ok=True)
@@ -160,41 +177,12 @@ def rgb565(red, green, blue):
 
 
 def convert():
-    """assets/splash.png -> lib/render/splash_image.c (4bpp + palette)."""
+    """assets/splash.png -> lib/render/splash_image.c (RGB565)."""
     image = Image.open(PNG).convert("RGB")
     if image.size != (WIDTH, HEIGHT):
         sys.exit(f"{PNG}: must be {WIDTH}x{HEIGHT}, is "
                  f"{image.size[0]}x{image.size[1]}")
-
-    # Exact palette if the image already has <= 16 colours (the generated
-    # card does), so entry order is first-seen from the top-left: the
-    # letterbox colour is whatever the corner pixel is. Otherwise let
-    # Pillow quantise, then move the corner's colour to entry 0.
-    colours = image.getcolors(maxcolors=COLOURS)
-    if colours is not None:
-        seen = []
-        for pixel in image.get_flattened_data():
-            if pixel not in seen:
-                seen.append(pixel)
-        palette = seen
-        pixels = [palette.index(p) for p in image.get_flattened_data()]
-    else:
-        quantised = image.quantize(colors=COLOURS, dither=Image.Dither.NONE)
-        flat = quantised.getpalette()[:COLOURS * 3]
-        palette = [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
-        pixels = list(quantised.get_flattened_data())
-        corner = pixels[0]
-        order = [corner] + [i for i in range(len(palette)) if i != corner]
-        remap = {old: new for new, old in enumerate(order)}
-        palette = [palette[i] for i in order]
-        pixels = [remap[p] for p in pixels]
-    palette += [(0, 0, 0)] * (COLOURS - len(palette))
-
-    # Two pixels a byte, the left one in the low nibble (as render.h's
-    # tiles pack LSB-first).
-    packed = bytearray()
-    for index in range(0, len(pixels), 2):
-        packed.append(pixels[index] | pixels[index + 1] << 4)
+    pixels = [rgb565(*pixel) for pixel in image.get_flattened_data()]
 
     lines = [
         "/*",
@@ -203,21 +191,19 @@ def convert():
         " */",
         '#include "splash.h"',
         "",
-        "const uint16_t splash_palette[SPLASH_COLOURS] = {",
+        "/* The top-right pixel: the screen around the image. */",
+        f"const uint16_t splash_background = 0x{pixels[WIDTH - 1]:04x};",
+        "",
+        "/* Word-aligned: the painter reads two pixels at a time. */",
+        "const uint16_t splash_pixels[SPLASH_HEIGHT * SPLASH_WIDTH]",
+        "    __attribute__((aligned(4))) = {",
     ]
-    for red, green, blue in palette:
-        lines.append(f"\t0x{rgb565(red, green, blue):04x},"
-                     f"\t/* {red}, {green}, {blue} */")
-    lines += ["};", "",
-              "const uint8_t splash_pixels[SPLASH_HEIGHT * SPLASH_WIDTH / 2]"
-              " = {"]
-    for offset in range(0, len(packed), 16):
-        chunk = packed[offset:offset + 16]
-        lines.append("\t" + ", ".join(f"0x{b:02x}" for b in chunk) + ",")
+    for offset in range(0, len(pixels), 16):
+        chunk = pixels[offset:offset + 16]
+        lines.append("\t" + ", ".join(f"0x{p:04x}" for p in chunk) + ",")
     lines += ["};", ""]
     OUT_C.write_text("\n".join(lines))
-    print(f"wrote {OUT_C.relative_to(ROOT)}: "
-          f"{len(set(pixels))} colours, {len(packed)} bytes")
+    print(f"wrote {OUT_C.relative_to(ROOT)}: {len(pixels) * 2} bytes")
 
 
 def main():

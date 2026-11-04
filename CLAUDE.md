@@ -22,7 +22,7 @@
   reset of the user's settings.
 - Fonts: edit `tools/fonts.toml`, then `cd tools && uv run ttf2psf.py`
   regenerates `fonts/psf/` and `lib/font/fonts_builtin.c`.
-- Boot splash: replace `assets/splash.png` (192x128, <= 16 colours), then
+- Boot splash: replace `assets/splash.png` (256x256, RGB565; its top-right pixel fills the screen), then
   `cd tools && uv run splash.py` regenerates `lib/render/splash_image.c`.
 - Check the screen: `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2"
   -frames:v 1 capture.jpg` from the user's Terminal panel (needs camera

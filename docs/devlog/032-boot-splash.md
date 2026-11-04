@@ -2,35 +2,56 @@
 
 *2026-11-04*
 
-![The boot splash at 640x480: a small test card in the middle of a navy screen, with seven colour bars, a strip of reversed bars and "VeeTee 2350" underneath](img/032-splash.jpg)
+![The boot splash at 640x480: a 256x256 test card in the middle of a navy screen, with seven colour bars, a strip of reversed bars, a grey ramp, a hue sweep and "VeeTee 2350" underneath](img/032-splash.jpg)
 
 On a fresh boot the ShadowCast capture card sometimes wouldn't lock onto
 the picture. But tap BOOTSEL to bring up SET-UP and it locked every
 time. The one obvious difference is the picture. A fresh boot is a black
 screen with three lines of banner, while SET-UP fills most of the screen.
-So the first three seconds now show a small test card instead of the
-terminal.
+So the first three seconds now show a test card instead of the terminal.
 
 ## The card
 
-`tools/splash.py --generate` draws it: 192x108 pixels, seven 75% colour
-bars, the reversed strip from the SMPTE card, and the title in the
-FM Towns 8x16 font. It has a navy frame, and the screen around the card
-takes the frame's colour, so no line of the frame is black.
+`tools/splash.py --generate` draws it at 256x256. Inside a navy frame
+it has seven 75% colour bars, the reversed strip from the SMPTE card, a
+black-to-white ramp, a hue sweep, and the title in the FM Towns 8x16
+font at twice its size. That gives the receiver hard vertical edges and
+smooth gradients both.
 
 The PNG it writes (`assets/splash.png`) is the source. Replace it with
-any 192x108 image and run `uv run splash.py` again. That converts it to
-at most 16 colours, 4 bits a pixel (10 KB), into
-`lib/render/splash_image.c`. The image's top-left pixel decides the
-background colour.
+any 256x256 image and run `uv run splash.py` again. That stores it as
+RGB565 in `lib/render/splash_image.c`, exactly as the scanline wants it.
+The image's **top-right pixel** sets the colour of the rest of the
+screen, so a border can be one colour and the fill another.
+
+## Straight from flash
+
+The first version was a 16-colour 192x108 card, copied at boot into
+SET-UP's idle screen buffer so the painter would read only RAM. Then
+came the obvious point: the image is in flash already, and all it has to
+do is get a few frames out to a capture card. So now the painter reads
+it from flash directly. That's 128 KB of RGB565, with no palette and no
+copy.
+
+That breaks a rule the text renderer lives by: never touch flash from
+the render IRQ. The image is 8x the XIP cache, so every image line is a
+cache miss. But the sums allow it for this one job. A line at 1:1 is
+512 bytes, and QSPI flash gives tens of MB/s, so a line costs a few
+microseconds against 25–32 µs in every mode. And it lasts 3 seconds.
+
+Going all the way to the DVI serialiser, with TMDS pre-encoded in flash,
+doesn't work. TMDS is about 3.8 KB a line at 640x480, which would need
+about 120 MB/s out of flash. That's more than QSPI can give, and every
+mode would need its own copy.
 
 ## Painting it
 
 `lib/render/splash.c` is a second scanline function, with the same shape
-as `render_scanline`. Lines above and below the card are a word fill.
-A line through the card is a palette lookup per source pixel, written
-two pixels to a 32-bit store. At 720p each pixel is doubled, so the card
-is 384x216. Elsewhere it's 1:1.
+as `render_scanline`:
+
+- a line above or below the card is a word fill;
+- a line through it is a copy, two pixels per 32-bit load and store;
+- at 720p each pixel fills a word (512x512); elsewhere it's 1:1.
 
 Swapping it in and out costs the text renderer nothing:
 
@@ -42,32 +63,18 @@ Swapping it in and out costs the text renderer nothing:
   while the splash draws. With `live` false, a pause returns at once
   instead of hanging.
 
-## Borrowed memory
-
-Reading the pixels from flash inside the render IRQ risks an XIP cache
-miss mid-line. So `splash_layout` copies them into RAM first. The RAM is
-SET-UP's screen (`setup_cells`, 19 KB): nothing uses it at boot, and
-the 10 KB of pixels fits. When the splash ends, the buffer is wiped and
-handed back. Opening SET-UP ends the splash early, so SET-UP never finds
-its screen borrowed.
-
-The terminal runs underneath the whole time. The banner, host output and
-settings carry on as usual, and they appear when the splash goes away.
-Nothing waits on it.
+Opening SET-UP ends the splash early. The terminal runs underneath the
+whole time. The banner, host output and settings carry on as usual, and
+they appear when the splash goes away. Nothing waits on it.
 
 ## Does it help?
 
 The recording above was made by reflashing the board while ffmpeg
 captured. The card locked partway through the 3 seconds, and the splash
-was on screen for about the last 2. One boot doesn't settle whether a busy
-picture makes the ShadowCast lock faster. What tells us is cold boots,
-over the next few days. If it isn't enough, the next things to try are a
-longer splash, or a bigger card that lights more of each line.
+was on screen for about the last 2, with no damaged lines from the flash
+reads. One boot doesn't settle whether a busy picture makes the
+ShadowCast lock faster. What tells us is cold boots in each mode.
 
 Host tests: `test/test_splash` checks the layout at 640x480 and 720p,
-the fallback to flash when the borrowed buffer is too small, a
-background line, and a line through the card at both scales.
-
-**Later the same day:** the card grew to 192x128, a rounder size, and
-the bars got taller to match: 384x256 at 720p, 12 KB of pixels, still
-well inside SET-UP's 19 KB buffer.
+that the card always starts on an even column, a background line, and
+lines through the card at both scales, including its last line.
