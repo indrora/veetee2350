@@ -23,7 +23,8 @@
 - Fonts: edit `tools/fonts.toml`, then `cd tools && uv run ttf2psf.py`
   regenerates `fonts/psf/` and `lib/font/fonts_builtin.c`.
 - Boot splash: replace `assets/splash.png` (256x256, RGB565; its top-right pixel fills the screen), then
-  `cd tools && uv run splash.py` regenerates `lib/render/splash_image.c`.
+  build: a pre-build step (tools/pio_splash.py) regenerates
+  `lib/render/splash_image.c` whenever the PNG changed.
 - Check the screen: `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2"
   -frames:v 1 capture.jpg` from the user's Terminal panel (needs camera
   permission the agent sandbox lacks).

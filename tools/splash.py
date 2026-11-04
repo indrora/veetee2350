@@ -202,8 +202,16 @@ def convert():
         chunk = pixels[offset:offset + 16]
         lines.append("\t" + ", ".join(f"0x{p:04x}" for p in chunk) + ",")
     lines += ["};", ""]
-    OUT_C.write_text("\n".join(lines))
-    print(f"wrote {OUT_C.relative_to(ROOT)}: {len(pixels) * 2} bytes")
+    # Only write when something changed: the build runs this every time
+    # (tools/pio_splash.py), and a rewritten file -- even identical --
+    # gets its 130 KB of C recompiled.
+    text = "\n".join(lines)
+    name = OUT_C.relative_to(ROOT)
+    if OUT_C.exists() and OUT_C.read_text() == text:
+        print(f"{name}: up to date")
+        return
+    OUT_C.write_text(text)
+    print(f"wrote {name}: {len(pixels) * 2} bytes")
 
 
 def main():
