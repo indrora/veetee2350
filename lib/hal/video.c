@@ -324,6 +324,21 @@ video_in_gap(void)
 	return in_gap;
 }
 
+/*
+ * The callback and its argument are two stores, and the render IRQ runs
+ * on this core: masked, it can't see the new function with the old
+ * argument. The next line rendered uses the new pair (a line already in
+ * the ring keeps what it was drawn with).
+ */
+void
+video_set_scanline(video_scanline_fn scanline, void *ctx)
+{
+	uint32_t saved = save_and_disable_interrupts();
+	scanline_fn = scanline;
+	scanline_ctx = ctx;
+	restore_interrupts(saved);
+}
+
 void
 video_poll(void)
 {

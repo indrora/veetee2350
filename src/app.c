@@ -44,6 +44,7 @@
 #include "settings.h"
 #include "storage.h"
 #include "setup.h"
+#include "splash.h"
 #include "term.h"
 #include "usbhost.h"
 #include "usbio.h"
@@ -62,6 +63,7 @@ static_assert(sizeof(struct settings) <= FLASHCFG_MAX);
 #define BOOT_HEALTHY_MS		60000	/* then the crash count clears */
 #define CRASHES_MAX		2	/* in a row: boot with factory defaults */
 #define VISUAL_BELL_MS		100
+#define SPLASH_MS		3000	/* the boot splash, from first picture */
 
 static struct render render;
 static struct term term;
@@ -89,6 +91,18 @@ static struct cell setup_cells[SETUP_COLS * SETUP_ROWS];
 static char problems[512];
 static size_t problems_len;
 static bool in_config_error;
+
+/*
+ * The boot splash (lib/render/splash.h): a small test card for the first
+ * SPLASH_MS, drawn instead of the terminal, because some capture cards
+ * lock onto a busy picture far more readily than onto a fresh boot's
+ * nearly-black screen (devlog 032). The terminal runs underneath all the
+ * while -- banner, host output and all -- and simply appears when the
+ * splash ends, so nothing waits on it.
+ */
+static struct splash splash;
+static bool splash_up;
+static uint32_t splash_until;
 
 static uint32_t bells_seen;
 static absolute_time_t bell_until;
@@ -466,9 +480,33 @@ scan_progress(const char *text, void *ctx)
 	setup_message(&setup, text);
 }
 
+/*
+ * Put the terminal back on the screen. render.live goes true only now:
+ * render_pause waits for the renderer's frame counter to move, and it
+ * doesn't while the splash draws, so until here a pause must not wait.
+ */
+static void
+end_splash(void)
+{
+	if (!splash_up)
+		return;
+	splash_up = false;
+	video_set_scanline(render_scanline, &render);
+	render.live = true;
+	/*
+	 * The splash's pixels were in SET-UP's screen (setup_cells): wipe
+	 * them. video_set_scanline holds off the render IRQ, so the line it
+	 * might have been drawing finished before the swap; lines after it
+	 * are the terminal's.
+	 */
+	memset(setup_cells, 0, sizeof(setup_cells));
+}
+
 static void
 enter_setup(void)
 {
+	end_splash();	/* SET-UP is never hidden behind it */
+
 	struct grid *screen = term.screen;
 	struct cell blank = grid_make_cell(term.space_glyph, 0xffff, 0, 0);
 	/* No bigger than the terminal's grid: that's known to fit. */
@@ -1278,8 +1316,15 @@ app_init(void)
 	if (!term_init(&term, boot_font != nullptr ? boot_font :
 	    &font_builtins[0], &render, send_to_host, nullptr))
 		panic("term: cannot start (font or memory)");
-	video_init(running_resolution, render_scanline, &render);
-	render.live = true;	/* from now on, render_pause must wait */
+	/*
+	 * The first picture is the splash; render.live stays false until it
+	 * ends (end_splash), since the renderer isn't drawing until then.
+	 */
+	splash_layout(&splash, mode->width, mode->height, setup_cells,
+	    sizeof(setup_cells));	/* SET-UP's screen: free until opened */
+	splash_up = true;
+	video_init(running_resolution, splash_scanline, &splash);
+	splash_until = now_ms() + SPLASH_MS;
 	/* After video_init: its TMDS buffers come off the heap first. */
 	term_set_graphics_budget(&term, GRAPHICS_BUDGET, board_free_heap);
 	term_set_keepalive(&term, board_watchdog_feed);
@@ -1417,6 +1462,8 @@ app_poll(void)
 		    p->divider + 1, p->pass[1], (unsigned long)p->probe_us);
 	}
 #endif
+	if (splash_up && (int32_t)(now_ms() - splash_until) >= 0)
+		end_splash();
 	if (!boot_marked_ok && now_ms() > BOOT_HEALTHY_MS) {
 		board_boot_ok();
 		boot_marked_ok = true;

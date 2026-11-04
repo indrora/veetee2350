@@ -35,6 +35,7 @@ was learned.
 29. [Hands for the robot: an automation HID for debug builds](029-automation-hid.md)
 30. [A real serial line: the header's UART, SET-UP split into pages, a poor man's getty](030-serial-line.md)
 31. [Writing only in the blanking gap: no more torn frames under a flood](031-blanking-gap.md)
+32. [A boot splash for the capture card](032-boot-splash.md)
 
 How entries are made: capture with
 `ffmpeg -f avfoundation -framerate 30 -i "ShadowCast 2" -frames:v 1 x.jpg`

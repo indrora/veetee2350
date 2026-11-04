@@ -63,6 +63,12 @@ struct video_stats {
  */
 void	video_init(unsigned mode, video_scanline_fn scanline, void *ctx);
 
+/*
+ * Draw with a different scanline callback from the next line on (the
+ * boot splash swaps in and out this way, app.c). Core 0, thread code.
+ */
+void	video_set_scanline(video_scanline_fn scanline, void *ctx);
+
 /* The running mode's active size, and sysclk cycles per line (budget). */
 unsigned video_width(void);
 unsigned video_height(void);
