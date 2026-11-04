@@ -28,15 +28,15 @@ Where do they go? A second build (`env:pizero-experiments`) re-runs
 variants of the loop once a frame on line 240, into lines nobody sees,
 each timed:
 
-| Variant (80 cells of plain text) | Cycles |
-|---|---|
-| the real loop, in `render_scanline` | 4270 |
-| a minimal plain-text loop, same work, into main SRAM | 3352 |
-| the same, into SCRATCH_X (no DMA or core 1 traffic) | 3220 |
-| loads and arithmetic only, no stores | 2898 |
-| stores only | 822 |
-| copying the row's cells into SCRATCH_Y | 1355 |
-| the minimal loop reading those scratch cells | 2888 |
+| Variant (80 cells of plain text)                     | Cycles |
+| ---------------------------------------------------- | ------ |
+| the real loop, in `render_scanline`                  | 4270   |
+| a minimal plain-text loop, same work, into main SRAM | 3352   |
+| the same, into SCRATCH_X (no DMA or core 1 traffic)  | 3220   |
+| loads and arithmetic only, no stores                 | 2898   |
+| stores only                                          | 822    |
+| copying the row's cells into SCRATCH_Y               | 1355   |
+| the minimal loop reading those scratch cells         | 2888   |
 
 Two things came out of that. SRAM contention with core 1 is real but
 small: 4% on stores, 14% on reading cells. And the real loop was 27%
@@ -87,14 +87,14 @@ it opens or closes one), and a PAIR span whose colours just changed.
 
 640x480, 80x30, render cycles a line, average / worst line:
 
-| Screen | Before | With the planner |
-|---|---|---|
-| Plain text | 4201 / 4347 | **2601** / 3366 |
-| Tools menu open over it | 4135 / 5995 | **2933 / 3557** |
-| Every cell its own colours | 4201 / 4340 | 3982 / 4157 |
-| Attributes on every cell | 4816 / 5083 | 4625 / 4795 |
-| Double-width lines | 3923 / 4049 | 3927 / 4052 |
-| Full-screen Sixel | 5740 / 6587 | 5480 / 6268 |
+| Screen                     | Before      | With the planner |
+| -------------------------- | ----------- | ---------------- |
+| Plain text                 | 4201 / 4347 | **2601** / 3366  |
+| Tools menu open over it    | 4135 / 5995 | **2933 / 3557**  |
+| Every cell its own colours | 4201 / 4340 | 3982 / 4157      |
+| Attributes on every cell   | 4816 / 5083 | 4625 / 4795      |
+| Double-width lines         | 3923 / 4049 | 3927 / 4052      |
+| Full-screen Sixel          | 5740 / 6587 | 5480 / 6268      |
 
 The everyday case, a shell in the theme's colours, is 38% cheaper, and
 the menu's worst line is 40% lower. Colourful and attributed screens
@@ -165,6 +165,7 @@ attributes; Sixel; the menu over double-width lines; reverse
 video](img/024-contact.jpg)
 
 Left to right, top to bottom:
+
 1. Plain text (all PAIR spans).
 2. The Tools menu over it: grid, menu and grid spans, nothing composed.
 3. Every cell in its own colours (PLAIN).
