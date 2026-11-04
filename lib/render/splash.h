@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #define SPLASH_WIDTH	192
-#define SPLASH_HEIGHT	108
+#define SPLASH_HEIGHT	128
 #define SPLASH_COLOURS	16
 
 extern const uint16_t splash_palette[SPLASH_COLOURS];

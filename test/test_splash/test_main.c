@@ -28,7 +28,7 @@ test_layout_640x480(void)
 	splash_layout(&splash, 640, 480, ram, sizeof(ram));
 	TEST_ASSERT_EQUAL_UINT(1, splash.scale);
 	TEST_ASSERT_EQUAL_UINT((640 - 192) / 2, splash.left);
-	TEST_ASSERT_EQUAL_UINT((480 - 108) / 2, splash.top);
+	TEST_ASSERT_EQUAL_UINT((480 - 128) / 2, splash.top);
 	/* Copied into the borrowed RAM, and the same bytes. */
 	TEST_ASSERT_EQUAL_PTR(ram, splash.pixels);
 	TEST_ASSERT_EQUAL_MEMORY(splash_pixels, ram, SPLASH_PIXEL_BYTES);
@@ -40,7 +40,7 @@ test_layout_720p_doubles(void)
 	splash_layout(&splash, 1280, 720, ram, sizeof(ram));
 	TEST_ASSERT_EQUAL_UINT(2, splash.scale);
 	TEST_ASSERT_EQUAL_UINT((1280 - 384) / 2, splash.left);
-	TEST_ASSERT_EQUAL_UINT((720 - 216) / 2, splash.top);
+	TEST_ASSERT_EQUAL_UINT((720 - 256) / 2, splash.top);
 }
 
 static void

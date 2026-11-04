@@ -33,7 +33,7 @@ splash_layout(struct splash *splash, unsigned width, unsigned height,
 {
 	/*
 	 * 1:1 up to 540 lines, doubled from 720: a small card either way
-	 * (192x108, or 384x216 at 720p, a fifth of the screen's width).
+	 * (192x128, or 384x256 at 720p, under a third of the screen either way).
 	 */
 	unsigned scale = height >= 720 ? 2 : 1;
 

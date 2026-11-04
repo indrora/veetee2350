@@ -15,9 +15,9 @@ Two steps, both from this script:
   uv run splash.py              convert assets/splash.png into
                                 lib/render/splash_image.c
 
-The PNG is the source of truth: replace it with any 192x108 image and
+The PNG is the source of truth: replace it with any 192x128 image and
 re-run the second step. The converter quantises to at most 16 colours
-(4 bits a pixel, so the image is about 10 KB of flash) and puts the
+(4 bits a pixel, so the image is 12 KB of flash) and puts the
 top-left pixel's colour in palette entry 0: the firmware fills the rest
 of the screen with it, so the image's border decides the background.
 
@@ -37,7 +37,7 @@ PNG = ROOT / "assets" / "splash.png"
 OUT_C = ROOT / "lib" / "render" / "splash_image.c"
 FONT = ROOT / "fonts" / "psf" / "fmtowns-8x16.psf"
 
-WIDTH, HEIGHT = 192, 108
+WIDTH, HEIGHT = 192, 128
 COLOURS = 16
 
 # The test card's palette. Entry 0 is the letterbox (see module comment).
@@ -126,7 +126,7 @@ def generate():
     frame = 4
     inner = WIDTH - 2 * frame
     bars_top = frame
-    bars_bottom = 70
+    bars_bottom = 84
     for index, colour in enumerate(BARS):
         left = frame + index * inner // len(BARS)
         right = frame + (index + 1) * inner // len(BARS) - 1

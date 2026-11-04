@@ -67,3 +67,7 @@ longer splash, or a bigger card that lights more of each line.
 Host tests: `test/test_splash` checks the layout at 640x480 and 720p,
 the fallback to flash when the borrowed buffer is too small, a
 background line, and a line through the card at both scales.
+
+**Later the same day:** the card grew to 192x128, a rounder size, and
+the bars got taller to match: 384x256 at 720p, 12 KB of pixels, still
+well inside SET-UP's 19 KB buffer.
