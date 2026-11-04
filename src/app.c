@@ -40,6 +40,7 @@
 #include "printer_sd.h"
 #include "replay_sd.h"
 #include "screenshot.h"
+#include "serial.h"
 #include "settings.h"
 #include "storage.h"
 #include "setup.h"
@@ -93,6 +94,49 @@ static uint32_t bells_seen;
 static absolute_time_t bell_until;
 static bool bell_flashing;
 
+/*
+ * The communication line: the USB CDC port or the header's UART
+ * (settings.line_port, applied by line_apply). Everything that talks to
+ * the host goes through these two, so switching ports is one flag.
+ */
+static bool line_on_uart;
+
+static size_t
+line_read(char *buf, size_t cap)
+{
+	return line_on_uart ? serial_read((uint8_t *)buf, cap) :
+	    usbio_read(USBIO_LINE, buf, cap);
+}
+
+static void
+line_write(const char *buf, size_t len)
+{
+	if (line_on_uart)
+		serial_write((const uint8_t *)buf, len);
+	else
+		usbio_write(USBIO_LINE, buf, len);
+}
+
+/* Start the port the settings name, with their format; stop the other. */
+static void
+line_apply(void)
+{
+	if (settings.line_port != LINE_UART) {
+		serial_end();
+		line_on_uart = false;
+		return;
+	}
+	struct serial_format format = {
+		.baud = settings_bauds[settings.line_baud % SETTINGS_BAUDS],
+		.data_bits = settings.line_data_bits,
+		.parity = settings.line_parity,
+		.stop_bits = settings.line_stop_bits,
+		.rts_cts = settings.line_flow == FLOW_RTS_CTS,
+	};
+	serial_begin(&format);
+	line_on_uart = true;
+}
+
 static void
 send_to_host(const char *bytes, size_t len, void *ctx)
 {
@@ -101,7 +145,7 @@ send_to_host(const char *bytes, size_t len, void *ctx)
 	 * asked for: drop them. */
 	if (replay_sd_active())
 		return;
-	usbio_write(USBIO_LINE, bytes, len);
+	line_write(bytes, len);
 }
 
 static uint32_t
@@ -292,6 +336,7 @@ apply_settings(void)
 		panic("term: cannot apply settings (memory)");
 	printer_sd_enable(&term, settings.printer != 0);
 	capture_sd_enable(settings.capture != 0);
+	line_apply();
 	show_state();
 }
 
@@ -1173,12 +1218,14 @@ app_init(void)
 	    "\x1b[1mVeeTee 2350\x1b[0m ready. Ctrl+F3: Tools. BOOTSEL: "
 	    "SET-UP (hold 5 s: factory reset)\r\n";
 	term_feed(&term, (const uint8_t *)banner, sizeof(banner) - 1);
-	char detail[280];
+	char detail[320];
+	char line[32];
+	settings_line_summary(&settings, line, sizeof(line));
 	int len = snprintf(detail, sizeof(detail), "%s, %s, %ux%u, "
-	    "sixel %u cells\r\nsettings: %s; USB keyboard port: %s\r\n"
-	    "last reset: %s%s\r\n",
+	    "sixel %u cells\r\nsettings: %s; line: %s; USB keyboard port: "
+	    "%s\r\nlast reset: %s%s\r\n",
 	    mode->name, term.font_source->name, term.screen->cols,
-	    term.screen->rows, term.graphics.tiles, settings_origin,
+	    term.screen->rows, term.graphics.tiles, settings_origin, line,
 	    usbhost_describe(), board_reset_reason(),
 	    strcmp(board_reset_reason(), "brown-out") == 0 ?
 	    "  (the supply dipped: a USB device plugged in?)" : "");
@@ -1203,7 +1250,7 @@ app_init(void)
 		    "crashed: HardFault at pc=0x%08lx lr=0x%08lx\x1b[0m\r\n",
 		    (unsigned long)fault_pc, (unsigned long)fault_lr);
 		term_feed(&term, (const uint8_t *)detail, (size_t)len);
-		usbio_write(USBIO_LINE, detail, (size_t)len);
+		line_write(detail, (size_t)len);
 	}
 	if (fell_back)
 		config_problem("Startup", "the last boots crashed or hung "
@@ -1297,7 +1344,14 @@ app_poll(void)
 	/* Host output waits while the Configuration Error is showing, and
 	 * while a replay has the screen (it stays in the USB buffers). */
 	size_t count = in_config_error || replay_sd_active() ? 0 :
-	    usbio_read(USBIO_LINE, buffer, sizeof(buffer));
+	    line_read(buffer, sizeof(buffer));
+	/* On the UART, what a program sends the idle CDC port goes
+	 * nowhere: drain it rather than let it back up into the host. */
+	if (line_on_uart) {
+		char discard[64];
+		while (usbio_read(USBIO_LINE, discard, sizeof(discard)) > 0)
+			;
+	}
 
 	if (count > 0)
 		show_bytes((const uint8_t *)buffer, count);

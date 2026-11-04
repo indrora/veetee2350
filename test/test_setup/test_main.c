@@ -65,8 +65,13 @@ test_settings_crc(void)
 static void
 test_navigation_and_values(void)
 {
-	/* Starts on Resolution; Right picks the next mode in SET-UP's
-	 * order (640x480 @ 72 is listed second, though stored last). */
+	/* Opens on the directory; Enter on Display opens it on
+	 * Resolution. Right picks the next mode in SET-UP's order
+	 * (640x480 @ 72 is listed second, though stored last). */
+	TEST_ASSERT_EQUAL(PAGE_DIRECTORY, setup.page);
+	TEST_ASSERT_EQUAL(ITEM_PAGE_DISPLAY, setup.selected);
+	press(KEY_ENTER, 0);
+	TEST_ASSERT_EQUAL(PAGE_DISPLAY, setup.page);
 	TEST_ASSERT_EQUAL(ITEM_RESOLUTION, setup.selected);
 	TEST_ASSERT_EQUAL(VIDEO_MODE_640x480, setup.work.resolution);
 	press(KEY_RIGHT, 0);
@@ -86,8 +91,15 @@ test_navigation_and_values(void)
 	setup.selected = ITEM_SCHEME;
 	press(KEY_LEFT, 0);
 	TEST_ASSERT_EQUAL(SCHEME_COUNT - 1, setup.work.scheme);
-	/* Up from the top wraps to Exit. */
-	setup.selected = 0;
+	/* Up from the top of a page wraps to its last line; Esc goes
+	 * back to the directory, on the entry for that page. */
+	setup.selected = ITEM_RESOLUTION;
+	press(KEY_UP, 0);
+	TEST_ASSERT_EQUAL(ITEM_PROFILER, setup.selected);
+	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ESCAPE, 0));
+	TEST_ASSERT_EQUAL(PAGE_DIRECTORY, setup.page);
+	TEST_ASSERT_EQUAL(ITEM_PAGE_DISPLAY, setup.selected);
+	/* Up from the top of the directory wraps to Exit. */
 	press(KEY_UP, 0);
 	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
 	/* Things changed, so Exit asks first (test_exit_prompt). */
@@ -375,6 +387,8 @@ test_card_lists(void)
 	};
 
 	setup_catalogue(&setup, &card);
+	press(KEY_ENTER, 0);		/* the Display page has both */
+	TEST_ASSERT_EQUAL(PAGE_DISPLAY, setup.page);
 	/* Font: Left from the first built-in wraps to the card font. */
 	while (setup.selected != ITEM_FONT)
 		press(KEY_DOWN, 0);
@@ -473,7 +487,7 @@ test_hotkeys_page(void)
 
 	setup.selected = ITEM_HOTKEYS;
 	TEST_ASSERT_EQUAL(SETUP_NONE, press(KEY_ENTER, 0));
-	TEST_ASSERT_TRUE(setup.hotkeys_page);
+	TEST_ASSERT_EQUAL(PAGE_HOTKEYS, setup.page);
 	/* The list: Tools menu, Set-Up, Screenshot, ... Bind Ctrl+F3 to
 	 * Screenshot: the Tools menu loses it. */
 	press(KEY_DOWN, 0);
@@ -494,7 +508,8 @@ test_hotkeys_page(void)
 	press(KEY_DELETE, 0);
 	TEST_ASSERT_EQUAL(KEY_NONE, setup.work.hotkeys[TOOL_SCREENSHOT].code);
 	press(KEY_ESCAPE, 0);
-	TEST_ASSERT_FALSE(setup.hotkeys_page);
+	TEST_ASSERT_EQUAL(PAGE_DIRECTORY, setup.page);
+	TEST_ASSERT_EQUAL(ITEM_HOTKEYS, setup.selected);
 	/* Nothing was saved: the stored settings still have Ctrl+F3. */
 	TEST_ASSERT_EQUAL(KEY_F3, settings.hotkeys[TOOL_MENU].code);
 }
@@ -502,17 +517,24 @@ test_hotkeys_page(void)
 static void
 test_short_screen_scrolls(void)
 {
-	struct grid small;
+	struct grid small, tiny;
 
 	TEST_ASSERT_TRUE(grid_init(&small, 80, 24, grid_make_cell(0, 0, 0,
 	    0)));
+	TEST_ASSERT_TRUE(grid_init(&tiny, 64, 12, grid_make_cell(0, 0, 0, 0)));
+	/* Every page fits an 80x24 screen without scrolling. */
 	setup_begin(&setup, &settings, &small, &font, VIDEO_MODE_640x480);
-	press(KEY_UP, 0);		/* wraps to Exit, the last item */
+	press(KEY_UP, 0);		/* wraps to Exit, the last entry */
 	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
-	TEST_ASSERT_TRUE(setup.scroll > 0);
-	/* Exit is on screen: the list ends at row 24 - 3. */
-	TEST_ASSERT_EQUAL(1 + ITEM_EXIT - setup.scroll, 24 - 3);
+	TEST_ASSERT_EQUAL(0, setup.scroll);
+	/* A screen too short for the directory still scrolls, keeping the
+	 * selection in view: 12 rows show 9 of its 11 entries. */
+	setup_begin(&setup, &settings, &tiny, &font, VIDEO_MODE_640x480);
+	press(KEY_UP, 0);
+	TEST_ASSERT_EQUAL(ITEM_EXIT, setup.selected);
+	TEST_ASSERT_EQUAL(11 - 9, setup.scroll);
 	grid_free(&small);
+	grid_free(&tiny);
 }
 
 /*
@@ -565,6 +587,73 @@ test_settings_upgrade(void)
 	/* A corrupted old record is refused. */
 	raw[offsetof(struct settings, scheme)] ^= 1;
 	TEST_ASSERT_FALSE(settings_upgrade(&upgraded, raw));
+}
+
+/* Version 12 (before the serial line): upgrades onto USB, 8N1, 115200. */
+static void
+test_settings_upgrade_v12(void)
+{
+	uint8_t raw[sizeof(struct settings)];
+	struct settings old, upgraded;
+
+	settings_defaults(&old);
+	old.replay_newlines = NEWLINES_ALL;
+	make_record(raw, &old, 12,
+	    offsetof(struct settings, replay_newlines) + 1);
+	TEST_ASSERT_TRUE(settings_upgrade(&upgraded, raw));
+	TEST_ASSERT_EQUAL(NEWLINES_ALL, upgraded.replay_newlines);
+	TEST_ASSERT_EQUAL(LINE_USB, upgraded.line_port);
+	TEST_ASSERT_EQUAL(115200, settings_bauds[upgraded.line_baud]);
+	TEST_ASSERT_EQUAL(8, upgraded.line_data_bits);
+	TEST_ASSERT_EQUAL(PARITY_NONE, upgraded.line_parity);
+	TEST_ASSERT_EQUAL(1, upgraded.line_stop_bits);
+	TEST_ASSERT_EQUAL(FLOW_NONE, upgraded.line_flow);
+}
+
+/* The Communications page: every value cycles and the summary follows. */
+static void
+test_comms_page(void)
+{
+	char summary[32];
+
+	setup.selected = ITEM_PAGE_COMMS;
+	press(KEY_ENTER, 0);
+	TEST_ASSERT_EQUAL(PAGE_COMMS, setup.page);
+	TEST_ASSERT_EQUAL(ITEM_LINE_PORT, setup.selected);
+	settings_line_summary(&setup.work, summary, sizeof(summary));
+	TEST_ASSERT_EQUAL_STRING("USB", summary);
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(LINE_UART, setup.work.line_port);
+	press(KEY_DOWN, 0);		/* speed: 115200 is the last */
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(300, settings_bauds[setup.work.line_baud]);
+	press(KEY_LEFT, 0);
+	press(KEY_LEFT, 0);
+	TEST_ASSERT_EQUAL(57600, settings_bauds[setup.work.line_baud]);
+	press(KEY_DOWN, 0);		/* data bits: 8 -> 5 -> 8, 7 */
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(5, setup.work.line_data_bits);
+	press(KEY_LEFT, 0);
+	press(KEY_LEFT, 0);
+	TEST_ASSERT_EQUAL(7, setup.work.line_data_bits);
+	press(KEY_DOWN, 0);		/* parity */
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(PARITY_EVEN, setup.work.line_parity);
+	press(KEY_DOWN, 0);		/* stop bits */
+	press(KEY_CHAR, ' ');
+	TEST_ASSERT_EQUAL(2, setup.work.line_stop_bits);
+	press(KEY_DOWN, 0);		/* flow control */
+	press(KEY_RIGHT, 0);
+	TEST_ASSERT_EQUAL(FLOW_RTS_CTS, setup.work.line_flow);
+	settings_line_summary(&setup.work, summary, sizeof(summary));
+	TEST_ASSERT_EQUAL_STRING("UART 57600 7E2 RTS/CTS", summary);
+	TEST_ASSERT_TRUE(settings_valid((settings_seal(&setup.work),
+	    &setup.work)));
+	/* The directory's entry shows the same summary. */
+	press(KEY_ESCAPE, 0);
+	TEST_ASSERT_EQUAL(ITEM_PAGE_COMMS, setup.selected);
+	TEST_ASSERT_TRUE(setup_dirty(&setup));
+	TEST_ASSERT_FALSE(setup_dirty_reset(&setup));
 }
 
 static struct picker picker;
@@ -672,6 +761,8 @@ main(void)
 	RUN_TEST(test_short_screen_scrolls);
 	RUN_TEST(test_settings_upgrade);
 	RUN_TEST(test_settings_upgrade_v11);
+	RUN_TEST(test_settings_upgrade_v12);
+	RUN_TEST(test_comms_page);
 	RUN_TEST(test_settings_crc);
 	RUN_TEST(test_navigation_and_values);
 	RUN_TEST(test_toggles_and_actions);

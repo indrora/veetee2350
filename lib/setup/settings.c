@@ -4,6 +4,7 @@
 #include "settings.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "grid.h"
@@ -35,6 +36,11 @@ const struct settings_size settings_sizes[SIZE_COUNT] = {
 };
 
 const uint8_t settings_peek_seconds[SETTINGS_PEEK_TIMES] = {3, 5, 7, 10};
+
+const uint32_t settings_bauds[SETTINGS_BAUDS] = {
+	300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200,
+};
+static_assert(SETTINGS_BAUD_DEFAULT < SETTINGS_BAUDS);
 
 void
 settings_defaults(struct settings *settings)
@@ -68,6 +74,15 @@ settings_defaults(struct settings *settings)
 	settings->hotkeys[TOOL_SCREENSHOT] = (struct hotkey){KEY_F12, 0, 0};
 	/* Debug builds show what they measure (build.h). */
 	settings->profiler_bar = PROFILER_DEBUG;
+	/* The USB line, as before the UART existed; 8N1 at 115200 is what
+	 * a USB-serial adapter or another computer most likely expects
+	 * when the UART is picked. */
+	settings->line_port = LINE_USB;
+	settings->line_baud = SETTINGS_BAUD_DEFAULT;
+	settings->line_data_bits = 8;
+	settings->line_parity = PARITY_NONE;
+	settings->line_stop_bits = 1;
+	settings->line_flow = FLOW_NONE;
 	settings_seal(settings);
 }
 
@@ -149,7 +164,31 @@ settings_valid(const struct settings *settings)
 	    (settings->sixel == 0 || settings->sixel == 1 ||
 	    settings->sixel == 2 || settings->sixel == 4 ||
 	    settings->sixel == 8) &&
+	    settings->line_port < LINE_PORT_COUNT &&
+	    settings->line_baud < SETTINGS_BAUDS &&
+	    settings->line_data_bits >= 5 && settings->line_data_bits <= 8 &&
+	    settings->line_parity < PARITY_COUNT &&
+	    (settings->line_stop_bits == 1 || settings->line_stop_bits == 2) &&
+	    settings->line_flow < FLOW_COUNT &&
 	    settings->crc == crc32(settings, offsetof(struct settings, crc));
+}
+
+void
+settings_line_summary(const struct settings *settings, char *out,
+    unsigned len)
+{
+	static const char parity[PARITY_COUNT] = {'N', 'E', 'O'};
+
+	if (settings->line_port != LINE_UART) {
+		snprintf(out, len, "USB");
+		return;
+	}
+	snprintf(out, len, "UART %lu %u%c%u%s",
+	    (unsigned long)settings_bauds[settings->line_baud %
+	    SETTINGS_BAUDS], settings->line_data_bits,
+	    parity[settings->line_parity % PARITY_COUNT],
+	    settings->line_stop_bits,
+	    settings->line_flow == FLOW_RTS_CTS ? " RTS/CTS" : "");
 }
 
 const char *
@@ -183,6 +222,8 @@ fields_end(unsigned version)
 		    sizeof(((struct settings *)0)->hotkeys);
 	case 11:
 		return offsetof(struct settings, profiler_bar) + 1;
+	case 12:
+		return offsetof(struct settings, replay_newlines) + 1;
 	default:
 		return 0;
 	}

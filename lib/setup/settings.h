@@ -14,11 +14,11 @@
 #include <stdint.h>
 
 #define SETTINGS_MAGIC		0x45455456u	/* "VTEE" little-endian */
-#define SETTINGS_VERSION	12	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
+#define SETTINGS_VERSION	13	/* 2 resolution, 3 size, 4 emulation, 5 sixel,
 				   6 card fonts and schemes, 7 screenshots,
 				   8 printer, 9 sixel depth, 10 hotkeys,
 				   status line, capture, 11 profiler bar,
-				   12 replay newlines */
+				   12 replay newlines, 13 serial line */
 /*
  * Oldest record settings_upgrade() can read: from version 9 on, fields
  * were only ever appended (just before `crc`), so an older record is a
@@ -98,6 +98,37 @@ enum profiler_bar_mode {
 	PROFILER_MODES
 };
 
+/*
+ * The communication line: the native USB's CDC port ("VeeTee line"), or
+ * the hardware UART on the 40-pin header (UART1: TX GPIO 4 = pin 8, RX
+ * GPIO 5 = pin 10, CTS GPIO 6 = pin 31, RTS GPIO 7 = pin 26; see
+ * docs/hat.md). Baud, data bits, parity, stop bits and flow control only
+ * mean something on the UART: a CDC port takes whatever the host sets.
+ */
+enum line_port {
+	LINE_USB,
+	LINE_UART,
+	LINE_PORT_COUNT
+};
+
+enum line_parity {
+	PARITY_NONE,
+	PARITY_EVEN,
+	PARITY_ODD,
+	PARITY_COUNT
+};
+
+enum line_flow {
+	FLOW_NONE,
+	FLOW_RTS_CTS,
+	FLOW_COUNT
+};
+
+/* The classic speeds, 300 to 115200; line_baud indexes this. */
+#define SETTINGS_BAUDS		10
+#define SETTINGS_BAUD_DEFAULT	9	/* 115200 */
+extern const uint32_t settings_bauds[SETTINGS_BAUDS];
+
 /* How long a peeking status line stays up: 3, 5, 7 or 10 seconds. */
 #define SETTINGS_PEEK_TIMES	4
 extern const uint8_t settings_peek_seconds[SETTINGS_PEEK_TIMES];
@@ -171,6 +202,12 @@ struct settings {
 	struct hotkey	hotkeys[TOOL_COUNT];
 	uint8_t		profiler_bar;	/* enum profiler_bar_mode */
 	uint8_t		replay_newlines;	/* enum replay_newlines */
+	uint8_t		line_port;	/* enum line_port */
+	uint8_t		line_baud;	/* index into settings_bauds */
+	uint8_t		line_data_bits;	/* 5 to 8 */
+	uint8_t		line_parity;	/* enum line_parity */
+	uint8_t		line_stop_bits;	/* 1 or 2 */
+	uint8_t		line_flow;	/* enum line_flow */
 	uint32_t	crc;
 };
 
@@ -193,6 +230,13 @@ bool	settings_same(const struct settings *a, const struct settings *b);
  * their defaults. False if it isn't one (then use the defaults).
  */
 bool	settings_upgrade(struct settings *out, const void *raw);
+
+/*
+ * The line in a few words: "USB" or "UART 9600 8N1" (plus " RTS/CTS"),
+ * for SET-UP's directory and the boot banner.
+ */
+void	settings_line_summary(const struct settings *settings, char *out,
+	    unsigned len);
 
 const char *settings_scheme_name(unsigned scheme);
 /* Default foreground/background of a scheme, as 8-bit RGB triples. */

@@ -295,6 +295,46 @@ format_value(const struct setup *setup, unsigned item, char *out, size_t len)
 		snprintf(out, len, "\"%s\"%s", work->answerback,
 		    setup->editing ? "_" : "");
 		break;
+	case ITEM_LINE_PORT:
+		snprintf(out, len, "%s", work->line_port == LINE_UART ?
+		    "UART  (header pins 8 TX, 10 RX)" : "USB  (VeeTee line)");
+		break;
+	case ITEM_BAUD:
+		snprintf(out, len, "%lu", (unsigned long)settings_bauds[
+		    work->line_baud % SETTINGS_BAUDS]);
+		break;
+	case ITEM_DATA_BITS:
+		snprintf(out, len, "%u", work->line_data_bits);
+		break;
+	case ITEM_PARITY: {
+		static const char *const names[PARITY_COUNT] = {
+			"none", "even", "odd",
+		};
+		snprintf(out, len, "%s", names[work->line_parity %
+		    PARITY_COUNT]);
+		break;
+	}
+	case ITEM_STOP_BITS:
+		snprintf(out, len, "%u", work->line_stop_bits);
+		break;
+	case ITEM_FLOW:
+		snprintf(out, len, "%s", work->line_flow == FLOW_RTS_CTS ?
+		    "RTS/CTS  (pins 26 RTS, 31 CTS)" : "none");
+		break;
+	/* The directory shows what's on each page, in brief. */
+	case ITEM_PAGE_DISPLAY:
+		snprintf(out, len, "%s, %s", mode->name,
+		    work_font_index(setup) < (int)font_builtin_count &&
+		    work_font_index(setup) >= 0 ?
+		    font_builtins[work_font_index(setup)].name : work->font);
+		break;
+	case ITEM_PAGE_TERMINAL:
+		snprintf(out, len, "%s",
+		    term_emulations[work->emulation % EMU_COUNT].name);
+		break;
+	case ITEM_PAGE_COMMS:
+		settings_line_summary(work, out, (unsigned)len);
+		break;
 	default:
 		out[0] = '\0';
 		break;
@@ -325,6 +365,16 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_ECHO] = "Local echo",
 	[ITEM_BELL] = "Visual bell",
 	[ITEM_ANSWERBACK] = "Answerback",
+	[ITEM_LINE_PORT] = "Port",
+	[ITEM_BAUD] = "Speed (baud)",
+	[ITEM_DATA_BITS] = "Data bits",
+	[ITEM_PARITY] = "Parity",
+	[ITEM_STOP_BITS] = "Stop bits",
+	[ITEM_FLOW] = "Flow control",
+	[ITEM_PAGE_DISPLAY] = "Display...",
+	[ITEM_PAGE_TERMINAL] = "Terminal...",
+	[ITEM_PAGE_COMMS] = "Communications...",
+	[ITEM_PAGE_CARD] = "Printer and card...",
 	[ITEM_HOTKEYS] = "Hotkeys...",
 	[ITEM_SAVE] = "Save settings          (S)",
 	[ITEM_RECALL] = "Recall saved settings  (R)",
@@ -333,6 +383,112 @@ static const char *const item_labels[ITEM_COUNT] = {
 	[ITEM_SAVE_EXIT] = "Save and exit          (F4)",
 	[ITEM_EXIT] = "Exit SET-UP            (F3 / Esc)",
 };
+
+/*
+ * What each page lists, in order. SET-UP was one list of 30 lines; by
+ * the time the serial line's six settings joined it, it scrolled on
+ * most screens. The split follows the VT420/VT520's Set-Up Directory:
+ * the directory is where you start and where Esc brings you back.
+ */
+struct page {
+	const char	*title;		/* after "VeeTee 2350 SET-UP: " */
+	const char	*note;		/* row 1, when there's room */
+	unsigned	 count;
+	const uint8_t	*items;
+};
+
+static const uint8_t directory_items[] = {
+	ITEM_PAGE_DISPLAY, ITEM_PAGE_TERMINAL, ITEM_PAGE_COMMS, ITEM_PAGE_CARD,
+	ITEM_HOTKEYS, ITEM_SAVE, ITEM_RECALL, ITEM_DEFAULTS, ITEM_RESET,
+	ITEM_SAVE_EXIT, ITEM_EXIT,
+};
+static const uint8_t display_items[] = {
+	ITEM_RESOLUTION, ITEM_FONT, ITEM_SIZE, ITEM_SCHEME, ITEM_CURSOR,
+	ITEM_BLINK, ITEM_STATUS, ITEM_PEEK, ITEM_PROFILER,
+};
+static const uint8_t terminal_items[] = {
+	ITEM_EMULATION, ITEM_DEPTH, ITEM_UTF8, ITEM_ALTSCREEN, ITEM_SIXEL,
+	ITEM_WRAP, ITEM_NEWLINE, ITEM_ECHO, ITEM_BELL, ITEM_ANSWERBACK,
+};
+static const uint8_t comms_items[] = {
+	ITEM_LINE_PORT, ITEM_BAUD, ITEM_DATA_BITS, ITEM_PARITY, ITEM_STOP_BITS,
+	ITEM_FLOW,
+};
+static const uint8_t card_items[] = {
+	ITEM_SCREENSHOT, ITEM_PRINTER, ITEM_CAPTURE, ITEM_NEWLINES,
+};
+
+#define PAGE(title, note, list) {title, note, sizeof(list), list}
+static const struct page pages[PAGE_COUNT] = {
+	[PAGE_DIRECTORY] = PAGE(nullptr,
+	    "Enter: open a page.  Esc on a page comes back here.",
+	    directory_items),
+	[PAGE_DISPLAY] = PAGE("Display",
+	    "Font, size, colours: reset the terminal.  Resolution: restarts.",
+	    display_items),
+	[PAGE_TERMINAL] = PAGE("Terminal",
+	    "Emulation sets depth, UTF-8, alt screen and Sixel to its own.",
+	    terminal_items),
+	[PAGE_COMMS] = PAGE("Communications",
+	    "Applies when saved.  Speed, bits, parity, flow: UART only.",
+	    comms_items),
+	[PAGE_CARD] = PAGE("Printer and card",
+	    "Files go to the SD card.", card_items),
+	[PAGE_HOTKEYS] = {"Hotkeys",
+	    "Keys that run a tool from the terminal. Inside SET-UP they "
+	    "don't apply.", 0, nullptr},
+};
+
+/* Where `item` is on the current page's list; -1 if it isn't there. */
+static int
+page_index(const struct setup *setup, unsigned item)
+{
+	const struct page *page = &pages[setup->page % PAGE_COUNT];
+
+	for (unsigned i = 0; i < page->count; i++)
+		if (page->items[i] == item)
+			return (int)i;
+	return -1;
+}
+
+/* The page a directory entry opens (PAGE_DIRECTORY if it opens none). */
+static enum setup_page
+page_opened_by(unsigned item)
+{
+	switch (item) {
+	case ITEM_PAGE_DISPLAY:		return PAGE_DISPLAY;
+	case ITEM_PAGE_TERMINAL:	return PAGE_TERMINAL;
+	case ITEM_PAGE_COMMS:		return PAGE_COMMS;
+	case ITEM_PAGE_CARD:		return PAGE_CARD;
+	case ITEM_HOTKEYS:		return PAGE_HOTKEYS;
+	default:			return PAGE_DIRECTORY;
+	}
+}
+
+/* Open `page` on its first line; the directory remembers its entry. */
+static void
+open_page(struct setup *setup, enum setup_page page)
+{
+	unsigned from = setup->page;
+
+	setup->page = page;
+	setup->scroll = 0;
+	setup->hotkey_selected = 0;
+	if (page == PAGE_DIRECTORY) {
+		/* Back on the entry that opened the page we came from. */
+		static const uint8_t entry[PAGE_COUNT] = {
+			[PAGE_DIRECTORY] = ITEM_PAGE_DISPLAY,
+			[PAGE_DISPLAY] = ITEM_PAGE_DISPLAY,
+			[PAGE_TERMINAL] = ITEM_PAGE_TERMINAL,
+			[PAGE_COMMS] = ITEM_PAGE_COMMS,
+			[PAGE_CARD] = ITEM_PAGE_CARD,
+			[PAGE_HOTKEYS] = ITEM_HOTKEYS,
+		};
+		setup->selected = entry[from % PAGE_COUNT];
+	} else if (pages[page].count > 0) {
+		setup->selected = pages[page].items[0];
+	}
+}
 
 /*
  * Layout: title on row 0, a note on row 1 when there's room (28+ rows),
@@ -430,35 +586,39 @@ setup_draw(struct setup *setup)
 {
 	struct grid *grid = setup->grid;
 	unsigned top = list_top(setup), rows = list_rows(setup);
+	const struct page *page = &pages[setup->page % PAGE_COUNT];
 	char value[64];
 
 	for (unsigned row = 0; row < grid->rows; row++)
 		fill_row(setup, row, MENU_FG, MENU_BG);
 
 	fill_row(setup, 0, TITLE_FG, TITLE_BG);
-	put(setup, 0, 1, setup->hotkeys_page ? "VeeTee 2350 SET-UP: Hotkeys" :
-	    "VeeTee 2350 SET-UP", TITLE_FG, TITLE_BG);
-	put(setup, 0, 30, setup->storage, TITLE_FG, TITLE_BG);
+	snprintf(value, sizeof(value), "VeeTee 2350 SET-UP%s%s",
+	    page->title != nullptr ? ": " : "",
+	    page->title != nullptr ? page->title : "");
+	put(setup, 0, 1, value, TITLE_FG, TITLE_BG);
+	/* The card status moves right of a long title. */
+	put(setup, 0, strlen(value) + 3 > 30 ? (unsigned)strlen(value) + 3 : 30,
+	    setup->storage, TITLE_FG, TITLE_BG);
 	if (grid->cols >= 80)
 		put(setup, 0, grid->cols - 21, "BOOTSEL / F3: leave",
 		    TITLE_FG, TITLE_BG);
 	if (top > 1)
-		put(setup, 1, LABEL_COL, setup->hotkeys_page ?
-		    "Keys that run a tool from the terminal. Inside SET-UP "
-		    "they don't apply." :
-		    "Font, size, emulation, colours: reset the terminal.  "
-		    "Resolution: restarts.", DIM_FG, MENU_BG);
+		put(setup, 1, LABEL_COL, page->note, DIM_FG, MENU_BG);
 
-	if (setup->hotkeys_page) {
+	if (setup->page == PAGE_HOTKEYS) {
 		draw_hotkeys(setup);
 	} else {
-		follow(setup->selected, ITEM_COUNT, rows, &setup->scroll);
-		for (unsigned item = setup->scroll;
-		    item < ITEM_COUNT && item < setup->scroll + rows; item++) {
+		int at = page_index(setup, setup->selected);
+		follow(at < 0 ? 0 : (unsigned)at, page->count, rows,
+		    &setup->scroll);
+		for (unsigned i = setup->scroll;
+		    i < page->count && i < setup->scroll + rows; i++) {
+			unsigned item = page->items[i];
 			bool selected = item == setup->selected;
 			uint16_t fg = selected ? MENU_BG : MENU_FG;
 			uint16_t bg = selected ? MENU_FG : MENU_BG;
-			unsigned row = top + item - setup->scroll;
+			unsigned row = top + i - setup->scroll;
 
 			if (selected) {
 				grid_clear_span(grid, row, LABEL_COL - 1,
@@ -470,7 +630,7 @@ setup_draw(struct setup *setup)
 			format_value(setup, item, value, sizeof(value));
 			put(setup, row, VALUE_COL, value, fg, bg);
 		}
-		draw_more_marks(setup, setup->scroll, ITEM_COUNT);
+		draw_more_marks(setup, setup->scroll, page->count);
 	}
 
 	unsigned help_row = grid->rows - 2;
@@ -478,10 +638,12 @@ setup_draw(struct setup *setup)
 	    "Type the answerback; Enter or Esc to finish." :
 	    setup->capturing ?
 	    "Press the new key.  Esc: cancel" :
-	    setup->hotkeys_page ?
+	    setup->page == PAGE_HOTKEYS ?
 	    "Up/Down select   Enter: new key   Delete: none   Esc: back" :
+	    setup->page == PAGE_DIRECTORY ?
+	    "Up/Down select  Enter open  S save  F4 save & exit" :
 	    /* F3 is in the title bar; 64 columns don't fit both here. */
-	    "Up/Down select  Left/Right change  S save  F4 save & exit";
+	    "Up/Down  Left/Right change  Esc back  S save  F4 save&exit";
 	put(setup, help_row, LABEL_COL, help, DIM_FG, MENU_BG);
 	put(setup, help_row + 1, LABEL_COL, setup->message, TITLE_BG,
 	    MENU_BG);
@@ -518,7 +680,8 @@ setup_begin(struct setup *setup, const struct settings *current,
 	setup->grid = grid;
 	setup->font = font;
 	setup->running_resolution = running_resolution;
-	setup->selected = ITEM_RESOLUTION;
+	setup->page = PAGE_DIRECTORY;
+	setup->selected = ITEM_PAGE_DISPLAY;
 	setup_draw(setup);
 }
 
@@ -663,6 +826,29 @@ change_value(struct setup *setup, int step)
 	case ITEM_BELL:
 		work->visual_bell = !work->visual_bell;
 		break;
+	case ITEM_LINE_PORT:
+		work->line_port = (uint8_t)cycle(work->line_port,
+		    LINE_PORT_COUNT, step);
+		break;
+	case ITEM_BAUD:
+		work->line_baud = (uint8_t)cycle(work->line_baud,
+		    SETTINGS_BAUDS, step);
+		break;
+	case ITEM_DATA_BITS:	/* 5 to 8 */
+		work->line_data_bits = (uint8_t)(5 + cycle(
+		    (unsigned)(work->line_data_bits - 5) % 4, 4, step));
+		break;
+	case ITEM_PARITY:
+		work->line_parity = (uint8_t)cycle(work->line_parity,
+		    PARITY_COUNT, step);
+		break;
+	case ITEM_STOP_BITS:
+		work->line_stop_bits = work->line_stop_bits == 1 ? 2 : 1;
+		break;
+	case ITEM_FLOW:
+		work->line_flow = (uint8_t)cycle(work->line_flow, FLOW_COUNT,
+		    step);
+		break;
 	default:
 		break;
 	}
@@ -704,10 +890,12 @@ activate(struct setup *setup)
 	case ITEM_ANSWERBACK:
 		setup->editing = true;
 		return SETUP_NONE;
+	case ITEM_PAGE_DISPLAY:
+	case ITEM_PAGE_TERMINAL:
+	case ITEM_PAGE_COMMS:
+	case ITEM_PAGE_CARD:
 	case ITEM_HOTKEYS:
-		setup->hotkeys_page = true;
-		setup->hotkey_selected = 0;
-		setup->scroll = 0;
+		open_page(setup, page_opened_by(setup->selected));
 		return SETUP_NONE;
 	case ITEM_SAVE:
 		return SETUP_SAVE;
@@ -790,9 +978,7 @@ hotkeys_key(struct setup *setup, const struct key_event *key)
 		break;
 	case KEY_ESCAPE:
 	case KEY_LEFT:
-	case KEY_F3:
-		setup->hotkeys_page = false;
-		setup->scroll = 0;
+		open_page(setup, PAGE_DIRECTORY);
 		break;
 	default:
 		break;
@@ -864,20 +1050,30 @@ setup_key(struct setup *setup, const struct key_event *key)
 		return confirm_key(setup, key);
 	if (setup->editing)
 		return edit_answerback(setup, key);
-	if (setup->hotkeys_page) {
+	/* F3 leaves and F4 saves and leaves from any page. */
+	if (!setup->capturing && key->code == KEY_F3)
+		return setup_exit(setup);
+	if (!setup->capturing && key->code == KEY_F4)
+		return SETUP_SAVE_EXIT;
+	if (setup->page == PAGE_HOTKEYS) {
 		hotkeys_key(setup, key);
 		setup_draw(setup);
 		return SETUP_NONE;
 	}
 
+	const struct page *page = &pages[setup->page % PAGE_COUNT];
+	int at = page_index(setup, setup->selected);
+
 	setup->message[0] = '\0';
 	switch (key->code) {
 	case KEY_UP:
-		setup->selected = cycle(setup->selected, ITEM_COUNT, -1);
+		setup->selected = page->items[cycle(at < 0 ? 0 : (unsigned)at,
+		    page->count, -1)];
 		break;
 	case KEY_DOWN:
 	case KEY_TAB:
-		setup->selected = cycle(setup->selected, ITEM_COUNT, +1);
+		setup->selected = page->items[at < 0 ? 0 :
+		    cycle((unsigned)at, page->count, +1)];
 		break;
 	case KEY_LEFT:
 		change_value(setup, -1);
@@ -889,18 +1085,20 @@ setup_key(struct setup *setup, const struct key_event *key)
 		action = activate(setup);
 		break;
 	case KEY_ESCAPE:
-	case KEY_F3:
-		action = setup_exit(setup);
-		break;
-	case KEY_F4:
-		action = SETUP_SAVE_EXIT;
+		/* Esc backs out a level: a page to the directory, the
+		 * directory out of SET-UP. */
+		if (setup->page != PAGE_DIRECTORY)
+			open_page(setup, PAGE_DIRECTORY);
+		else
+			action = setup_exit(setup);
 		break;
 	case KEY_CHAR:
 		if (key->mods != 0)
 			break;		/* Alt+s isn't "save" */
 		switch (key->byte) {
 		case ' ':
-			if (setup->selected < ITEM_ANSWERBACK)
+			if (setup->selected < ITEM_SETTINGS_END &&
+			    setup->selected != ITEM_ANSWERBACK)
 				change_value(setup, +1);
 			break;
 		case 's': case 'S':

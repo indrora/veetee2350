@@ -3,15 +3,50 @@
 ## Data path
 
 ```
-host program ── USB CDC ──▶ app_poll() ──▶ term_feed()
+host program ── USB CDC or UART ──▶ app_poll() ──▶ term_feed()
                                              │ libvterm state layer
                                              ▼ (parser, modes, cursor, SGR)
                               lib/term callbacks ──▶ struct grid (12-byte cells)
                                                           │ core 1, per scanline
                                                           ▼
                                              render_scanline() ──▶ DVI
-replies (DA, DSR, ...) ◀── USB CDC ◀── term output callback
+replies (DA, DSR, ...) ◀── USB CDC or UART ◀── term output callback
 ```
+
+## Serial line (USB or UART)
+
+SET-UP > Communications picks the line: **USB** (the CDC port, "VeeTee
+line"; the default) or **UART**, the 40-pin header's UART1 (devlog 030):
+
+| Signal | GPIO | Header pin | Direction |
+|---|---|---|---|
+| TX | 4 | 8 | out |
+| RX | 5 | 10 | in |
+| CTS | 6 | 31 | in (with RTS/CTS flow control) |
+| RTS | 7 | 26 | out (with RTS/CTS flow control) |
+
+3.3 V logic. A USB-serial adapter crosses over: its RX to pin 8, its TX
+to pin 10, and a ground. The page also sets speed (300 to 115200), data
+bits (5 to 8), parity (none, even, odd), stop bits (1, 2) and flow control
+(none, RTS/CTS); they apply to the UART only, when SET-UP is left with
+the change saved. The boot banner says which line is in use ("line: UART
+115200 8N1"). A factory reset (hold BOOTSEL) goes back to USB.
+
+Received bytes go through an 8 KiB ring filled by the UART's interrupt, so
+a busy main loop doesn't lose them; with RTS/CTS the board drops RTS at
+3/4 full. `lib/hal/serial.c` has the details.
+
+On the Mac side, `tools/getty.py` puts a shell on the port:
+
+    cd tools && uv run getty.py /dev/cu.usbserial-XXXX --baud 115200 --format 8N1
+
+Use the `/dev/cu.*` node, not `/dev/tty.*`: opening a `tty.` node waits
+for carrier detect, which a USB-serial adapter may never raise, and a
+process stuck there can't even be killed (only unplugging the adapter
+frees it). getty sets the port's format, sizes the pty from the VeeTee's
+resize reports (as hostshell.py does), restarts the shell when it exits
+(`--once` to stop instead), and on SIGTERM/SIGINT/SIGHUP hangs the shell
+up and restores the port. `--log FILE` records the bytes each way.
 
 ## Running a real session
 
@@ -120,9 +155,13 @@ on the BOOTSEL button opens SET-UP (or closes it). **Holding BOOTSEL for
 down, letting go cancels, and at 5 seconds every setting goes back to
 factory defaults, is saved, and the board restarts once the button is
 let go. It needs no keyboard and no picture, so it's the way out of a
-mode the monitor can't show. Inside SET-UP: Up/Down to select,
-Left/Right/Enter/Space to change, `S` save, `R` recall, `D` factory
-defaults, **F4 to save and leave**, F3/Esc to leave. If anything changed,
+mode the monitor can't show. SET-UP opens on a directory (devlog 030):
+Display, Terminal, Communications, Printer and card, Hotkeys, then the
+actions (save, recall, factory defaults, reset terminal, exit). Enter
+opens a page; Esc goes back to the directory. On a page: Up/Down to
+select, Left/Right/Enter/Space to change. Everywhere: `S` save, `R`
+recall, `D` factory defaults, **F4 to save and leave**, F3 to leave (Esc
+too, from the directory). If anything changed,
 F3/Esc ask "Save changes?" first: Y (or F4) saves, N discards it all as
 if SET-UP never opened, Esc goes back. A new resolution takes a restart,
 so it only happens once saved, and the question says "and restart".

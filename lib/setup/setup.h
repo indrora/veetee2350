@@ -35,6 +35,11 @@ enum setup_action {
 	SETUP_RESET_TERMINAL,	/* hard-reset the terminal (RIS) */
 };
 
+/*
+ * Every line SET-UP shows, on any page. The order is only what pages and
+ * tests refer to; nothing here is stored. Settings come first, then the
+ * directory's entries (pages and actions).
+ */
 enum setup_item {
 	ITEM_RESOLUTION,
 	ITEM_FONT,
@@ -59,6 +64,18 @@ enum setup_item {
 	ITEM_PEEK,
 	ITEM_PROFILER,
 	ITEM_ANSWERBACK,
+	ITEM_LINE_PORT,
+	ITEM_BAUD,
+	ITEM_DATA_BITS,
+	ITEM_PARITY,
+	ITEM_STOP_BITS,
+	ITEM_FLOW,
+	ITEM_SETTINGS_END,	/* not an item: the settings end here */
+	/* The directory's entries. */
+	ITEM_PAGE_DISPLAY = ITEM_SETTINGS_END,
+	ITEM_PAGE_TERMINAL,
+	ITEM_PAGE_COMMS,
+	ITEM_PAGE_CARD,
 	ITEM_HOTKEYS,		/* opens the Hotkeys page */
 	ITEM_SAVE,
 	ITEM_RECALL,
@@ -67,6 +84,20 @@ enum setup_item {
 	ITEM_SAVE_EXIT,
 	ITEM_EXIT,
 	ITEM_COUNT
+};
+
+/*
+ * SET-UP opens on a directory of pages, as a VT420/VT520 does: Enter
+ * opens one, Esc comes back. S, R, D, F3 and F4 work on every page.
+ */
+enum setup_page {
+	PAGE_DIRECTORY,
+	PAGE_DISPLAY,
+	PAGE_TERMINAL,
+	PAGE_COMMS,
+	PAGE_CARD,
+	PAGE_HOTKEYS,
+	PAGE_COUNT
 };
 
 /*
@@ -98,12 +129,12 @@ struct setup {
 	bool		 confirming;	/* leaving asked "Save changes?" */
 	struct grid	*grid;
 	const struct font *font;	/* to look up glyphs while drawing */
-	unsigned	 selected;	/* enum setup_item */
+	unsigned	 page;		/* enum setup_page */
+	unsigned	 selected;	/* enum setup_item, on `page` */
 	unsigned	 running_resolution;	/* mode the hardware is in now */
 	bool		 editing;	/* typing into the answerback field */
 	unsigned	 scroll;	/* first item shown (short screens) */
 	/* The Hotkeys page: a list of tools, Enter to press a new key. */
-	bool		 hotkeys_page;
 	unsigned	 hotkey_selected;	/* index into the page's list */
 	bool		 capturing;	/* waiting for the key to bind */
 	char		 message[64];

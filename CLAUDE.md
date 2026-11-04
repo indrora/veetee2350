@@ -9,7 +9,11 @@
   PS/2) and the header map: `docs/hat.md` -- firmware for those follows
   it. The header is NOT BCM-numbered everywhere; use that map.
 - Run a real terminal session through the board: `cd tools && python3
-  hostshell.py /dev/cu.usbmodem*` (see docs/terminal.md).
+  hostshell.py /dev/cu.usbmodem*` (see docs/terminal.md). Over the
+  header's UART (SET-UP > Communications > Port: UART), `cd tools && uv
+  run getty.py /dev/cu.usbserial-* --baud 115200`. Always the `/dev/cu.*`
+  node: opening `/dev/tty.*` waits for carrier detect and can hang
+  unkillably until the adapter is unplugged (devlog 030).
 - Drive the board yourself (keys, BOOTSEL, debug text): flash a debug
   build (`pio run -e pizero-debug -t upload`), then `cd tools && uv run
   sendkeys.py 'key:ctrl+F3' 'wait:-> hotkey' ...` through its automation

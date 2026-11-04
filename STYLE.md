@@ -69,6 +69,7 @@ parallel one.
 | File-local            | `static`, no prefix needed     | `static void emit_row()`   |
 
 Every public symbol starts with its module's prefix (`video_`, `usbio_`,
+`serial_`,
 `flashcfg_`, `board_`, `term_`, `render_`, `grid_`, `font_`, `keys_`,
 `settings_`, `setup_`).
 
@@ -77,7 +78,8 @@ Every public symbol starts with its module's prefix (`video_`, `usbio_`,
 ```
 src/            main.cpp shim and app glue (app.c: wires modules together)
 include/        public headers that cross module boundaries
-lib/hal/        hardware abstraction: video (DVI), usbio (CDC, HID), clocks, flash
+lib/hal/        hardware abstraction: video (DVI), usbio (CDC, HID), serial
+                (the header's UART), clocks, flash
 lib/term/       escape-sequence handling (libvterm state) -> cell grid model
                 graphics.c: Sixel images as CELL_GRAPHIC cells + tile pool
 lib/sixel/      streaming Sixel decoder (pure, no allocation, host-testable)
